@@ -1,157 +1,145 @@
 <!DOCTYPE HTML>
-<HTML>
+<html>
 <head>
-<title>
-秋风Auting官网
-</title>
-<body>
-  <p>当前网站正在部署，由Auting网页工作组×Deepseek AI提供内容支持。<p/>
-<div id="customAlert" class="alert-modal">
-  <div class="alert-content">
-    <h3>Auting网页工作组尚未完成</h3>
-    <p>Auting网页工作组正在推进部署全新网站（不基于github），敬请期待！</p>
-    <button onclick="closeAlert()">关闭</button>
-  </div>
-</div>
-<script>
-// 显示弹窗
-function showAlert() {
-  document.getElementById("customAlert").style.display = "block";
-}
-
-// 关闭弹窗
-function closeAlert() {
-  document.getElementById("customAlert").style.display = "none";
-}
-
-// 点击遮罩层关闭
-document.getElementById("customAlert").addEventListener("click", function(e) {
-  if(e.target === this) closeAlert();
-});
-</script>
-</body>
-<style>
-/* 基础样式 - 你可以修改这些颜色和尺寸 */
-body {
-font-family: Arial, sans-serif;
-line-height: 1.6;
-max-width: 800px;
-margin: 0 auto;
-padding: 20px;
-background-color: #f5f5f5;
-}
-header {
-text-align: center;
-padding: 30px 0;
-border-bottom: 2px solid #ddd;
-}
-nav {
-margin: 20px 0;
-text-align: center;
-}
-nav a {
-margin: 0 15px;
-text-decoration: none;
-color: #333;
-}
-section {
-background: white;
-padding: 20px;
-margin: 20px 0;
-border-radius: 8px;
-box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-img {
-max-width: 100%;
-height: auto;
-border-radius: 4px;
-}
-img {
-  max-width: 100%;
-  height: auto;
-  border-radius: 4px;
-}
-footer {
-  text-align: center;
-  margin-top: 40px;
-  padding: 20px 0;
-  font-size: 10px; /* 控制整体字体大小 */
-  color: #666;
-}
-   .alert-modal {
-     display: none;
-     position: fixed;
-     ...
-.alert-modal {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.5);
-  z-index: 999;
-}
-
-.alert-content {
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  width: 300px;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-}
-
-.alert-content button {
-  padding: 8px 20px;
-  background: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-top: 15px;
-}
-</style>
+  <title>秋风Auting官网</title>
+  <style>
+    /* 基础样式 - 你可以修改这些颜色和尺寸 */
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    header {
+      text-align: center;
+      padding: 30px 0;
+      border-bottom: 2px solid #ddd;
+    }
+    nav {
+      margin: 20px 0;
+      text-align: center;
+    }
+    nav a {
+      margin: 0 15px;
+      text-decoration: none;
+      color: #333;
+    }
+    section {
+      background: white;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+    footer {
+      text-align: center;
+      margin-top: 40px;
+      padding: 20px 0;
+      font-size: 10px; /* 控制整体字体大小 */
+      color: #666;
+    }
+    .alert-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 999;
+    }
+    .alert-content {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      width: 300px;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+    .alert-content button {
+      padding: 8px 20px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 15px;
+    }
+  </style>
 </head>
 <body>
-<header>
-<!-- 标题区 -->
-<h1>秋风Auting官网</h1>
-<p>欢迎来到秋风Auting官网！</p >
-<h5>网站尚在搭建，功能有待完善，此网站内容仅供参考。</h5>
-</header>
+  <p>当前网站正在部署，由Auting网页工作组×Deepseek AI提供内容支持。</p>
+  <div id="customAlert" class="alert-modal">
+    <div class="alert-content">
+      <h3>Auting网页工作组尚未完成</h3>
+      <p>Auting网页工作组正在推进部署全新网站（不基于github），敬请期待！</p>
+      <button onclick="closeAlert()">关闭</button>
+    </div>
+  </div>
 
-<nav>
-<!-- 导航链接 -->
-<a href="#about">基本信息</a >
-<a href="#work">作品展示</a >
-<a href="javascript:void(0)" onclick="showAlert()">非github的个人网站</a>
-</nav>
+  <script>
+    // 显示弹窗
+    function showAlert() {
+      document.getElementById("customAlert").style.display = "block";
+    }
 
-<section id="about">
-<!-- 个人简介区 -->
-<h2>秋风Auting</h2>
-< img src="photo" alt="头像">
-<p>秋风Auting，原为太平洋西北沿岸东南季风中的其中一风，后被师傅“李逢”召往神界……（内容有待编辑）</p >
-</section>
+    // 关闭弹窗
+    function closeAlert() {
+      document.getElementById("customAlert").style.display = "none";
+    }
 
-<section id="work">
-<!-- 作品展示区 -->
-<h2>作品展示</h2>
-<div>
-< img src="photo" alt="作品1">
-<p>作品正在添加，数十个作品正在赶来的路上…</p >
-</div>
-</section>
+    // 点击遮罩层关闭
+    document.getElementById("customAlert").addEventListener("click", function(e) {
+      if(e.target === this) closeAlert();
+    });
+  </script>
 
-<footer>
-<!-- 页脚联系信息 -->
-<p> </p >
-<p>秋风Auting个人账号：QQ:3788553277（秋风·雨）;2172701924（秋风·誮）；抖音:AutumnWind_Feng</p >
-<p>Copyright@Auting网页工作组 2025-至今_20250205</p >
-<p>网页问题反馈：Chunguoquestion@163.com（春国工作室答疑解惑中心）
-</footer>
+  <header>
+    <!-- 标题区 -->
+    <h1>秋风Auting官网</h1>
+    <p>欢迎来到秋风Auting官网！</p>
+    <h5>网站尚在搭建，功能有待完善，此网站内容仅供参考。</h5>
+  </header>
+
+  <nav>
+    <!-- 导航链接 -->
+    <a href="#about">基本信息</a>
+    <a href="#work">作品展示</a>
+    <a href="javascript:void(0)" onclick="showAlert()">非github的个人网站</a>
+  </nav>
+
+  <section id="about">
+    <!-- 个人简介区 -->
+    <h2>秋风Auting</h2>
+    <img src="photo" alt="头像">
+    <p>秋风Auting，原为太平洋西北沿岸东南季风中的其中一风，后被师傅“李逢”召往神界……（内容有待编辑）</p>
+  </section>
+
+  <section id="work">
+    <!-- 作品展示区 -->
+    <h2>作品展示</h2>
+    <div>
+      <img src="photo" alt="作品1">
+      <p>作品正在添加，数十个作品正在赶来的路上…</p>
+    </div>
+  </section>
+
+  <footer>
+    <!-- 页脚联系信息 -->
+    <p> </p>
+    <p>秋风Auting个人账号：QQ:3788553277（秋风·雨）;2172701924（秋风·誮）；抖音:AutumnWind_Feng</p>
+    <p>Copyright@Auting网页工作组 2025-至今_20250205</p>
+    <p>网页问题反馈：Chunguoquestion@163.com（春国工作室答疑解惑中心）</p>
+  </footer>
+</body>
 </html>
