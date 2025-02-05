@@ -3,13 +3,61 @@
 <head>
   <title>秋风Auting官网</title>
   <style>
+    /* 新增容器布局 */
+.container {
+  display: flex;
+  gap: 30px; /* 主内容与侧边栏间距 */
+  max-width: 1200px; /* 扩大整体宽度 */
+  margin: 0 auto;
+}
+
+main {
+  flex: 2; /* 主内容占2/3 */
+}
+
+.notice-board {
+  flex: 1; /* 侧边栏占1/3 */
+  min-width: 300px; /* 最小宽度 */
+}
+
+/* 公告项样式 */
+.notice-item {
+  background: white;
+  padding: 15px;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.notice-item img {
+  width: 100%;
+  height: 180px; /* 固定图片高度 */
+  object-fit: cover; /* 保持图片比例 */
+  border-radius: 4px;
+}
+
+.notice-item h4 {
+  margin: 10px 0 5px;
+  font-size: 16px;
+  text-align: center;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .container {
+    flex-direction: column;
+  }
+  .notice-board {
+    order: -1; /* 移动端时公告栏显示在上方 */
+  }
+}
     /* 基础样式 - 你可以修改这些颜色和尺寸 */
     body {
       font-family: Arial, sans-serif;
       line-height: 1.6;
-      max-width: 800px;
+      max-width: none;
       margin: 0 auto;
-      padding: 20px;
+      padding: 20px 40px;
       background-color: #f5f5f5;
     }
     header {
@@ -20,6 +68,10 @@
     nav {
       margin: 20px 0;
       text-align: center;
+      position: sticky;
+      top: 0;
+      background: #f5f5f5;
+      z-index: 100;
     }
     nav a {
       margin: 0 15px;
@@ -110,6 +162,27 @@
     <p>欢迎来到秋风Auting官网！</p>
     <h5>网站尚在搭建，功能有待完善，此网站内容仅供参考。</h5>
   </header>
+  <div class="container">
+  <!-- 原有主内容区 -->
+  <main>
+    <nav>...</nav>
+    <section id="about">...</section>
+    <section id="work">...</section>
+    <footer>...</footer>
+  </main>
+
+  <!-- 新增右侧公告栏 -->
+  <aside class="notice-board">
+    <div class="notice-item">
+      <img src="photo" alt="公告1">
+      <h4>wenzi（公告标题）</h4>
+    </div>
+    <div class="notice-item">
+      <img src="photo" alt="公告2">
+      <h4>wenzi（公告标题）</h4>
+    </div>
+  </aside>
+</div>
 
   <nav>
     <!-- 导航链接 -->
