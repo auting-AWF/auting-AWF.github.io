@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh - CN">
+
+<head>
+  <meta charset="UTF - 8">
+  <meta name="viewport" content="width=device-width, initial - scale=1.0">
+  <title>秋风Auting个人信息库</title>
+  <style>
+    /* 简单的导航栏样式 */
+    nav {
+      background - color: #333;
+      color: white;
+      padding: 10px;
+    }
+
+    nav ul {
+      list-style - type: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+    }
+
+    nav ul li {
+      margin - right: 20px;
+    }
+
+    nav ul li a {
+      color: white;
+      text - decoration: none;
+    }
+
+    /* 模块的基本样式 */
+   .module {
+      border: 1px solid #ccc;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .certificate {
+      display: flex;
+      align - items: center;
+    }
+
+   .certificate img {
+      max - width: 500px;
+      margin - right: 20px;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- 导航栏 -->
+  <nav>
+    <ul>
+      <li><img src="logo.png" alt="返回主页面" width="50"></li> <!-- 这里的logo.png需要替换为实际logo图片文件名 -->
+      <li><a href="#">资料卡</a></li>
+      <li><a href="#">背景故事</a></li>
+      <li><a href="#">在展作品</a></li>
+      <li><a href="#">资质认证</a></li>
+      <li><a href="https://auting-awf.github.io">回到主页面</a></li>
+    </ul>
+  </nav>
+
+  <!-- 资料卡模块 -->
+  <div class="module">
+    <h2>资料卡</h2>
+    <img src="avatar.png" alt="二次元自设头像" width="100" style="float: left; margin - right: 10px;">
+    <p><strong>姓名</strong>  秋风（Auting）</p>
+    <p><strong>性别</strong>  双性</p>
+    <p><strong>国家</strong>  神界大陆－神界－风国</p>
+    <p><strong>简介</strong>  尚在制作。</p>
+  </div>
+
+  <!-- 背景故事模块 -->
+  <div class="module">
+    <h2>背景故事</h2>
+    <p>尚在制作。</p>
+  </div>
+
+  <!-- 展出作品模块 -->
+  <div class="module">
+    <h2>在展作品</h2>
+    <!展出作品1>
+    <div class="work">
+      <img src="work1.png" alt="作品1" width="200">
+      <h3>幻梦之境画作</h3>
+      <p>这幅作品描绘了星灵幻姬的诞生之地——幻梦之境，画面中五彩的幻光流转，神秘的灵植点缀其间，仿佛将观者带入了那梦幻般的世界。</p>
+   </div>
+    <!展出作品2>
+    <div class="work">
+      <img src="work2.png" alt="作品2" width="200">
+      <h3>幻力战斗场景图</h3>
+      <p>此图展现了星灵幻姬在冒险途中与邪恶灵体战斗的场景，她挥洒幻力，幻光四溢，战斗的激烈氛围跃然纸上。</p>
+    </div>
+  </div>
+
+  <!-- 资质认证模块 -->
+  <div class="module">
+    <h2>资质认证</h2>
+    <div class="certificate">
+      <img src="certificate.jpg" alt="资质认证照片">
+      <div>
+        <p><strong>作品登记证书</strong></p>
+        <p>证书来源曲折，介绍尚未公开。</p>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>
