@@ -1,109 +1,176 @@
 <!DOCTYPE html>
-<html lang="zh - CN">
-
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF - 8">
-  <meta name="viewport" content="width=device-width, initial - scale=1.0">
-  <title>秋风Auting个人信息库</title>
-  <style>
-    /* 简单的导航栏样式 */
-    nav {
-      background - color: #333;
-      color: white;
-      padding: 10px;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>秋风Auting个人信息数据库</title>
+    <style>
+        /* 独立样式体系 */
+        :root {
+            --main-color: #FF6B6B; /* 主题色-樱粉 */
+            --accent-color: #4ECDC4; /* 点缀色-苍碧 */
+            --text-dark: #2D3436; /* 正文深色 */
+        }
 
-    nav ul {
-      list-style - type: none;
-      margin: 0;
-      padding: 0;
-      display: flex;
-    }
+        /* 重置默认样式 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'ヒラギノ角ゴ Pro', sans-serif;
+        }
 
-    nav ul li {
-      margin - right: 20px;
-    }
+        /* 全息导航栏 */
+        .holo-nav {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem 5%;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
 
-    nav ul li a {
-      color: white;
-      text - decoration: none;
-    }
+        .nav-logo {
+            width: 150px;
+            transition: transform 0.3s;
+        }
 
-    /* 模块的基本样式 */
-   .module {
-      border: 1px solid #ccc;
-      padding: 20px;
-      margin: 20px 0;
-    }
-    .certificate {
-      display: flex;
-      align - items: center;
-    }
+        .nav-logo:hover {
+            transform: rotate(-5deg);
+        }
 
-   .certificate img {
-      max - width: 500px;
-      margin - right: 20px;
-    }
-  </style>
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .nav-link {
+            color: var(--text-dark);
+            text-decoration: none;
+            font-weight: 600;
+            position: relative;
+            padding: 0.5rem 0;
+        }
+
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--main-color);
+            transition: width 0.3s;
+        }
+
+        .nav-link:hover::after {
+            width: 100%;
+        }
+
+        /* 核心内容容器 */
+        .archive-container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 20px;
+        }
+
+        /* 资料卡模块 */
+        .id-card {
+            background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+            border-radius: 15px;
+            padding: 2rem;
+            margin: 2rem 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .character-portrait {
+            width: 250px;
+            border-radius: 10px;
+            border: 3px solid var(--main-color);
+            box-shadow: 0 5px 15px rgba(255,107,107,0.3);
+        }
+
+        .bio-data {
+            flex: 1;
+        }
+
+        .bio-title {
+            color: var(--main-color);
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+        }
+
+        /* 背景故事模块 */
+        .lore-section {
+            background: rgba(78,205,196,0.05);
+            border-left: 4px solid var(--accent-color);
+            padding: 2rem;
+            margin: 2rem 0;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .id-card {
+                flex-direction: column;
+            }
+            
+            .character-portrait {
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+    </style>
 </head>
-
 <body>
-  <!-- 导航栏 -->
-  <nav>
-    <ul>
-      <li><img src="logo.png" alt="返回主页面" width="50"></li> <!-- 这里的logo.png需要替换为实际logo图片文件名 -->
-      <li><a href="#">资料卡</a></li>
-      <li><a href="#">背景故事</a></li>
-      <li><a href="#">在展作品</a></li>
-      <li><a href="#">资质认证</a></li>
-      <li><a href="https://auting-awf.github.io">回到主页面</a></li>
-    </ul>
-  </nav>
+    <!-- 全息导航 -->
+    <nav class="holo-nav">
+        <a href="/">
+            <img src="path/to/logo.png" alt="官网logo" class="nav-logo"><!logo>
+        </a>
+        <div class="nav-links">
+            <a href="#profile" class="nav-link">个人资料</a>
+            <a href="#story" class="nav-link">在展作品</a>
+            <a href="#works" class="nav-link">资质认证</a>
+        </div>
+    </nav>
 
-  <!-- 资料卡模块 -->
-  <div class="module">
-    <h2>资料卡</h2>
-    <img src="avatar.png" alt="二次元自设头像" width="100" style="float: left; margin - right: 10px;">
-    <p><strong>姓名</strong>  秋风（Auting）</p>
-    <p><strong>性别</strong>  双性</p>
-    <p><strong>国家</strong>  神界大陆－神界－风国</p>
-    <p><strong>简介</strong>  尚在制作。</p>
-  </div>
+    <!-- 核心档案区 -->
+    <div class="archive-container">
+        <!-- 资料卡模块 -->
+        <section id="profile" class="id-card">
+            <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/refs/heads/index/4622f8e6df5143e6b377d07abbe7f915.png" alt="秋风auting" class="character-portrait">
+            <div class="bio-data">
+                <h2 class="bio-title">【秋风Auting】</h2>
+                <ul class="bio-list">
+                    <li>姓名：秋风(Auting）</li>
+                    <li>性别：双性</li>
+                    <li>国家：神界大陆－神界－风国</li>
+                    <li>性格：作者还没想好，先按作者的来吧，，</li>
+                </ul>
+            </div>
+        </section>
 
-  <!-- 背景故事模块 -->
-  <div class="module">
-    <h2>背景故事</h2>
-    <p>尚在制作。</p>
-  </div>
+        <!-- 背景故事 -->
+        <section id="story" class="lore-section">
+            <h2>人物故事</h2>
+            <p>待作者撰写。</p>
+        </section>
 
-  <!-- 展出作品模块 -->
-  <div class="module">
-    <h2>在展作品</h2>
-    <!展出作品1>
-    <div class="work">
-      <img src="work1.png" alt="作品1" width="200">
-      <h3>幻梦之境画作</h3>
-      <p>这幅作品描绘了星灵幻姬的诞生之地——幻梦之境，画面中五彩的幻光流转，神秘的灵植点缀其间，仿佛将观者带入了那梦幻般的世界。</p>
-   </div>
-    <!展出作品2>
-    <div class="work">
-      <img src="work2.png" alt="作品2" width="200">
-      <h3>幻力战斗场景图</h3>
-      <p>此图展现了星灵幻姬在冒险途中与邪恶灵体战斗的场景，她挥洒幻力，幻光四溢，战斗的激烈氛围跃然纸上。</p>
+        <!-- 展出作品 -->
+        <section id="works">
+            <h2>在展作品</h2>
+            <div class="artifact-grid">
+                <!-- 作品项 -->
+            </div>
+        </section>
     </div>
-  </div>
-
-  <!-- 资质认证模块 -->
-  <div class="module">
-    <h2>资质认证</h2>
-    <div class="certificate">
-      <img src="certificate.jpg" alt="资质认证照片">
-      <div>
-        <p><strong>作品登记证书</strong></p>
-        <p>证书来源曲折，介绍尚未公开。</p>
-      </div>
-    </div>
-  </div>
 </body>
-
 </html>
