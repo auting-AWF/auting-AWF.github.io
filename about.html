@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>关于我们</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+        }
+ 
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
+        }
+ 
+        body {
+            background: #f8f9fa;
+        }
+ 
+        /* 增强型导航栏 */
+        .navbar {
+            background: var(--primary-color);
+            padding: 1rem 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+ 
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+ 
+        .nav-brand {
+            color: white;
+            text-decoration: none;
+            display flex:;
+            align-items: center;
+            gap: 1rem;
+        }
+ 
+        .nav-logo {
+            width: 80px;
+            transition: transform 0.3s;
+        }
+ 
+        .nav-logo:hover {
+            transform: scale(1.05);
+        }
+ 
+        /* 主内容容器 */
+        .main-container {
+            max-width: 1200px;
+            margin:2 rem auto;
+            padding: 2rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+        }
+ 
+        /* 开发信息仪表盘 */
+        .dev-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap:2 rem;
+            padding: 2rem 0;
+        }
+ 
+        .info-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            border: 1px solid #eee;
+            border-radius: 10px;
+            padding: 2rem;
+            transition: transform 0.3s;
+        }
+ 
+        .info-card:hover {
+            transform: translateY(-5px);
+        }
+ 
+        .card-title {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            font-size: 1.2em;
+            border-bottom: 2px solid var(--accent-color);
+            padding-bottom: 0.5rem;
+        }
+ 
+        .metadata {
+            color: #666;
+            line-height: 1.8;
+        }
+ 
+        .version-timeline {
+            margin-top: 3rem;
+            padding: 2rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+ 
+        .timeline-item {
+            display: flex;
+            justify-content: space-between;
+            padding :1rem;
+            border-left: 3px solid var(--accent-color);
+            margin: 1rem 0;
+        }
+ 
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="nav-brand">
+                <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/Autinglogo.png" 
+                     alt="官网Logo" 
+                     class="nav-logo">
+                <span>返回首页</span>
+            </a>
+            <div class="metadata" style="color: white;">
+                当前版本：Beta1.0.0
+            </div>
+        </div>
+    </nav>
+ 
+    <div class="main-container">
+        <h1>Auting网页工作组 开发团队</h1>
+        
+        <div class="dev-dashboard">
+            <div class="info-card">
+                <h2 class="card-title">网页工作组</h2>
+                <div class="metadata">
+                    <p>· 名称：Auting网页工作组</p>
+                    <p>· 成立时间：2024－4－20</p>
+                    <p>· 成员数量：2人</p>
+                </div>
+            </div>
+ 
+            <div class="info-card">
+                <h2 class="card-title">美术设计</h2>
+                <div class="metadata">
+                    <p>✦ UX：秋风Auting</p>
+                    <p>✦ UI设计师：Deepseek AI</p>
+                    <p>✦ UI信息：ChunG UI 2.0（GodLive Use）</p>
+                </div>
+            </div>
+ 
+            <div class="info-card">
+                <h2 class="card-title">技术支持</h2>
+                <div class="metadata">
+                    <p>📦 项目仓库：
+                    <a href="https://github.com/ingaut-AWF/auting-AWF.github.io" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      title="项目源码">
+                      项目源码
+                    </a>
+                    <p>◈ 构建引擎：Jekyll v4.3.2（静态渲染）</p>
+                    <p>◈ 持续部署：Github Pages</p>
+                </div>
+            </div>
+        </div>
+ 
+        <div class="version-timeline">
+            <h2>版本更新历史</h2>
+            <div class="timeline-item">
+                <div class="version-info">
+                    <h3>Beta1.0.0</h3>
+                    <p>2024－2－7</p>
+                </div>
+                <div class="update-detail">
+                    <p>完善 UI界面</p>
+                </div>
+            </div>
+            <!-- 可添加更多历史版本 -->
+        </div>
+ </div   >
+ 
+    <footer>
+        <p>© 2023 Auting网页工作组 保留所有权利</p>
+        <p>页面最后编译时间：2023-08-07 17:28:04 (UTC+8)</p>
+    </footer>
+</body>
+</html>
