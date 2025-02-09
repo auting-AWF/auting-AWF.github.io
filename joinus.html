@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>加入我们——Auting网页工作组</title>
+    <style>
+        :root {
+            --primary-color: #4c6e80;
+            --accent-color: #3498db;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
+        }
+
+        body {
+            background: #f8f9fa;
+        }
+
+        /* 导航栏样式 */
+        .navbar {
+            background: var(--primary-color);
+            padding: 1rem 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            color: white;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .nav-logo {
+            width: 120px;
+            transition: transform 0.3s;
+        }
+
+        .nav-logo:hover {
+            transform: scale(1.05);
+        }
+
+        /* 主内容容器 */
+        .main-container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+        }
+
+        /* 招募信息板块 */
+        .recruitment-section {
+            display: grid;
+            gap: 2rem;
+            padding: 2rem 0;
+        }
+
+        .contact-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            border: 1px solid #eee;
+            border-radius: 10px;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .qq-contact {
+            display: inline-flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 2rem;
+            background: #f0f8ff;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .qq-icon {
+            width: 40px;
+            height: 40px;
+        }
+
+        .position-list {
+            display: grid;
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .position-card {
+            padding: 1.5rem;
+            border-left: 4px solid var(--accent-color);
+            background: #f8f9fa;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px 0;
+            font-size: 10px;
+            color: #666;
+            line-height: 1.5
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="https://auting-awf.github.io/about" class="nav-brand">
+                <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/Autinglogo.png" 
+                     alt="返回关于页" 
+                     class="nav-logo">
+            </a>
+            <div class="metadata" style="color: white;">
+                招募通道
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <h1>加入Auting网页工作组</h1>
+        
+        <div class="recruitment-section">
+            <div class="contact-card">
+                <h2>联系方式</h2>
+                <div class="qq-contact">
+                    <!待添加QQ截图>
+                    <img src="https://static.qq.com/qq2018/img/qq_logo_2x.png" 
+                         alt="QQ" 
+                         class="qq-icon">
+                    <div>
+                        <p>QQ：458299675</p>
+                        <p>邮箱：458299675@qq.com（开发者）；autumnwind_feng@163.com（秋风Auting）</p>
+                    </div>
+                </div>
+                <p>添加时请备注“致Auting网页工作组”</p>
+            </div>
+
+            <div class="position-list">
+                <div class="position-card">
+                    <h3>开发顾问</h3>
+                    <p>要求：熟悉HTML/CSS/JavaScript，有Github使用经验</p>
+                    <p>“福利”：网页开发署名权</p>
+                    <p>备注：个人开发，感兴趣来，没有薪资</p>
+                </div>
+
+                <div class="position-card">
+                    <h3>UI设计</h3>
+                    <p>要求：熟练使用设计工具，有界面设计经验</p>
+                    <p>“福利”：UI开发署名权</p>
+                    <p>备注：个人开发，感兴趣来，没有薪资</p>
+                </div>
+
+                <div class="position-card">
+                    <h3>网页内容管理</h3>
+                    <p>要求：文字功底扎实，熟悉二次元文化；熟悉github上传流程，会通过代码添加作品（静态网站是这样的）</p>
+                    <p>“福利”：参与神界世界观的构建与完善</p>
+                    <p>备注：个人开发，感兴趣来，没有薪资</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>秋风Auting个人账号：QQ:3788553277（秋风·雨）;2172701924（秋风·誮）；抖音:AutumnWind_Feng</p>
+        <p>Copyright@Auting网页工作组 2025-至今_20250205</p>
+        <p>招募流程及其它问题反馈：Chunguoquestion@163.com（春国工作室答疑解惑中心）</p>
+    </footer>
+</body>
+  </html>
