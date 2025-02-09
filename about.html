@@ -9,25 +9,33 @@
             --primary-color: #4c6e80;
             --accent-color: #3498db;
         }
- 
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
         }
- 
+
         body {
             background: #f8f9fa;
         }
- 
-        /* 增强型导航栏 */
+
+        /* 修复1：display属性语法错误 */
+        .nav-brand {
+            color: white;
+            text-decoration: none;
+            display: flex; /* 修正为正确语法 */
+            align-items: center;
+            gap: 1rem;
+        }
+
         .navbar {
             background: var(--primary-color);
             padding: 1rem 2rem;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
- 
+
         .nav-container {
             max-width: 1200px;
             margin: 0 auto;
@@ -35,42 +43,34 @@
             justify-content: space-between;
             align-items: center;
         }
- 
-        .nav-brand {
-            color: white;
-            text-decoration: none;
-            display flex:;
-            align-items: center;
-            gap: 1rem;
-        }
- 
+
         .nav-logo {
             width: 120px;
             transition: transform 0.3s;
         }
- 
+
         .nav-logo:hover {
             transform: scale(1.05);
         }
- 
-        /* 主内容容器 */
+
+        /* 修复2：margin单位书写错误 */
         .main-container {
             max-width: 1200px;
-            margin:2 rem auto;
+            margin: 2rem auto; /* 修正空格问题 */
             padding: 2rem;
             background: white;
             border-radius: 12px;
             box-shadow: 0 2px 15px rgba(0,0,0,0.05);
         }
- 
-        /* 开发信息仪表盘 */
+
+        /* 修复3：gap单位书写错误 */
         .dev-dashboard {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap:2 rem;
+            gap: 2rem; /* 修正单位书写 */
             padding: 2rem 0;
         }
- 
+
         .info-card {
             background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
             border: 1px solid #eee;
@@ -78,11 +78,11 @@
             padding: 2rem;
             transition: transform 0.3s;
         }
- 
+
         .info-card:hover {
             transform: translateY(-5px);
         }
- 
+
         .card-title {
             color: var(--primary-color);
             margin-bottom: 1rem;
@@ -90,41 +90,70 @@
             border-bottom: 2px solid var(--accent-color);
             padding-bottom: 0.5rem;
         }
- 
+
         .metadata {
             color: #666;
             line-height: 1.8;
         }
- 
+
+        /* 新增：链接样式 */
+        .metadata a {
+            color: var(--accent-color);
+            text-decoration: none;
+            border-bottom: 1px dotted currentColor;
+        }
+
+        .metadata a:hover {
+            color: #2980b9;
+        }
+
         .version-timeline {
             margin-top: 3rem;
             padding: 2rem;
             background: #f8f9fa;
             border-radius: 8px;
         }
- 
+
         .timeline-item {
             display: flex;
             justify-content: space-between;
-            padding :1rem;
+            padding: 1rem; /* 修正冒号位置 */
             border-left: 3px solid var(--accent-color);
             margin: 1rem 0;
         }
- 
+
         footer {
             text-align: center;
             margin-top: 40px;
             padding: 20px 0;
-            font-size: 10px; /* 控制整体字体大小 */
+            font-size: 10px;
             color: #666;
             line-height: 1.5
+        }
+
+        /* 新增：加入我们按钮样式 */
+        .joinus-link {
+            display: block;
+            margin-top: 1rem;
+            padding: 0.8rem;
+            background: var(--accent-color);
+            color: white !important;
+            border-radius: 6px;
+            text-align: center;
+            transition: background 0.3s;
+        }
+
+        .joinus-link:hover {
+            background: #2980b9;
+            transform: none; /* 禁用原有hover效果 */
         }
     </style>
 </head>
 <body>
     <nav class="navbar">
         <div class="nav-container">
-            <a href="/" class="nav-brand">
+            <!-- 修复4：主站链接 -->
+            <a href="https://auting-awf.github.io" class="nav-brand">
                 <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/Autinglogo.png" 
                      alt="官网Logo" 
                      class="nav-logo">
@@ -134,7 +163,7 @@
             </div>
         </div>
     </nav>
- 
+
     <div class="main-container">
         <h1>Auting网页工作组 开发团队</h1>
         
@@ -143,14 +172,15 @@
                 <h2 class="card-title">网页工作组</h2>
                 <div class="metadata">
                     <p>• 名称：Auting网页工作组</p>
-                    <p>• 成立时间：2024－4－20</p>
+                    <p>• 成立时间：2024-4-20</p> <!-- 修正日期符号 -->
                     <p>• 成员数量：2人</p>
-                    <div class="/joinus.html" style="text-align:center;">
-                      <p>• 加入我们</p>
-                    </div>
+                    <!-- 修复5：正确链接语法 -->
+                    <a href="/joinus.html" class="joinus-link">
+                        加入我们 →
+                    </a>
                 </div>
             </div>
- 
+
             <div class="info-card">
                 <h2 class="card-title">美术设计</h2>
                 <div class="metadata">
@@ -159,38 +189,48 @@
                     <p>✦ UI信息：ChunG UI 2.0（GodLive Use）</p>
                 </div>
             </div>
- 
+
             <div class="info-card">
                 <h2 class="card-title">技术支持</h2>
                 <div class="metadata">
+                    <!-- 修复仓库链接 -->
                     <p>📦 项目仓库：
-                    <a href="https://github.com/ingaut-AWF/auting-AWF.github.io" 
+                    <a href="https://github.com/auting-AWF/auting-AWF.github.io" 
                       target="_blank" 
                       rel="noopener noreferrer"
                       title="项目源码">
                       项目源码
-                    </a>
+                    </a></p>
                     <p>◈ 构建引擎：Jekyll v4.3.2（静态渲染）</p>
                     <p>◈ 持续部署：Github Pages</p>
                 </div>
             </div>
         </div>
- 
+
         <div class="version-timeline">
             <h2>版本更新历史</h2>
             <div class="timeline-item">
                 <div class="version-info">
                     <h3>Beta1.0.0</h3>
-                    <p>2024－2－7</p>
+                    <p>2024-2-7</p>
                 </div>
                 <div class="update-detail">
                     <p>完善 UI界面</p>
                 </div>
             </div>
-            <!-- 可添加更多历史版本 -->
+            <div class="timeline-item">
+                <div class="version-info">
+                    <h3>Beta1.0.1</h3>
+                    <p>2024-2-9</p>
+                </div>
+                <div class="update-detail">
+                    <p>新增 “加入我们”板块</p>
+                    <p>修复 部分页面的显示bug</p>
+                </div>
+            </div>
         </div>
- </div   >
- 
+    </div> <!-- 修正闭合标签格式 -->
+
     <footer>
       <p>秋风Auting个人账号：QQ:3788553277（秋风·雨）;2172701924（秋风·誮）；抖音:AutumnWind_Feng</p>
       <p>Copyright@Auting网页工作组 2025-至今_20250205</p>
