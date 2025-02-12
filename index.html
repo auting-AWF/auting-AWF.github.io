@@ -1,218 +1,326 @@
-<!DOCTYPE HTML>
-<html>
+<!DOCTYPE html>
+<html lang="zh-CN">
 <head>
-  <title>秋风Auting官网</title>
-  <style>
-    /* 基础样式 - 你可以修改这些颜色和尺寸 */
-    body {
-      font-family: Arial, sans-serif;
-      line-height: 1.6;
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 20px;
-      background-color: #f5f5f5;
-    }
-    up {
-      color: grey;
-      font-size: 11px;
-      margin-bottom: 10px;
-    }
-    header {
-      text-align: center;
-      padding: 30px 0;
-      border-bottom: 2px solid #ddd;
-      font-size: 13px;
-    }
-    subfield {
-      color: black;
-      font-size: 13px;
-      margin-bottom: 12px;
-    }
-    division{
-      color: black;
-      font-size: 13px;
-      margin-bottom: 10px;
-    }
-    nav {
-      margin: 20px 0;
-      text-align: center;
-    }
-    nav a {
-      margin: 0 15px;
-      text-decoration: none;
-      color: #333;
-    }
-    section {
-      background: white;
-      padding: 20px;
-      margin: 20px 0;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    img {
-      max-width: 100%;
-      height: auto;
-      border-radius: 4px;
-    }
-    footer {
-      text-align: center;
-      margin-top: 40px;
-      padding: 20px 0;
-      font-size: 10px; /* 控制整体字体大小 */
-      color: #666;
-      line-height: 0.8
-    }
-    /* === 个人信息模块图片 === */
-    section#about img {
-      width: 200px;         /* 固定宽度 */
-      height: 200px;        /* 固定高度 */
-      object-fit: cover;    /* 保持比例填充容器 */
-      border: 2px solid #ddd; /* 可选边框 */
-      margin: 0 auto 15px;  /* 下边距15px */
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>秋风Auting官网</title>
+    <style>
+        /* 基础样式 */
+        :root {
+            --primary-color: #4c6e80;
+            --accent-color: #3498db;
+            --text-dark: #2d3436;
+            --text-light: #f8f9fa;
+            --border-color: #ddd;
+        }
 
-/* === 作品展示模块图片 === */
-    section#work img {
-      width: 100%;          /* 宽度占满父容器 */
-      max-width: 250px;     /* 最大宽度限制 */
-      max-height: 400px;        /* 固定高度 */
-      object-fit: cover;    /* 保持比例填充 */
-      border-radius: 6px;   /* 圆角增强视觉效果 */
-      margin: 10px 0;
-    }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
+        }
 
-/* === 移动端适配 === */
-@media (max-width: 768px) {
-  section#about img {
-    width: 150px;      /* 手机端缩小尺寸 */
-    height: 180px;
-  }
-  section#work img {
-    height: 180px;
-  }
-    }
-    .alert-modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.5);
-      z-index: 999;
-    }
-    .alert-content {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      width: 300px;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center;
-    }
-    .alert-content button {
-      padding: 8px 20px;
-      background: #007bff;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      margin-top: 15px;
-    }
-    .custom-link {
-        color: blue
-    }
-  </style>
+        body {
+            background: var(--text-light);
+            color: var(--text-dark);
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* 顶部注释 */
+        .annotation {
+            color: #666;
+            font-size: 0.8rem;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        /* 页头 */
+        header {
+            text-align: center;
+            padding: 2rem 0;
+            border-bottom: 2px solid var(--border-color);
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            color: var(--text-dark);
+            margin-bottom: 1rem;
+        }
+
+        header h5, header h6 {
+            color: #666;
+            font-size: 0.9rem;
+            margin: 0.5rem 0;
+        }
+
+        /* 导航栏 */
+        nav {
+            margin: 2rem 0;
+            text-align: center;
+        }
+
+        nav a {
+            margin: 0 1rem;
+            text-decoration: none;
+            color: var(--text-dark);
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+
+        nav a:hover {
+            background: rgba(0,0,0,0.05);
+        }
+
+        /* 内容区块 */
+        section {
+            background: white;
+            padding: 2rem;
+            margin: 2rem 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .division {
+            margin-bottom: 1.5rem;
+            cursor: pointer;
+        }
+
+        .division h2 {
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .subfield {
+            color: var(--text-dark);
+            font-size: 0.9rem;
+            line-height: 1.6;
+            margin-bottom: 1rem;
+        }
+
+        /* 图片容器 */
+        .avatar-container {
+            text-align: center;
+            margin: 1.5rem 0;
+        }
+
+        #about img {
+            width: 200px;
+            height: 200px;
+            object-fit: cover;
+            border: 2px solid var(--border-color);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+
+        #about img:hover {
+            transform: scale(1.05);
+        }
+
+        #work img {
+            width: 100%;
+            max-width: 300px;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin: 1rem auto;
+            display: block;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+
+        #work img:hover {
+            transform: translateY(-5px);
+        }
+
+        /* 页脚 */
+        footer {
+            text-align: center;
+            margin-top: 3rem;
+            padding: 2rem 0;
+            border-top: 1px solid var(--border-color);
+            color: #666;
+            font-size: 0.8rem;
+            line-height: 1.5;
+        }
+
+        .custom-link {
+            color: var(--accent-color);
+            text-decoration: none;
+            border-bottom: 1px dotted currentColor;
+        }
+
+        .custom-link:hover {
+            color: #2980b9;
+        }
+
+        /* 弹窗样式 */
+        .alert-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+
+        .alert-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .alert-content button {
+            padding: 0.5rem 1.5rem;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 1rem;
+            transition: background 0.3s;
+        }
+
+        .alert-content button:hover {
+            background: #2980b9;
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+
+            header h1 {
+                font-size: 1.8rem;
+            }
+
+            nav {
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            nav a {
+                margin: 0;
+                padding: 0.8rem;
+            }
+
+            section {
+                padding: 1.5rem;
+            }
+
+            #about img {
+                width: 150px;
+                height: 150px;
+            }
+
+            #work img {
+                height: 150px;
+            }
+        }
+    </style>
 </head>
-  
-<up>
-  <p>当前网站正在部署，由Auting网页工作组丨Deepseek AI×豆包 AI提供内容支持。</p>
-</up>
-  
+
 <body>
-  <div id="customAlert" class="alert-modal">
-    <div class="alert-content">
-      <h3>开发者尚未完成网页部署</h3>
-      <p>Auting网页工作组正在推进部署不基于github的二级域名网站，敬请期待！</p>
-      <button onclick="closeAlert()">关闭</button>
+    <div class="annotation">
+        <p>当前网站正在部署，由Auting网页工作组丨Deepseek AI×豆包 AI提供内容支持。</p>
     </div>
-  </div>
 
-  <script>
-    // 显示弹窗
-    function showAlert() {
-      document.getElementById("customAlert").style.display = "block";
-    }
-
-    // 关闭弹窗
-    function closeAlert() {
-      document.getElementById("customAlert").style.display = "none";
-    }
-
-    // 点击遮罩层关闭
-    document.getElementById("customAlert").addEventListener("click", function(e) {
-      if(e.target === this) closeAlert();
-    });
-  </script>
-
-  <header>
-    <!-- 标题区 -->
-    <h1>秋风Auting官网</h1>
-    <p>欢迎来到秋风Auting官网！</p>
-    <h5>网站尚在搭建，功能有待完善，此网站内容仅供参考。</h5>
-    <h6>⚠️1.由于人力有限，我们未对手机端做额外适配。因此，我们建议手机端用户横屏浏览该网站；</h6>
-    <h6>2.受Github服务器限制，在夜间访问本网站时，可能出现无法正常显示图片的问题</h6>
-  </header>
-
-  <nav>
-    <!-- 导航链接 -->
-    <a href="#about">基本信息</a>
-    <a href="#work">作品展示</a>
-    <a href="javascript:void(0)" onclick="showAlert()">原官网</a>
-  </nav>
-
-  <section id="about">
-    <!-- 个人简介区 -->
-  <div>
-    <division onclick="window.location.href = 'https://auting-awf.github.io/personaldata'">
-      <h2>秋风Auting</h2>
-    </division>
-    <section#about img onclick="window.location.href = 'https://auting-awf.github.io/personaldata'">
-      <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/4622f8e6df5143e6b377d07abbe7f915.png" alt="头像">
-    </section#about img>
-    <subfield onclick="window.location.href = 'https://auting-awf.github.io/personaldata'">
-      <p>上图展示的是秋风Auting的Q版自设，由画师岁狸绘制。</p>
-    </subfield>
-  </div>
-  </section>
-
-  <section id="work">
-    <!-- 作品展示区 -->
-    <division>
-      <h2>作品展示</h2>
-    </division>
-    <div>
-      <section#work img>
-        <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/mmexport1723590148280.png" alt="最新作品">
-      </section#work img>
-      <subfield>
-      <p>秋风Auting的2025年新春作品（1）。作品号：20240600_Suili</p>
-      <!记得在支持跳转之后删掉下面的内容>
-        <up>
-          <p>此外，之后将支持您点击此模块的任意位置进入秋风Auting公开作品数据库，敬请期待。</p>
-        </up>
-      </subfield>
+    <!-- 弹窗 -->
+    <div id="customAlert" class="alert-modal">
+        <div class="alert-content">
+            <h3>开发者尚未完成网页部署</h3>
+            <p>Auting网页工作组正在推进部署不基于github的二级域名网站，敬请期待！</p>
+            <button onclick="closeAlert()">关闭</button>
+        </div>
     </div>
-  </section>
 
-  <footer>
-    <!-- 页脚联系信息 -->
-    <p>秋风Auting个人账号：QQ:3788553277（秋风·雨）;2172701924（秋风·誮）；抖音:AutumnWind_Feng</p>
-    <p>Copyright@Auting网页工作组 2025-至今_20250205</p>
-    <p>网页问题反馈：Chunguoquestion@163.com（春国工作室答疑解惑中心）</p>
-    <p>关于此网站的更多<a href="https://auting-awf.github.io/about" target="_blank" class="custom-link" rel="noopener noreferrer">开发信息</a>，请点击</p>
-  </footer>
+    <header>
+        <h1>秋风Auting官网</h1>
+        <p>欢迎来到秋风Auting官网！</p>
+        <h5>网站尚在搭建，功能有待完善，此网站内容仅供参考。</h5>
+        <h6>⚠️ 受Github服务器限制，在夜间访问本网站时，可能出现无法正常显示图片的问题</h6>
+    </header>
+
+    <nav>
+        <a href="#about">基本信息</a>
+        <a href="#work">作品展示</a>
+        <a href="javascript:void(0)" onclick="showAlert()">原官网</a>
+    </nav>
+
+    <section id="about">
+        <div class="division" onclick="window.location.href = 'https://auting-awf.github.io/personaldata'">
+            <h2>秋风Auting</h2>
+        </div>
+        <div class="avatar-container">
+            <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/4622f8e6df5143e6b377d07abbe7f915.png" 
+                 alt="秋风Auting自设形象"
+                 onclick="window.location.href = 'https://auting-awf.github.io/personaldata'">
+        </div>
+        <div class="subfield" onclick="window.location.href = 'https://auting-awf.github.io/personaldata'">
+            <p>上图展示的是秋风Auting的Q版自设，由画师岁狸绘制。</p>
+        </div>
+    </section>
+
+    <section id="work">
+        <div class="division">
+            <h2>作品展示</h2>
+        </div>
+        <div>
+            <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/mmexport1723590148280.png" 
+                 alt="秋风Auting的2025年新春作品">
+            <div class="subfield">
+                <p>秋风Auting的2025年新春作品（1）。作品号：20240600_Suili</p>
+                <div class="annotation">
+                    <p>此外，之后将支持您点击此模块的任意位置进入秋风Auting公开作品数据库，敬请期待。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>秋风Auting个人账号：QQ:3788553277（秋风·雨）;2172701924（秋风·誮）；抖音:AutumnWind_Feng</p>
+        <p>Copyright@Auting网页工作组 2025-至今_20250205</p>
+        <p>网页问题反馈：Chunguoquestion@163.com（春国工作室答疑解惑中心）</p>
+        <p>关于此网站的更多<a href="https://auting-awf.github.io/about" target="_blank" class="custom-link" rel="noopener noreferrer">开发信息</a>，请点击</p>
+    </footer>
+
+    <script>
+        // 显示弹窗
+        function showAlert() {
+            document.getElementById("customAlert").style.display = "block";
+        }
+
+        // 关闭弹窗
+        function closeAlert() {
+            document.getElementById("customAlert").style.display = "none";
+        }
+
+        // 点击遮罩层关闭
+        document.getElementById("customAlert").addEventListener("click", function(e) {
+            if(e.target === this) closeAlert();
+        });
+    </script>
 </body>
 </html>
