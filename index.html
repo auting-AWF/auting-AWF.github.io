@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>秋风Auting官网</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         /* 基础样式 */
         :root {
@@ -144,6 +145,64 @@
             transform: translateY(-5px);
         }
 
+        /* 合作中心卡片样式 */
+        #collaboration {
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .collaboration-card {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .collaboration-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
+
+        .collab-icon {
+            width: 60px;
+            height: 60px;
+            background: rgba(52, 152, 219, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            color: var(--accent-color);
+        }
+
+        .collab-content {
+            flex: 1;
+        }
+
+        .collab-content h3 {
+            color: var(--primary-color);
+            margin-bottom: 8px;
+        }
+
+        .collab-link {
+            display: inline-flex;
+            align-items: center;
+            margin-top: 10px;
+            color: var(--accent-color);
+            font-weight: 600;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+
+        .collaboration-card:hover .collab-link {
+            transform: translateX(10px);
+        }
+
         /* 页脚 */
         footer {
             text-align: center;
@@ -238,6 +297,11 @@
             #work img {
                 height: 150px;
             }
+            
+            .collaboration-card {
+                flex-direction: column;
+                text-align: center;
+            }
         }
     </style>
 </head>
@@ -266,6 +330,7 @@
     <nav>
         <a href="#about">基本信息</a>
         <a href="#work">作品展示</a>
+        <a href="https://auting-awf.github.io/collaborating">合作中心</a>
         <a href="javascript:void(0)" onclick="showAlert()">原官网</a>
     </nav>
 
@@ -295,6 +360,23 @@
                 <div class="annotation">
                     <p>此外，之后将支持您点击此模块的任意位置进入秋风Auting公开作品数据库，敬请期待。</p>
                 </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- 新增的合作中心入口 -->
+    <section id="collaboration">
+        <div class="division">
+            <h2>合作中心</h2>
+        </div>
+        <div class="collaboration-card" onclick="window.location.href='https://auting-awf.github.io/collaborating'">
+            <div class="collab-icon">
+                <i class="fas fa-handshake"></i>
+            </div>
+            <div class="collab-content">
+                <h3>探索合作机会</h3>
+                <p>了解我们的合作伙伴，寻找合作机会，或提交您的合作申请</p>
+                <div class="collab-link">前往合作中心 <i class="fas fa-arrow-right"></i></div>
             </div>
         </div>
     </section>
