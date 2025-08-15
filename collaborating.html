@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>合作中心 - 秋风Auting</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        }
+
+        :root {
+            --primary-color: #4c6e80;
+            --accent-color: #3498db;
+            --dark-color: #2d3436;
+            --light-color: #f8f9fa;
+            --border-color: #e0e0e0;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+            color: var(--dark-color);
+            line-height: 1.6;
+            padding-top: 80px;
+        }
+
+        /* 悬浮导航栏 */
+        .floating-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 15px 5%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow);
+            z-index: 1000;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            text-decoration: none;
+        }
+
+        .nav-logo {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--primary-color);
+        }
+
+        .nav-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 25px;
+        }
+
+        .nav-link {
+            color: var(--dark-color);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: var(--transition);
+            padding: 8px 15px;
+            border-radius: 30px;
+        }
+
+        .nav-link:hover {
+            background: rgba(76, 110, 128, 0.1);
+        }
+
+        .nav-link i {
+            margin-right: 8px;
+        }
+
+        /* 页面标题 */
+        .page-header {
+            text-align: center;
+            padding: 50px 20px 30px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            position: relative;
+            display: inline-block;
+        }
+
+        .page-title:after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 4px;
+            background: var(--accent-color);
+            border-radius: 2px;
+        }
+
+        .page-subtitle {
+            font-size: 1.2rem;
+            color: #666;
+            max-width: 700px;
+            margin: 20px auto 0;
+            line-height: 1.8;
+        }
+
+        /* 合作对象网格 */
+        .collaborators-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 30px;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .collaborator-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            cursor: pointer;
+        }
+
+        .collaborator-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-header {
+            position: relative;
+            height: 200px;
+            overflow: hidden;
+        }
+
+        .collaborator-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: var(--transition);
+        }
+
+        .collaborator-card:hover .collaborator-image {
+            transform: scale(1.05);
+        }
+
+        .collaborator-type {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            background: rgba(52, 152, 219, 0.85);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        .collaborator-name {
+            font-size: 1.4rem;
+            margin-bottom: 10px;
+            color: var(--primary-color);
+        }
+
+        .collaborator-bio {
+            color: #666;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin-bottom: 15px;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .view-details {
+            display: inline-flex;
+            align-items: center;
+            color: var(--accent-color);
+            font-weight: 600;
+            text-decoration: none;
+            font-size: 0.95rem;
+        }
+
+        .view-details i {
+            margin-left: 5px;
+            transition: var(--transition);
+        }
+
+        .collaborator-card:hover .view-details i {
+            transform: translateX(5px);
+        }
+
+        /* 模态框 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1100;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            max-width: 800px;
+            margin: 50px auto;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            animation: modalAppear 0.5s ease;
+        }
+
+        @keyframes modalAppear {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .modal-header {
+            position: relative;
+            height: 300px;
+            overflow: hidden;
+        }
+
+        .modal-header img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.5rem;
+            color: var(--dark-color);
+            transition: var(--transition);
+        }
+
+        .close-modal:hover {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .modal-title {
+            font-size: 2rem;
+            color: var(--primary-color);
+            margin-bottom: 15px;
+        }
+
+        .modal-subtitle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.1rem;
+            color: var(--accent-color);
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .modal-subtitle span {
+            background: rgba(52, 152, 219, 0.1);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .modal-description {
+            font-size: 1.05rem;
+            line-height: 1.8;
+            color: #555;
+            margin-bottom: 25px;
+        }
+
+        .collaboration-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .detail-card {
+            background: rgba(76, 110, 128, 0.05);
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .detail-card i {
+            font-size: 2rem;
+            color: var(--accent-color);
+            margin-bottom: 15px;
+        }
+
+        .detail-card h4 {
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+            color: var(--primary-color);
+        }
+
+        .detail-card p {
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        /* 加入合作部分 */
+        .join-section {
+            max-width: 1000px;
+            margin: 80px auto 50px;
+            padding: 0 20px;
+        }
+
+        .join-container {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: var(--shadow);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+        }
+
+        .join-info {
+            padding: 20px;
+        }
+
+        .join-title {
+            font-size: 1.8rem;
+            color: var(--primary-color);
+            margin-bottom: 20px;
+        }
+
+        .join-description {
+            font-size: 1.05rem;
+            line-height: 1.8;
+            color: #555;
+            margin-bottom: 25px;
+        }
+
+        .contact-methods {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .contact-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 1.1rem;
+        }
+
+        .contact-item i {
+            width: 40px;
+            height: 40px;
+            background: rgba(52, 152, 219, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent-color);
+        }
+
+        .join-form {
+            background: rgba(76, 110, 128, 0.05);
+            border-radius: 12px;
+            padding: 30px;
+        }
+
+        .form-title {
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+
+        .form-control:focus {
+            border-color: var(--accent-color);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+        }
+
+        textarea.form-control {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .submit-btn {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 14px 25px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: var(--transition);
+        }
+
+        .submit-btn:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+
+        /* 页脚 */
+        footer {
+            background: var(--primary-color);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            text-align: left;
+        }
+
+        .footer-column h3 {
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            position: relative;
+            padding-bottom: 10px;
+        }
+
+        .footer-column h3:after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 50px;
+            height: 3px;
+            background: var(--accent-color);
+        }
+
+        .footer-links {
+            list-style: none;
+        }
+
+        .footer-links li {
+            margin-bottom: 12px;
+        }
+
+        .footer-links a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .footer-links a:hover {
+            color: white;
+            transform: translateX(5px);
+        }
+
+        .copyright {
+            max-width: 1200px;
+            margin: 40px auto 0;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 992px) {
+            .join-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .collaboration-details {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .floating-nav {
+                flex-direction: column;
+                gap: 15px;
+                padding: 15px;
+            }
+            
+            .nav-links {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .collaborators-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .page-title {
+                font-size: 2rem;
+            }
+            
+            .modal-header {
+                height: 200px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .nav-links {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .nav-link {
+                width: 100%;
+                text-align: center;
+            }
+            
+            .page-header {
+                padding: 30px 15px;
+            }
+            
+            .modal-body {
+                padding: 20px;
+            }
+            
+            .join-container {
+                padding: 25px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 悬浮导航栏 -->
+    <nav class="floating-nav">
+        <a href="https://auting-awf.github.io" class="nav-brand">
+            <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/Autinglogo.png" alt="官网Logo" class="nav-logo">
+            <span class="nav-title">秋风Auting合作中心</span>
+        </a>
+        <div class="nav-links">
+            <a href="https://auting-awf.github.io" class="nav-link">
+                <i class="fas fa-home"></i>返回官网
+            </a>
+            <a href="#join" class="nav-link">
+                <i class="fas fa-handshake"></i>加入合作
+            </a>
+        </div>
+    </nav>
+
+    <!-- 页面标题 -->
+    <header class="page-header">
+        <h1 class="page-title">合作中心</h1>
+        <p class="page-subtitle">
+            秋风Auting致力于与各领域的创作者建立深度合作关系。在这里，您可以了解我们现有的合作伙伴，
+            探索合作机会，并提交您的合作申请。让我们一起创造更多精彩内容！
+        </p>
+    </header>
+
+    <!-- 合作对象网格 -->
+    <div class="collaborators-grid">
+        <!-- 合作对象 1 -->
+        <div class="collaborator-card" onclick="openModal('modal1')">
+            <div class="card-header">
+                <img src="https://images.unsplash.com/photo-1511367461989-f85a21fda167?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80" alt="合作对象" class="collaborator-image">
+                <span class="collaborator-type">插画合作</span>
+            </div>
+            <div class="card-body">
+                <h3 class="collaborator-name">岁狸</h3>
+                <p class="collaborator-bio">资深二次元插画师，擅长角色设计和场景绘制，拥有5年以上行业经验，曾参与多个知名游戏项目...</p>
+                <a class="view-details">查看详情 <i class="fas fa-arrow-right"></i></a>
+            </div>
+        </div>
+
+        <!-- 合作对象 2 -->
+        <div class="collaborator-card" onclick="openModal('modal2')">
+            <div class="card-header">
+                <img src="https://images.unsplash.com/photo-1552058544-f2b08422138a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80" alt="合作对象" class="collaborator-image">
+                <span class="collaborator-type">音乐创作</span>
+            </div>
+            <div class="card-body">
+                <h3 class="collaborator-name">音律工作室</h3>
+                <p class="collaborator-bio">专业游戏与动画音乐制作团队，提供原创配乐、音效设计和主题曲创作服务，曾为多款热门游戏提供音乐支持...</p>
+                <a class="view-details">查看详情 <i class="fas fa-arrow-right"></i></a>
+            </div>
+        </div>
+
+        <!-- 合作对象 3 -->
+        <div class="collaborator-card" onclick="openModal('modal3')">
+            <div class="card-header">
+                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80" alt="合作对象" class="collaborator-image">
+                <span class="collaborator-type">角色设计</span>
+            </div>
+            <div class="card-body">
+                <h3 class="collaborator-name">星尘设计</h3>
+                <p class="collaborator-bio">专注于二次元角色概念设计和世界观构建，擅长将故事与视觉元素完美融合，打造独特的角色形象...</p>
+                <a class="view-details">查看详情 <i class="fas fa-arrow-right"></i></a>
+            </div>
+        </div>
+
+        <!-- 合作对象 4 -->
+        <div class="collaborator-card" onclick="openModal('modal4')">
+            <div class="card-header">
+                <img src="https://images.unsplash.com/photo-1560250097-0b93528c311a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80" alt="合作对象" class="collaborator-image">
+                <span class="collaborator-type">周边制作</span>
+            </div>
+            <div class="card-body">
+                <h3 class="collaborator-name">幻创工坊</h3>
+                <p class="collaborator-bio">专业二次元周边产品设计与制作团队，提供高质量手办、徽章、立牌等周边产品开发服务...</p>
+                <a class="view-details">查看详情 <i class="fas fa-arrow-right"></i></a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加入合作部分 -->
+    <section class="join-section" id="join">
+        <div class="join-container">
+            <div class="join-info">
+                <h2 class="join-title">加入我们的合作网络</h2>
+                <p class="join-description">
+                    秋风Auting正在寻找有才华的创作者和团队加入我们的合作网络。无论您是插画师、音乐人、编剧还是周边设计师，
+                    我们都欢迎您的加入。与我们一起创作更多精彩内容，共同成长！
+                </p>
+                <div class="contact-methods">
+                    <div class="contact-item">
+                        <i class="fab fa-qq"></i>
+                        <div>
+                            <h4>QQ联系</h4>
+                            <p>3788553277（秋风·雨）</p>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <i class="fas fa-envelope"></i>
+                        <div>
+                            <h4>邮箱联系</h4>
+                            <p>Chunguoquestion@163.com</p>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <i class="fas fa-comments"></i>
+                        <div>
+                            <h4>商务合作</h4>
+                            <p>请备注"合作申请"</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="join-form">
+                <h3 class="form-title">提交合作申请</h3>
+                <form id="collaborationForm">
+                    <div class="form-group">
+                        <label for="name">您的姓名/工作室名称</label>
+                        <input type="text" id="name" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="contact">联系方式（QQ/微信/电话）</label>
+                        <input type="text" id="contact" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">电子邮箱</label>
+                        <input type="email" id="email" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="type">合作类型</label>
+                        <select id="type" class="form-control" required>
+                            <option value="">请选择合作类型</option>
+                            <option value="illustration">插画创作</option>
+                            <option value="music">音乐制作</option>
+                            <option value="design">角色设计</option>
+                            <option value="merch">周边制作</option>
+                            <option value="other">其他合作</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="message">合作意向描述</label>
+                        <textarea id="message" class="form-control" required></textarea>
+                    </div>
+                    <button type="submit" class="submit-btn">提交申请</button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- 模态框 -->
+    <div id="modal1" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <img src="https://images.unsplash.com/photo-1511367461989-f85a21fda167?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80" alt="岁狸">
+                <div class="close-modal" onclick="closeModal()">
+                    <i class="fas fa-times"></i>
+                </div>
+            </div>
+            <div class="modal-body">
+                <h2 class="modal-title">岁狸</h2>
+                <div class="modal-subtitle">
+                    <i class="fas fa-paint-brush"></i>
+                    <span>插画合作</span>
+                </div>
+                <p class="modal-description">
+                    岁狸是一位专注于二次元风格的资深插画师，拥有超过5年的专业创作经验。她擅长角色设计、场景绘制和色彩运用，
+                    作品风格细腻且富有情感表达。曾参与多个知名游戏项目的角色设计和宣传插画创作，包括《幻境之旅》和《星尘物语》等。
+                </p>
+                <p class="modal-description">
+                    在合作项目中，岁狸主要负责秋风Auting角色设计的视觉呈现，将角色设定转化为精美的插画作品。
+                    她的作品不仅保留了角色的核心特征，还通过独特的艺术风格赋予角色更深层次的情感表达。
+                </p>
+                
+                <div class="collaboration-details">
+                    <div class="detail-card">
+                        <i class="fas fa-calendar-alt"></i>
+                        <h4>合作时间</h4>
+                        <p>2023年3月至今</p>
+                    </div>
+                    <div class="detail-card">
+                        <i class="fas fa-project-diagram"></i>
+                        <h4>合作项目</h4>
+                        <p>12个已完成项目</p>
+                    </div>
+                    <div class="detail-card">
+                        <i class="fas fa-star"></i>
+                        <h4>作品评价</h4>
+                        <p>专业度高，沟通顺畅</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer>
+        <div class="footer-content">
+            <div class="footer-column">
+                <h3>关于我们</h3>
+                <ul class="footer-links">
+                    <li><a href="https://auting-awf.github.io/about"><i class="fas fa-chevron-right"></i>团队介绍</a></li>
+                    <li><a href="#"><i class="fas fa-chevron-right"></i>发展历程</a></li>
+                    <li><a href="#"><i class="fas fa-chevron-right"></i>加入我们</a></li>
+                    <li><a href="#"><i class="fas fa-chevron-right"></i>联系方式</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h3>合作中心</h3>
+                <ul class="footer-links">
+                    <li><a href="#"><i class="fas fa-chevron-right"></i>合作伙伴</a></li>
+                    <li><a href="#"><i class="fas fa-chevron-right"></i>合作流程</a></li>
+                    <li><a href="#"><i class="fas fa-chevron-right"></i>申请合作</a></li>
+                    <li><a href="#"><i class="fas fa-chevron-right"></i>合作案例</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h3>联系信息</h3>
+                <ul class="footer-links">
+                    <li><a href="#"><i class="fab fa-qq"></i> QQ: 3788553277</a></li>
+                    <li><a href="#"><i class="fas fa-envelope"></i> 邮箱: Chunguoquestion@163.com</a></li>
+                    <li><a href="#"><i class="fab fa-weixin"></i> 微信: AutumnWind_Feng</a></li>
+                    <li><a href="#"><i class="fas fa-map-marker-alt"></i> 中国·湖南</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="copyright">
+            <p>Copyright © 2025 Auting网页工作组. 保留所有权利。 湘ICP备2021000000号</p>
+        </div>
+    </footer>
+
+    <script>
+        // 模态框控制函数
+        function openModal(modalId) {
+            document.getElementById(modalId).style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeModal() {
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                modal.style.display = 'none';
+            });
+            document.body.style.overflow = 'auto';
+        }
+        
+        // 点击模态框外部关闭
+        window.onclick = function(event) {
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+        }
+        
+        // 表单提交处理
+        document.getElementById('collaborationForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            alert('感谢您的合作申请！我们会尽快与您联系。');
+            this.reset();
+        });
+        
+        // 导航平滑滚动
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+    </script>
+</body>
+</html>
