@@ -31,7 +31,7 @@
             z-index: 1000;
             box-shadow: 0 2px 15px rgba(0,0,0,0.1);
             display: flex;
-         align   -items: center;
+         align-items: center;
             justify-content: space-between;
         }
 
@@ -118,6 +118,64 @@
             padding: 2rem;
             margin: 2rem 0;
         }
+
+        /* 作品展示部分 */
+        #works {
+            margin: 3rem 0;
+        }
+        
+        .artifact-grid {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        
+        .artwork-container {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        .artwork-title { /* 作品标题样式 */
+            text-align: center;
+            color: var(--text-dark);
+            font-size: 1.4rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--accent-color);
+        }
+        
+        .artwork-image {
+            max-width: 100%;
+            max-height: 500px;
+            width: auto;
+            height: auto;
+            border: 2px solid var(--main-color);
+            border-radius: 8px;
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease; /* 添加平滑过渡效果 */
+        }
+        
+        .artwork-image:hover {
+            transform: scale(1.02); /* 悬停时轻微放大 */
+        }
+        
+        .artwork-caption {
+            text-align: center;
+            margin-top: 1.2rem;
+            color: var(--text-dark);
+            font-size: 1rem;
+            line-height: 1.6;
+            padding: 0 1rem;
+            font-style: italic;
+        }
+        
         /*资质认证部分*/
         .certificate-section {
             display: flex;
@@ -133,11 +191,6 @@
             border-radius: 10px;
         }
  
-        .certificate-text {
-            color: var(--text-dark);
-            font-size: 1rem;
-            line-height: 1.5;
-        }
         footer {
             text-align: center;
             margin-top: 40px;
@@ -146,20 +199,137 @@
             color: #666;
             line-height: 1.5
         }
+
         .custom-link {
-            color: blue;
+            color: var(--accent-color);
+            text-decoration: none;
+            border-bottom: 1px dashed currentColor;
         }
 
-        /* 响应式设计 */
-        @media (max-width: 768px) {
-            .id-card {
-                flex-direction: column;
-            }
+    /* 资质认证部分样式 */
+    #authentication {
+        margin: 2rem 0;
+        padding: 2rem;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    }
+    
+    #authentication h2 {
+        text-align: center;
+        color: #4c6e80;
+        margin-bottom: 2rem;
+        font-size: 1.8rem;
+        position: relative;
+        padding-bottom: 10px;
+    }
+    
+    #authentication h2::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 80px;
+        height: 3px;
+        background: #3498db;
+    }
+    
+    .certificate-section {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 30px;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .certificate-image {
+        max-width: 100%;
+        height: auto;
+        border: 1px solid #eee;
+        border-radius: 8px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        max-height: 400px;
+    }
+    
+    .certificate-image:hover {
+        transform: scale(1.02);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    }
+    
+    .certificate-content {
+        flex: 1;
+        min-width: 300px;
+        max-width: 600px;
+    }
+    
+    .certificate-text {
+        font-size: 1.1rem;
+        line-height: 1.8;
+        color: #555;
+        margin-bottom: 1.5rem;
+        background: #f8f9fa;
+        padding: 1.5rem;
+        border-radius: 8px;
+        border-left: 4px solid #3498db;
+    }
+    
+    .verify-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 25px;
+        background: #3498db;
+        color: white;
+        text-decoration: none;
+        border-radius: 30px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3);
+    }
+    
+    .verify-link:hover {
+        background: #2980b9;
+        transform: translateY(-3px);
+        box-shadow: 0 6px 15px rgba(52, 152, 219, 0.4);
+    }
+    
+    /* 响应式设计 */
+    @media (max-width: 768px) {
+        .certificate-section {
+            flex-direction: column;
+        }
+        
+        .certificate-image {
+            max-width: 100%;
+        }
+        
+        .certificate-content {
+            text-align: center;
+        }
+    }
+
+     @media (max-width: 768px) {
+          .id-card {
+            flex-direction: column;
+          }
             
-            .character-portrait {
-                width: 100%;
-                max-width: 300px;
-            }
+          .character-portrait {
+              width: 100%;
+              max-width: 300px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .holo-nav {
+            flex-direction: column;
+          }
+          .nav-links {
+            margin-top: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+          }
         }
     </style>
 </head>
@@ -186,9 +356,10 @@
                 <h2 class="bio-title">秋风Auting</h2>
                 <ul class="bio-list">
                     <li>姓名：秋风(Auting）</li>
-                    <li>性别：双性</li>
-                    <li>国家：神界大陆－神界－风国</li>
-                    <li>性格：作者还没想好，先按作者的来吧，，</li>
+                    <li>性别：双性 男性名为“秋风·雨”，女性名为“秋风·誮”</li>
+                    <li>国家及地区：神界大陆－神界－风国－临元城</li>
+                    <li>职位：临元城城主</li>
+                    <li>性格：温和、善良、大方、知性</li>
                 </ul>
             </div>
         </section>
@@ -196,29 +367,41 @@
         <!-- 背景故事 -->
         <section id="story" class="lore-section">
             <h2>人物故事</h2>
-            <p>待作者撰写。</p>
+            <p>详见《神界》。该作品字数过多，作品正在努力转译，敬请期待。</p>
         </section>
 
         <!-- 展出作品 -->
         <section id="works">
             <h2>在展作品</h2>
             <div class="artifact-grid">
-                <!-- 作品项 -->
+                <div class="artwork-container">
+                    <h3 class="artwork-title">2025贺新春作品</h3>
+                    <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/IMG_20250126_211310.png" 
+                         alt="2025贺新春作品" 
+                         class="artwork-image">
+                    <p class="artwork-caption">
+                        秋风Auting工作组联合蓝图画师岁岁出品<br>
+                        (图片中使用的主角是秋风·誮)
+                    </p>
+                </div>
             </div>
         </section>
-
-        <p>  </p>
         
-        <!资质认证>
-        <section id="authentication">
-            <h2>资质认证</h2>
-            <div class="certificate-section">
-                <!这里我把证书的路径删了，后期要加回去>
-                <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/" alt="证书" class="certificate-image">
-                <p class="certificate-text">该部分尚在制作，敬请期待。您也可通过“湖南省版权服务平台”查询登记号“湘作登字－2024－F－0093957”查看。</p>
+       <!-- 资质认证部分 -->
+    <section id="authentication">
+        <h2>资质认证</h2>
+        <div class="certificate-section">
+            <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/zhengshu.jpg" 
+                 alt="作品登记证书" 
+                 class="certificate-image">
+            <div class="certificate-content">
+                <p class="certificate-text">本证书由湖南省版权局于2024年8月10日正式颁发，登记秋风Auting相关作品。您可通过"湖南省版权服务平台"查询登记号验证证书真伪。</p>
+                <a href="https://www.hunan-copyright.com" target="_blank" class="verify-link">
+                    前往验证平台 <i class="fas fa-external-link-alt"></i>
+                </a>
             </div>
-        </section>
-    </div>
+        </div>
+    </section>
 
     <footer>
       <!-- 页脚联系信息 -->
