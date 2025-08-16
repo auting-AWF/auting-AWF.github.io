@@ -8,6 +8,8 @@
         :root {
             --primary-color: #4c6e80;
             --accent-color: #3498db;
+            --light-bg: #f8f9fa;
+            --dark-text: #2d3436;
         }
 
         * {
@@ -18,14 +20,17 @@
         }
 
         body {
-            background: #f8f9fa;
+            background: var(--light-bg);
+            color: var(--dark-text);
+            line-height: 1.6;
         }
 
         /* 导航栏样式 */
         .navbar {
             background: var(--primary-color);
-            padding: 1rem 2rem;
+            padding: 1rem;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            position: relative;
         }
 
         .nav-container {
@@ -34,71 +39,98 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         .nav-brand {
-            color: white;
-            text-decoration: none;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
             display: flex;
             align-items: center;
-            gap: 1rem;
         }
 
         .nav-logo {
-            width: 120px;
+            height: 50px; /* 固定高度，宽度自适应 */
+            max-width: 100%;
             transition: transform 0.3s;
         }
 
         .nav-logo:hover {
             transform: scale(1.05);
         }
-    a { 
-        color: blue; 
-        text-decoration: none; 
-    } 
- 
-    a:hover { 
-        text-decoration: underline; 
-    } 
+
+        .back-link {
+            color: white;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            transition: background 0.3s;
+        }
+
+        .back-link:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
 
         /* 主内容容器 */
         .main-container {
             max-width: 1200px;
             margin: 2rem auto;
-            padding: 2rem;
+            padding: 1.5rem;
             background: white;
             border-radius: 12px;
             box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--primary-color);
+            margin-bottom: 2rem;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--light-bg);
         }
 
         /* 招募信息板块 */
         .recruitment-section {
             display: grid;
             gap: 2rem;
-            padding: 2rem 0;
+            padding: 1rem 0;
         }
 
         .contact-card {
             background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
             border: 1px solid #eee;
             border-radius: 10px;
-            padding: 2rem;
+            padding: 1.5rem;
             text-align: center;
         }
 
         .qq-contact {
-            display: inline-flex;
+            display: flex;
+            flex-direction: column;
             align-items: center;
             gap: 1rem;
-            padding: 1rem 2rem;
+            padding: 1.5rem;
             background: #f0f8ff;
             border-radius: 8px;
             margin: 1rem 0;
         }
 
         .qq-icon {
-            width: 40px;
-            height: 40px;
+            width: 60px;
+            height: 60px;
+        }
+
+        .contact-details {
+            text-align: center;
+        }
+
+        .contact-details p {
+            margin: 8px 0;
         }
 
         .position-list {
@@ -111,24 +143,101 @@
             padding: 1.5rem;
             border-left: 4px solid var(--accent-color);
             background: #f8f9fa;
+            border-radius: 8px;
+            transition: transform 0.3s;
+        }
+
+        .position-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .position-card h3 {
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .position-card h3::before {
+            content: "▹";
+            color: var(--accent-color);
+        }
+
+        .position-card p {
+            margin: 10px 0;
+            line-height: 1.6;
         }
 
         footer {
             text-align: center;
             margin-top: 40px;
-            padding: 20px 0;
-            font-size: 10px;
+            padding: 20px 1rem;
+            font-size: 0.85rem;
             color: #666;
-            line-height: 1.5
+            line-height: 1.6;
+            background: white;
+            border-top: 1px solid #eee;
+        }
+
+        /* 响应式设计 */
+        @media (min-width: 768px) {
+            .qq-contact {
+                flex-direction: row;
+                text-align: left;
+            }
+            
+            .contact-details {
+                text-align: left;
+            }
+            
+            .position-list {
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            }
+            
+            .nav-container {
+                padding: 0 2rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .nav-brand {
+                position: static;
+                transform: none;
+                margin: 10px auto;
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .back-link {
+                margin-bottom: 10px;
+            }
+            
+            .main-container {
+                padding: 1rem;
+            }
+            
+            .contact-card, .position-card {
+                padding: 1.2rem;
+            }
         }
     </style>
 </head>
 <body>
     <nav class="navbar">
         <div class="nav-container">
-            <a href="https://auting-awf.github.io/about">←返回关于页</a>
-            <div class="metadata" style="color: white;">
-                招募通道
+            <a href="https://auting-awf.github.io/about" class="back-link">
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"/>
+                </svg>
+                返回关于页
+            </a>
+            
+            <div class="nav-brand">
+                <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/Autinglogo.png" 
+                     alt="秋风Auting" 
+                     class="nav-logo">
             </div>
         </div>
     </nav>
@@ -140,38 +249,38 @@
             <div class="contact-card">
                 <h2>联系方式</h2>
                 <div class="qq-contact">
-                    <!待添加QQ截图>
                     <img src="https://static.qq.com/qq2018/img/qq_logo_2x.png" 
                          alt="QQ" 
                          class="qq-icon">
-                    <div>
-                        <p>QQ：458299675</p>
-                        <p>邮箱：458299675@qq.com（开发者）；autumnwind_feng@163.com（秋风Auting）</p>
+                    <div class="contact-details">
+                        <p><strong>QQ：458299675</strong></p>
+                        <p>开发者邮箱：458299675@qq.com</p>
+                        <p>秋风Auting邮箱：autumnwind_feng@163.com</p>
                     </div>
                 </div>
-                <p>添加时请备注“致Auting网页工作组”</p>
+                <p>添加时请备注"致Auting网页工作组"</p>
             </div>
 
             <div class="position-list">
                 <div class="position-card">
                     <h3>开发顾问</h3>
-                    <p>要求：熟悉HTML/CSS/JavaScript，有Github使用经验</p>
-                    <p>“福利”：网页开发署名权</p>
-                    <p>备注：个人开发，感兴趣来，没有薪资</p>
+                    <p><strong>要求：</strong>熟悉HTML/CSS/JavaScript，有Github使用经验</p>
+                    <p><strong>"福利"：</strong>网页开发署名权</p>
+                    <p><strong>备注：</strong>个人开发，感兴趣来，没有薪资</p>
                 </div>
 
                 <div class="position-card">
                     <h3>UI设计</h3>
-                    <p>要求：熟练使用设计工具，有界面设计经验</p>
-                    <p>“福利”：UI开发署名权</p>
-                    <p>备注：个人开发，感兴趣来，没有薪资</p>
+                    <p><strong>要求：</strong>熟练使用设计工具，有界面设计经验</p>
+                    <p><strong>"福利"：</strong>UI开发署名权</p>
+                    <p><strong>备注：</strong>个人开发，感兴趣来，没有薪资</p>
                 </div>
 
                 <div class="position-card">
                     <h3>网页内容管理</h3>
-                    <p>要求：文字功底扎实，熟悉二次元文化；熟悉github上传流程，会通过代码添加作品（静态网站是这样的）</p>
-                    <p>“福利”：参与神界世界观的构建与完善</p>
-                    <p>备注：个人开发，感兴趣来，没有薪资</p>
+                    <p><strong>要求：</strong>文字功底扎实，熟悉二次元文化；熟悉github上传流程，会通过代码添加作品（静态网站是这样的）</p>
+                    <p><strong>"福利"：</strong>参与神界世界观的构建与完善</p>
+                    <p><strong>备注：</strong>个人开发，感兴趣来，没有薪资</p>
                 </div>
             </div>
         </div>
@@ -179,8 +288,8 @@
 
     <footer>
         <p>秋风Auting个人账号：QQ:3788553277（秋风·雨）;2172701924（秋风·誮）；抖音:AutumnWind_Feng</p>
-        <p>Copyright©Auting网页工作组 2025-至今_20250205</p>
+        <p>Copyright© Auting网页工作组 2025-至今_20250205</p>
         <p>招募流程及其它问题反馈：Chunguoquestion@163.com（春国工作室答疑解惑中心）</p>
     </footer>
 </body>
-  </html>
+</html>
