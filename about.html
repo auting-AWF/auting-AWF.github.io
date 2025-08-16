@@ -21,15 +21,6 @@
             background: #f8f9fa;
         }
 
-        /* 修复1：display属性语法错误 */
-        .nav-brand {
-            color: white;
-            text-decoration: none;
-            display: flex; /* 修正为正确语法 */
-            align-items: center;
-            gap: 1rem;
-        }
-
         .navbar {
             background: var(--primary-color);
             padding: 1rem 2rem;
@@ -44,6 +35,14 @@
             align-items: center;
         }
 
+        .nav-brand {
+            color: white;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
         .nav-logo {
             width: 120px;
             transition: transform 0.3s;
@@ -53,21 +52,19 @@
             transform: scale(1.05);
         }
 
-        /* 修复2：margin单位书写错误 */
         .main-container {
             max-width: 1200px;
-            margin: 2rem auto; /* 修正空格问题 */
+            margin: 2rem auto;
             padding: 2rem;
             background: white;
             border-radius: 12px;
             box-shadow: 0 2px 15px rgba(0,0,0,0.05);
         }
 
-        /* 修复3：gap单位书写错误 */
         .dev-dashboard {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem; /* 修正单位书写 */
+            gap: 2rem;
             padding: 2rem 0;
         }
 
@@ -96,7 +93,6 @@
             line-height: 1.8;
         }
 
-        /* 新增：链接样式 */
         .metadata a {
             color: var(--accent-color);
             text-decoration: none;
@@ -117,21 +113,17 @@
         .timeline-item {
             display: flex;
             justify-content: space-between;
-            padding: 1rem; /* 修正冒号位置 */
+            padding: 1rem;
             border-left: 3px solid var(--accent-color);
             margin: 1rem 0;
         }
-
-        footer {
-            text-align: center;
-            margin-top: 40px;
-            padding: 20px 0;
-            font-size: 10px;
-            color: #666;
-            line-height: 1.5
+        
+        /* 新增：更新详情右对齐样式 */
+        .update-detail {
+            text-align: right;
+            width: 60%;
         }
 
-        /* 新增：加入我们按钮样式 */
         .joinus-link {
             display: block;
             margin-top: 1rem;
@@ -145,21 +137,28 @@
 
         .joinus-link:hover {
             background: #2980b9;
-            transform: none; /* 禁用原有hover效果 */
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px 0;
+            font-size: 10px;
+            color: #666;
+            line-height: 1.5
         }
     </style>
 </head>
 <body>
     <nav class="navbar">
         <div class="nav-container">
-            <!-- 修复4：主站链接 -->
             <a href="https://auting-awf.github.io" class="nav-brand">
                 <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/Autinglogo.png" 
                      alt="官网Logo" 
                      class="nav-logo">
             </a>
             <div class="metadata" style="color: white;">
-                当前版本：Beta1.0.1
+                当前版本：Beta1.0.2
             </div>
         </div>
     </nav>
@@ -172,9 +171,10 @@
                 <h2 class="card-title">网页工作组</h2>
                 <div class="metadata">
                     <p>• 名称：Auting网页工作组</p>
-                    <p>• 成立时间：2024-4-20</p> <!-- 修正日期符号 -->
+                    <p>• 成立时间：2024-4-20</p>
                     <p>• 成员数量：2人</p>
-                    <!-- 修复5：正确链接语法 -->
+                    <!-- 新增成员链接 -->
+                    <p>• 成员：<a href="https://tiantiane0616.github.io" target="_blank">天天饿喵Tiantiane</a></p>
                     <a href="/joinus.html" class="joinus-link">
                         加入我们 →
                     </a>
@@ -185,7 +185,7 @@
                 <h2 class="card-title">美术设计</h2>
                 <div class="metadata">
                     <p>✦ UX：秋风Auting</p>
-                    <p>✦ UI设计师：Deepseek AI</p>
+                    <p>✦ UI设计：Deepseek AI</p>
                     <p>✦ UI信息：ChunG UI 2.0（GodLive Use）</p>
                 </div>
             </div>
@@ -193,7 +193,6 @@
             <div class="info-card">
                 <h2 class="card-title">技术支持</h2>
                 <div class="metadata">
-                    <!-- 修复仓库链接 -->
                     <p>📦 项目仓库：
                     <a href="https://github.com/auting-AWF/auting-AWF.github.io" 
                       target="_blank" 
@@ -208,14 +207,24 @@
         </div>
 
         <div class="version-timeline">
-            <h2>版本更新历史</h2>
-                <div class="timeline-item">
-                <div class="version-info">
+            <h2>更新日志</h2>
+            <div class="timeline-item">
+                  <div class="version-info">
+                    <h3>Beta1.0.2</h3>
+                    <p>2024-8-16</p>
+                  </div>
+                <div class="update-detail">
+                    <p>新增 "合作中心"板块</p>
+                    <p>优化 部分页面的显示效果</p>
+                </div>
+            </div>
+            <div class="timeline-item">
+                  <div class="version-info">
                     <h3>Beta1.0.1</h3>
                     <p>2024-2-9</p>
-                </div>
+                  </div>
                 <div class="update-detail">
-                    <p>新增 “加入我们”板块</p>
+                    <p>新增 "加入我们"板块</p>
                     <p>修复 部分页面的显示bug</p>
                 </div>
             </div>
@@ -229,11 +238,11 @@
                 </div>
             </div>
         </div>
-    </div> <!-- 修正闭合标签格式 -->
+    </div>
 
     <footer>
       <p>秋风Auting个人账号：QQ:3788553277（秋风·雨）;2172701924（秋风·誮）；抖音:AutumnWind_Feng</p>
-      <p>Copyright@Auting网页工作组 2025-至今_20250205</p>
+      <p>Copyright©Auting网页工作组 2025-至今_20250205</p>
       <p>网页问题反馈：Chunguoquestion@163.com（春国工作室答疑解惑中心）</p>
     </footer>
 </body>
