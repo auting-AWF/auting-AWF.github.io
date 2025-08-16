@@ -138,15 +138,16 @@
             box-shadow: 0 5px 20px rgba(0,0,0,0.08);
             max-width: 800px;
             width: 100%;
+            text-align: left; /* 添加全局左对齐 */
         }
         
-        .artwork-title { /* 作品标题样式 */
-            text-align: center;
+        .artwork-title { /* 作品标题 */
             color: var(--text-dark);
             font-size: 1.4rem;
             margin-bottom: 1rem;
             padding-bottom: 0.5rem;
             border-bottom: 2px solid var(--accent-color);
+            text-align: left; /* 确保标题左对齐 */
         }
         
         .artwork-image {
@@ -157,9 +158,9 @@
             border: 2px solid var(--main-color);
             border-radius: 8px;
             display: block;
-            margin: 0 auto;
+            margin: 0; /* 移除自动居中 */
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease; /* 添加平滑过渡效果 */
+            transition: transform 0.3s ease;
         }
         
         .artwork-image:hover {
@@ -167,13 +168,12 @@
         }
         
         .artwork-caption {
-            text-align: center;
+            text-align: left; /* 改为左对齐 */
             margin-top: 1.2rem;
             color: var(--text-dark);
             font-size: 1rem;
             line-height: 1.6;
-            padding: 0 1rem;
-            font-style: italic;
+            padding: 0; /* 移除左右内边距 */
         }
         
         /*资质认证部分*/
