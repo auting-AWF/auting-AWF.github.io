@@ -40,8 +40,8 @@
             backdrop-filter: blur(10px);
             padding: 15px 5%;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            justify-content: space-between;  /* 左右分布 */
+            align-items: center;  /* 垂直居中 */
             box-shadow: var(--shadow);
             z-index: 1000;
         }
@@ -51,6 +51,8 @@
             align-items: center;
             gap: 15px;
             text-decoration: none;
+            flex: 1;
+            justify-content: center;
         }
 
         .nav-logo {
@@ -62,6 +64,7 @@
             font-size: 1.4rem;
             font-weight: 700;
             color: var(--primary-color);
+            margin: 0 auto;
         }
 
         .nav-links {
@@ -266,10 +269,12 @@
         /* 简化页脚 */
         .simple-footer {
             text-align: center;
-            padding: 30px 20px;
+            padding: 20px 20px;
             background: var(--primary-color);
             color: white;
             margin-top: 50px;
+            font-size: 0.8rem;
+            line-height: 1.4;
         }
 
         .simple-footer p {
@@ -288,8 +293,13 @@
         @media (max-width: 768px) {
             .floating-nav {
                 flex-direction: column;
-                gap: 15px;
+                gap: 10px;
                 padding: 15px;
+            }
+
+            .nav-title {
+                text-align: center;
+                margin: 10px 0 0 0;
             }
             
             .nav-links {
@@ -352,11 +362,32 @@
         <p class="page-subtitle">
             如果您是个人画师，想达成临时合作关系，别担心，我们也准备了充足的文件来保证合作顺利进行。
         </p>
+        <!-- 修正后的链接代码 -->
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="https://docs.google.com/viewer?url=https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/合作文件模板.docx"
+               target="_blank"
+               style="display: inline-flex; align-items: center; gap: 10px; padding: 12px 30px; background: #3498db; color: white; text-decoration: none; border-radius: 30px; font-weight: 600; transition: all 0.3s; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                <i class="fas fa-file-word" style="font-size: 1.3em;"></i>
+                查看合作文件（尚未准备好）
+            </a>
+            <p style="margin-top: 12px; font-size: 0.9em; color: #666;">
+                将在新窗口打开文档预览
+            </p>
+        </div>
+
+        <style>
+            /* 添加悬停效果 */
+            a:hover {
+                background: #2980b9;
+                transform: translateY(-3px);
+                box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+            }
+        </style>
     </header>
 
     <!-- 合作对象网格 - 修改为虚以待位 -->
     <div class="collaborators-grid">
-        <!-- 虚以待位 1 -->
+        <!-- 位置 1 -->
         <div class="collaborator-card">
             <div class="card-header">
                 <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/refs/heads/index/suisui.png" 
@@ -370,7 +401,7 @@
             </div>
         </div>
 
-        <!-- 虚以待位 2 -->
+        <!-- 位置 2 -->
         <div class="collaborator-card">
             <div class="card-header">
                 <img src="https://static.vecteezy.com/system/resources/previews/010/150/412/non_2/simple-question-mark-icon-free-vector.jpg" 
@@ -384,7 +415,7 @@
             </div>
         </div>
 
-        <!-- 虚以待位 3 -->
+        <!-- 位置 3 -->
         <div class="collaborator-card">
             <div class="card-header">
                 <img src="https://static.vecteezy.com/system/resources/previews/010/150/412/non_2/simple-question-mark-icon-free-vector.jpg" 
