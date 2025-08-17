@@ -122,7 +122,14 @@
         /* 作品展示部分 */
         #works {
             margin: 3rem 0;
+            width: 100vw;
+            position: relative;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0 20px;
+            box-sizing: border-box;
         }
+
         
         .artifact-grid {
             display: flex;
@@ -190,7 +197,14 @@
             border: 2px solid var(--main-color);
             border-radius: 10px;
         }
- 
+
+        #profile,
+        #story,
+        #works,
+        #authentication {
+            scroll-margin-top: 80px; /* 可根据实际调整 */
+        }
+        
         footer {
             text-align: center;
             margin-top: 40px;
@@ -406,7 +420,7 @@
     <footer>
       <!-- 页脚联系信息 -->
       <p>秋风Auting个人账号：QQ:3788553277（秋风·雨）;2172701924（秋风·誮）；抖音:AutumnWind_Feng</p>
-      <p>Copyright@Auting网页工作组 2025-至今_20250205</p>
+      <p>Copyright©Auting网页工作组 2025-至今_20250205</p>
       <p>网页问题反馈：Chunguoquestion@163.com（春国工作室答疑解惑中心）</p>
       <p>关于此网站的更多<a href="https://auting-awf.github.io/about" target="_blank" class="custom-link" rel="noopener noreferrer">开发信息</a>，请点击</p>
     </footer>
