@@ -46,15 +46,6 @@
             z-index: 1000;
         }
 
-        .nav-brand {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            text-decoration: none;
-            flex: 1;
-            justify-content: center;
-        }
-
         .nav-logo {
             height: 40px; /* 调整为适合长条形logo的高度 */
             object-fit: contain;
@@ -65,6 +56,8 @@
             font-weight: 700;
             color: var(--primary-color);
             margin: 0 auto;
+            pointer-events: none; 
+            user-select: none;
         }
 
         .nav-links {
@@ -83,11 +76,21 @@
         }
 
         .nav-link:hover {
-            background: rgba(76, 110, 128, 0.1);
+            background: transparent;
         }
 
         .nav-link i {
             margin-right: 8px;
+        }
+
+        .nav-logo-link {
+            display: flex;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+         .nav-logo-link:hover {
+            transform: scale(1.05);
         }
 
         /* 页面标题 */
@@ -356,14 +359,18 @@
         </div>
     </div>
 
-    <!-- 悬浮导航栏 -->
+   <!-- 修改后的悬浮导航栏 -->
     <nav class="floating-nav">
-        <a href="https://auting-awf.github.io" class="nav-brand">
+        <!-- 只让Logo可点击 -->
+        <a href="https://auting-awf.github.io" class="nav-logo-link">
             <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/Autinglogo.png" 
                  alt="官网Logo" 
                  class="nav-logo">
-            <span class="nav-title">秋风Auting合作中心</span>
         </a>
+    
+        <!-- 标题不可点击 -->
+        <span class="nav-title">秋风Auting合作中心</span>
+    
         <div class="nav-links">
             <a href="https://auting-awf.github.io" class="nav-link">
                 <i class="fas fa-home"></i>返回官网
