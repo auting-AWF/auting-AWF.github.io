@@ -338,6 +338,24 @@
     </style>
 </head>
 <body>
+    <!-- 模态框容器 -->
+    <div id="collaboratorModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 2000; align-items: center; justify-content: center;">
+        <div class="modal-content" style="background: white; border-radius: 12px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; padding: 30px; position: relative;">
+            <!-- 关闭按钮 -->
+            <button onclick="closeModal()" style="position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 1.5rem; cursor: pointer;">×</button>
+        
+            <!-- 模态框内容（动态填充） -->
+            <div class="modal-header" style="text-align: center; margin-bottom: 20px;">
+                <img id="modalImage" src="" alt="合作方图片" style="width: 180px; height: 180px; object-fit: cover; border-radius: 50%; margin: 0 auto 20px; display: block;">
+                <span id="modalType" style="background: var(--accent-color); color: white; padding: 5px 15px; border-radius: 20px; font-size: 0.9rem;"></span>
+            </div>
+            <div class="modal-body">
+                <h2 id="modalName" style="font-size: 2rem; color: var(--primary-color); text-align: center; margin-bottom: 20px;"></h2>
+                <p id="modalBio" style="font-size: 1.1rem; line-height: 1.8; color: #555;"></p>
+            </div>
+        </div>
+    </div>
+
     <!-- 悬浮导航栏 -->
     <nav class="floating-nav">
         <a href="https://auting-awf.github.io" class="nav-brand">
@@ -497,6 +515,35 @@
                     behavior: 'smooth'
                 });
             });
+        });
+        // 打开模态框并填充内容
+        function openModal(card) {
+            // 获取卡片中的数据
+            const imageSrc = card.querySelector('.collaborator-image').src;
+            const typeText = card.querySelector('.collaborator-type').textContent;
+            const nameText = card.querySelector('.collaborator-name').textContent;
+            const bioText = card.querySelector('.collaborator-bio').textContent;
+    
+            // 填充到模态框
+            document.getElementById('modalImage').src = imageSrc;
+            document.getElementById('modalType').textContent = typeText;
+            document.getElementById('modalName').textContent = nameText;
+            document.getElementById('modalBio').textContent = bioText;
+    
+            // 显示模态框
+            document.getElementById('collaboratorModal').style.display = 'flex';
+            document.body.style.overflow = 'hidden'; // 禁止背景滚动
+        }
+
+        // 关闭模态框
+        function closeModal() {
+            document.getElementById('collaboratorModal').style.display = 'none';
+            document.body.style.overflow = 'auto'; // 恢复滚动
+        }
+
+        // 给所有合作卡片添加点击事件
+        document.querySelectorAll('.collaborator-card').forEach(card => {
+            card.addEventListener('click', () => openModal(card));
         });
     </script>
 </body>
