@@ -76,7 +76,8 @@
         }
 
         .nav-link:hover {
-            background: transparent;
+            color: var(--accent-color); /* 添加悬停颜色变化 */
+            transform: translateY(-1px); /* 轻微上移效果 */
         }
 
         .nav-link i {
@@ -285,59 +286,77 @@
             font-size: 0.9rem;
         }
 
-        /* 响应式设计 */
-        @media (max-width: 992px) {
-            .contact-methods {
-                flex-direction: column;
-                align-items: center;
-            }
+       /* 响应式设计 - 移动端优化 */
+    @media (max-width: 768px) {
+        /* 导航栏优化 */
+          .floating-nav {
+            flex-direction: row;
+            justify-content: space-between;
+            padding: 8px 5%;
+            min-height: 50px;
         }
-
-        @media (max-width: 768px) {
-            .floating-nav {
-                flex-direction: column;
-                gap: 10px;
-                padding: 15px;
-            }
-
-            .nav-title {
-                text-align: center;
-                margin: 10px 0 0 0;
-            }
-            
-            .nav-links {
-                width: 100%;
-                justify-content: center;
-            }
-            
-            .page-title {
-                font-size: 2rem;
-            }
+    
+        /* 隐藏Logo */
+        .nav-logo-link {
+            display: none;
         }
-
-        @media (max-width: 576px) {
-            .nav-links {
-                flex-direction: column;
-                gap: 10px;
-            }
-            
-            .nav-link {
-                width: 100%;
-                text-align: center;
-            }
-            
-            .page-header {
-                padding: 30px 15px;
-            }
-            
-            .contact-card {
-                padding: 25px;
-            }
-            
-            .collaborators-grid {
-                grid-template-columns: 1fr;
-            }
+    
+        /* 标题优化 */
+        .nav-title {
+            font-size: 1.2rem;
+            margin: 0;
+            padding: 5px 0;
+            position: static;
+            transform: none;
+            text-align: center;
+            flex-grow: 1;
         }
+    
+        /* 返回按钮优化 */
+        .nav-links {
+            width: auto;
+        }
+    
+        .nav-link {
+            padding: 5px 12px;
+            font-size: 0.9rem;
+        }
+    
+        .nav-link i {
+            margin-right: 0;
+        }
+    
+        /* 调整页面标题间距 */
+        .page-header {
+            padding-top: 30px;
+        }
+    
+        /* 合作卡片调整为单列 */
+        .collaborators-grid {
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+    }
+
+    @media (max-width: 576px) {
+        /* 进一步精简导航栏 */
+        .floating-nav {
+            padding: 5px 3%;
+        }
+    
+        .nav-title {
+            font-size: 1.1rem;
+        }
+    
+        /* 联系方式卡片调整 */
+        .contact-card {
+            padding: 20px;
+        }
+    
+        .contact-item {
+            min-width: 100%;
+        }
+    }
     </style>
 </head>
 <body>
@@ -359,23 +378,24 @@
         </div>
     </div>
 
-   <!-- 修改后的悬浮导航栏 -->
+    <!-- 修改后的悬浮导航栏 -->
     <nav class="floating-nav">
-        <!-- 只让Logo可点击 -->
-        <a href="https://auting-awf.github.io" class="nav-logo-link">
-            <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/Autinglogo.png" 
-                 alt="官网Logo" 
-                 class="nav-logo">
-        </a>
+      <!-- 桌面端显示Logo -->
+      <a href="https://auting-awf.github.io" class="nav-logo-link desktop-only">
+          <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/Autinglogo.png" 
+               alt="官网Logo" 
+               class="nav-logo">
+      </a>
     
-        <!-- 标题不可点击 -->
-        <span class="nav-title">秋风Auting合作中心</span>
+      <!-- 标题 -->
+      <span class="nav-title">秋风Auting合作中心</span>
     
-        <div class="nav-links">
-            <a href="https://auting-awf.github.io" class="nav-link">
-                <i class="fas fa-home"></i>返回官网
-            </a>
-        </div>
+      <!-- 返回链接 -->
+      <div class="nav-links">
+          <a href="https://auting-awf.github.io" class="nav-link">
+              <i class="fas fa-home"></i><span class="desktop-only">返回官网</span>
+          </a>
+      </div>
     </nav>
 
     <!-- 页面标题 -->
