@@ -67,6 +67,26 @@
             margin: 0.5rem 0;
         }
 
+        /* 工作进度按钮 */
+        .progress-btn {
+            display: inline-block;
+            margin: 15px 0;
+            padding: 8px 20px;
+            background: var(--accent-color);
+            color: white;
+            border-radius: 30px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+        }
+
+        .progress-btn:hover {
+            background: #2980b9;
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
         /* 导航栏 */
         nav {
             margin: 2rem 0;
@@ -245,12 +265,48 @@
             padding: 2rem;
             border-radius: 8px;
             width: 90%;
-            max-width: 400px;
+            max-width: 500px; /* 增加最大宽度 */
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
+            text-align: left; /* 改为左对齐 */
+        }
+
+        .alert-content h3 {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
             text-align: center;
+        }
+
+        .alert-content p {
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+
+        .alert-content ul {
+            padding-left: 20px;
+            margin-bottom: 1.5rem;
+        }
+
+        .alert-content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .feedback-notice {
+            background: #fff8e1;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 1.5rem 0;
+        }
+
+        .feedback-notice h4 {
+            color: #d35400;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .alert-content button {
@@ -262,6 +318,10 @@
             cursor: pointer;
             margin-top: 1rem;
             transition: background 0.3s;
+            display: block;
+            margin: 20px auto 0;
+            font-size: 1rem;
+            font-weight: 600;
         }
 
         .alert-content button:hover {
@@ -306,6 +366,10 @@
                 flex-direction: column;
                 text-align: center;
             }
+            
+            .alert-content {
+                padding: 1.5rem;
+            }
         }
     </style>
 </head>
@@ -315,7 +379,41 @@
         <p>当前网站正在部署，由Auting网页工作组丨Deepseek AI×豆包 AI提供内容支持。</p>
     </div>
 
-    <!-- 弹窗 -->
+    <!-- 网站进度弹窗 -->
+    <div id="progressModal" class="alert-modal">
+        <div class="alert-content">
+            <h3><i class="fas fa-tasks"></i> 网站开发进度与计划</h3>
+            
+            <p>感谢您访问秋风Auting官网！Auting网页工作组正在全力开发和完善网站功能。</p>
+            
+            <h4>当前工作内容：</h4>
+            <ul>
+                <li><i class="fas fa-check-circle" style="color: #27ae60;"></i> 修复已知bug</li>
+                <li><i class="fas fa-check-circle" style="color: #27ae60;"></i> 完善移动端适配</li>
+                <li><i class="fas fa-spinner" style="color: #f39c12;"></i> 初步优化移动端浏览体验</li>
+                <li><i class="fas fa-spinner" style="color: #f39c12;"></i> 建立合作中心平台</li>
+            </ul>
+            
+            <h4>近期计划：</h4>
+            <ul>
+                <li>完成二级域名网站部署（预计2028年+）</li>
+                <li>上线秋风Auting作品数据库（预计2026年）</li>
+                <li>神界阁Wed端搭建（2025年9月前）</li>
+                <li>添加多语言支持（待实际反馈）</li>
+            </ul>
+            
+            <div class="feedback-notice">
+                <h4><i class="fas fa-exclamation-triangle"></i> 重要提示</h4>
+                <p>在网站开发期间，如果您遇到任何问题或有改进建议，请随时向我们反馈！</p>
+                <p>📧 反馈邮箱：<strong>Chunguoquestion@163.com</strong></p>
+                <p>我们会认真阅读每一条反馈，并在后续版本中改进。</p>
+            </div>
+            
+            <button onclick="closeProgressModal()">关闭窗口</button>
+        </div>
+    </div>
+
+    <!-- 原弹窗保持不变 -->
     <div id="customAlert" class="alert-modal">
         <div class="alert-content">
             <h3>开发者尚未完成网页部署</h3>
@@ -328,6 +426,12 @@
         <h1>秋风Auting官网</h1>
         <p>欢迎来到秋风Auting官网！</p>
         <h5>网站尚在搭建，功能有待完善，此网站内容仅供参考。</h5>
+        
+        <!-- 添加的工作进度按钮 -->
+        <div class="progress-btn" onclick="showProgressModal()">
+            <i class="fas fa-info-circle"></i> 点击查看网站计划
+        </div>
+        
         <h6>⚠️ 受Github服务器限制，在夜间访问本网站时，可能出现无法正常显示图片的问题</h6>
     </header>
 
@@ -394,19 +498,34 @@
     </footer>
 
     <script>
-        // 显示弹窗
+        // 显示原弹窗
         function showAlert() {
             document.getElementById("customAlert").style.display = "block";
         }
 
-        // 关闭弹窗
+        // 关闭原弹窗
         function closeAlert() {
             document.getElementById("customAlert").style.display = "none";
         }
+        
+        // 显示进度弹窗
+        function showProgressModal() {
+            document.getElementById("progressModal").style.display = "block";
+        }
+        
+        // 关闭进度弹窗
+        function closeProgressModal() {
+            document.getElementById("progressModal").style.display = "none";
+        }
 
-        // 点击遮罩层关闭
-        document.getElementById("customAlert").addEventListener("click", function(e) {
-            if(e.target === this) closeAlert();
+        // 点击遮罩层关闭弹窗
+        const modals = document.querySelectorAll('.alert-modal');
+        modals.forEach(modal => {
+            modal.addEventListener("click", function(e) {
+                if(e.target === this) {
+                    this.style.display = "none";
+                }
+            });
         });
     </script>
 </body>
