@@ -244,6 +244,7 @@
             background: white;
             border-radius: 10px;
             padding: 15px;
+            min-height: auto;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             transition: all 0.3s;
             cursor: pointer;
@@ -287,7 +288,8 @@
         }
 
         .friend-link-item.active .friend-link-description {
-            max-height: 100px;
+            max-height: 250px;
+            overflow: visible;
         }
 
         /* 页脚 */
@@ -335,6 +337,9 @@
             left: 50%;
             transform: translate(-50%, -50%);
             text-align: left;
+            max-height: 85vh; /* 新增：限制最大高度为视口的80% */
+            overflow-y: auto; /* 新增：内容超出时显示垂直滚动条 */
+            box-sizing: border-box; /* 确保padding不增加总高度 */
         }
 
         .alert-content h3 {
@@ -587,7 +592,7 @@
                         <i class="fas fa-chevron-down friend-link-arrow"></i>
                     </div>
                     <div class="friend-link-description">
-                        <p>神界阁是由Auting工作组联合春国工作室出品的，用于神界成员查看神界圈资讯和查找议案、查看神界文件的平台，我们会在这展示神界的部分内容，欢迎访问。</p>
+                        <p>神界阁是由Auting工作组联合春国工作室出品的，用于神界成员查看神界圈资讯和查找议案、查看神界文件的平台，我们会在这展示神界的公开内容，欢迎访问。</p>
                         <a href="https://godlive-web.github.io" target="_blank" class="custom-link">访问官网</a>
                     </div>
                 </div>
