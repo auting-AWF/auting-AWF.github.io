@@ -30,9 +30,14 @@
             background: var(--text-light);
             color: var(--text-dark);
             line-height: 1.6;
-            max-width: 800px;
+            max-width: 100%; /* 修改为100%宽度 */
             margin: 0 auto;
             padding: 20px;
+        }
+
+        .container {
+            max-width: 800px; /* 添加容器约束 */
+            margin: 0 auto;
         }
 
         /* 顶部注释 */
@@ -258,6 +263,7 @@
             height: 100%;
             background: rgba(0,0,0,0.5);
             z-index: 999;
+            overflow: auto; /* 添加滚动支持 */
         }
 
         .alert-content {
@@ -265,12 +271,10 @@
             padding: 2rem;
             border-radius: 8px;
             width: 90%;
-            max-width: 500px; /* 增加最大宽度 */
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: left; /* 改为左对齐 */
+            max-width: 600px; /* 增加最大宽度 */
+            position: relative;
+            margin: 30px auto; /* 居中显示 */
+            text-align: left;
         }
 
         .alert-content h3 {
@@ -371,131 +375,144 @@
                 padding: 1.5rem;
             }
         }
+
+        @media (min-width: 1200px) {
+            /* 宽屏特定样式 */
+            .container {
+                max-width: 1000px; /* 增加宽屏下的最大宽度 */
+            }
+            
+            .alert-content {
+                max-width: 700px; /* 宽屏下弹窗更大 */
+            }
+        }
     </style>
 </head>
 
 <body>
-    <div class="annotation">
-        <p>当前网站正在部署，由Auting网页工作组丨Deepseek AI×豆包 AI提供内容支持。</p>
-    </div>
+    <div class="container"> <!-- 添加容器约束内容宽度 -->
+        <div class="annotation">
+            <p>当前网站正在部署，由Auting网页工作组丨Deepseek AI×豆包 AI提供内容支持。</p>
+        </div>
 
-    <!-- 网站进度弹窗 -->
-    <div id="progressModal" class="alert-modal">
-        <div class="alert-content">
-            <h3><i class="fas fa-tasks"></i> 网站开发进度与计划</h3>
+        <!-- 网站进度弹窗 -->
+        <div id="progressModal" class="alert-modal">
+            <div class="alert-content">
+                <h3><i class="fas fa-tasks"></i> 网站开发进度与计划</h3>
+                
+                <p>感谢您访问秋风Auting官网！Auting网页工作组正在全力开发和完善网站功能。</p>
+                
+                <h4>当前工作内容：</h4>
+                <ul>
+                    <li><i class="fas fa-check-circle" style="color: #27ae60;"></i> 初步优化移动端浏览体验</li>/* 已完成 */
+                    <li><i class="fas fa-check-circle" style="color: #27ae60;"></i> 建立合作中心平台</li>
+                    <li><i class="fas fa-spinner" style="color: #f39c12;"></i> 建立上线秋风Auting作品数据库</li>/* 未完成 */
+                    <li><i class="fas fa-spinner" style="color: #f39c12;"></i> 修复更多已知bug</li>
+                    <li><i class="fas fa-spinner" style="color: #f39c12;"></i> 完善移动端适配</li>
+                </ul>
+                
+                <h4>近期计划：</h4>
+                <ul>
+                    <li>完成二级域名网站部署（预计2028年后）</li>
+                    <li>上线秋风Auting作品数据库（预计2026年）</li>
+                    <li>添加多语言支持（根据需要）</li>
+                </ul>
+                
+                <div class="feedback-notice">
+                    <h4><i class="fas fa-exclamation-triangle"></i> 重要提示</h4>
+                    <p>网站尚处于开发测试阶段，如果您遇到任何问题或者改进建议，请及时通过邮箱向我们反馈，这对我们非常重要。</p>
+                    <p>📧 反馈邮箱：<strong>Chunguoquestion@163.com</strong></p>
+                    <p>我们会认真阅读每一条反馈，并在后续版本中改进。</p>
+                </div>
+                
+                <button onclick="closeProgressModal()">关闭窗口</button>
+            </div>
+        </div>
+
+        <!-- 原弹窗保持不变 -->
+        <div id="customAlert" class="alert-modal">
+            <div class="alert-content">
+                <h3>开发者尚未完成网页部署</h3>
+                <p>Auting网页工作组正在推进部署不基于github的二级域名网站，敬请期待！</p>
+                <button onclick="closeAlert()">关闭</button>
+            </div>
+        </div>
+
+        <header>
+            <h1>秋风Auting官网</h1>
+            <p>欢迎来到秋风Auting官网！</p>
+            <h5>网站尚在搭建，功能有待完善，此网站内容仅供参考。</h5>
             
-            <p>感谢您访问秋风Auting官网！Auting网页工作组正在全力开发和完善网站功能。</p>
-            
-            <h4>当前工作内容：</h4>
-            <ul>
-                <li><i class="fas fa-check-circle" style="color: #27ae60;"></i> 修复已知bug</li>
-                <li><i class="fas fa-check-circle" style="color: #27ae60;"></i> 完善移动端适配</li>
-                <li><i class="fas fa-spinner" style="color: #f39c12;"></i> 初步优化移动端浏览体验</li>
-                <li><i class="fas fa-spinner" style="color: #f39c12;"></i> 建立合作中心平台</li>
-            </ul>
-            
-            <h4>近期计划：</h4>
-            <ul>
-                <li>完成二级域名网站部署（预计2028年+）</li>
-                <li>上线秋风Auting作品数据库（预计2026年）</li>
-                <li>神界阁Wed端搭建（2025年9月前）</li>
-                <li>添加多语言支持（待实际反馈）</li>
-            </ul>
-            
-            <div class="feedback-notice">
-                <h4><i class="fas fa-exclamation-triangle"></i> 重要提示</h4>
-                <p>在网站开发期间，如果您遇到任何问题或有改进建议，请随时向我们反馈！</p>
-                <p>📧 反馈邮箱：<strong>Chunguoquestion@163.com</strong></p>
-                <p>我们会认真阅读每一条反馈，并在后续版本中改进。</p>
+            <!-- 添加的工作进度按钮 -->
+            <div class="progress-btn" onclick="showProgressModal()">
+                <i class="fas fa-info-circle"></i> 查看网站开发进程
             </div>
             
-            <button onclick="closeProgressModal()">关闭窗口</button>
-        </div>
-    </div>
+            <h6>⚠️ 受Github服务器限制，在夜间访问本网站时，可能出现无法正常显示图片的问题</h6>
+        </header>
 
-    <!-- 原弹窗保持不变 -->
-    <div id="customAlert" class="alert-modal">
-        <div class="alert-content">
-            <h3>开发者尚未完成网页部署</h3>
-            <p>Auting网页工作组正在推进部署不基于github的二级域名网站，敬请期待！</p>
-            <button onclick="closeAlert()">关闭</button>
-        </div>
-    </div>
+        <nav>
+            <a href="#about">基本信息</a>
+            <a href="#work">作品展示</a>
+            <a href="#collaboration">合作中心</a>
+            <a href="javascript:void(0)" onclick="showAlert()">原官网</a>
+        </nav>
 
-    <header>
-        <h1>秋风Auting官网</h1>
-        <p>欢迎来到秋风Auting官网！</p>
-        <h5>网站尚在搭建，功能有待完善，此网站内容仅供参考。</h5>
-        
-        <!-- 添加的工作进度按钮 -->
-        <div class="progress-btn" onclick="showProgressModal()">
-            <i class="fas fa-info-circle"></i> 点击查看网站计划
-        </div>
-        
-        <h6>⚠️ 受Github服务器限制，在夜间访问本网站时，可能出现无法正常显示图片的问题</h6>
-    </header>
+        <section id="about">
+            <div class="division" onclick="window.location.href = 'https://auting-awf.github.io/personaldata'">
+                <h2>秋风Auting</h2>
+            </div>
+            <div class="avatar-container">
+                <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/4622f8e6df5143e6b377d07abbe7f915.png" 
+                     alt="秋风Auting自设形象"
+                     onclick="window.location.href = 'https://auting-awf.github.io/personaldata'">
+            </div>
+            <div class="subfield" onclick="window.location.href = 'https://auting-awf.github.io/personaldata'">
+                <p>上图展示的是秋风Auting的Q版自设，由画师岁狸绘制。</p>
+            </div>
+        </section>
 
-    <nav>
-        <a href="#about">基本信息</a>
-        <a href="#work">作品展示</a>
-        <a href="#collaboration">合作中心</a>
-        <a href="javascript:void(0)" onclick="showAlert()">原官网</a>
-    </nav>
-
-    <section id="about">
-        <div class="division" onclick="window.location.href = 'https://auting-awf.github.io/personaldata'">
-            <h2>秋风Auting</h2>
-        </div>
-        <div class="avatar-container">
-            <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/4622f8e6df5143e6b377d07abbe7f915.png" 
-                 alt="秋风Auting自设形象"
-                 onclick="window.location.href = 'https://auting-awf.github.io/personaldata'">
-        </div>
-        <div class="subfield" onclick="window.location.href = 'https://auting-awf.github.io/personaldata'">
-            <p>上图展示的是秋风Auting的Q版自设，由画师岁狸绘制。</p>
-        </div>
-    </section>
-
-    <section id="work">
-        <div class="division">
-            <h2>作品展示</h2>
-        </div>
-        <div>
-            <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/mmexport1723590148280.png" 
-                 alt="秋风Auting的2025年新春作品">
-            <div class="subfield">
-                <p>秋风Auting的2025年新春作品（1）。作品号：20240600_Suili</p>
-                <div class="annotation">
-                    <p>此外，之后将支持您点击此模块的任意位置进入秋风Auting公开作品数据库，敬请期待。</p>
+        <section id="work">
+            <div class="division">
+                <h2>作品展示</h2>
+            </div>
+            <div>
+                <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/index/mmexport1723590148280.png" 
+                     alt="秋风Auting的2025年新春作品">
+                <div class="subfield">
+                    <p>秋风Auting的2025年新春作品（1）。作品号：20240600_Suili</p>
+                    <div class="annotation">
+                        <p>此外，之后将支持您点击此模块的任意位置进入秋风Auting公开作品数据库，敬请期待。</p>
+                    </div>
                 </div>
             </div>
-        </div>
-    </section>
-    
-    <!-- 新增的合作中心入口 -->
-    <section id="collaboration">
-        <div class="division">
-            <h2>合作中心</h2>
-        </div>
-        <div class="collaboration-card" onclick="window.location.href='https://auting-awf.github.io/collaborating'">
-            <div class="collab-icon">
-                <i class="fas fa-handshake"></i>
+        </section>
+        
+        <!-- 新增的合作中心入口 -->
+        <section id="collaboration">
+            <div class="division">
+                <h2>合作中心</h2>
             </div>
-            <div class="collab-content">
-                <h3>与我们有酬合作</h3>
-                <p>了解我们的合作伙伴或寻找合作机会，提交您的合作申请</p>
-                <p>如果您是个人画师，也欢迎您加入合作，共创秋风Auting自设信息或形象</p>
-                <div class="collab-link">前往合作中心 <i class="fas fa-arrow-right"></i></div>
+            <div class="collaboration-card" onclick="window.location.href='https://auting-awf.github.io/collaborating'">
+                <div class="collab-icon">
+                    <i class="fas fa-handshake"></i>
+                </div>
+                <div class="collab-content">
+                    <h3>与我们有酬合作</h3>
+                    <p>了解我们的合作伙伴或寻找合作机会，提交您的合作申请</p>
+                    <p>如果您是个人画师，也欢迎您加入合作，共创秋风Auting自设信息或形象</p>
+                    <div class="collab-link">前往合作中心 <i class="fas fa-arrow-right"></i></div>
+                </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <footer>
-        <p>秋风Auting个人账号：QQ:3788553277（秋风·雨）;2172701924（秋风·誮）；抖音:AutumnWind_Feng</p>
-        <p>Copyright©Auting网页工作组 2025-至今_20250205</p>
-        <p>网页问题反馈：Chunguoquestion@163.com（春国工作室答疑解惑中心）</p>
-        <p>关于此网站的更多<a href="https://auting-awf.github.io/about" target="_blank" class="custom-link" rel="noopener noreferrer">开发信息</a>，请点击</p>
-    </footer>
+        <footer>
+            <p>秋风Auting个人账号：QQ:3788553277（秋风·雨）;2172701924（秋风·誮）；抖音:AutumnWind_Feng</p>
+            <p>Copyright©Auting网页工作组 2025-至今_20250205</p>
+            <p>网页问题反馈：Chunguoquestion@163.com（春国工作室答疑解惑中心）</p>
+            <p>关于此网站的更多<a href="https://auting-awf.github.io/about" target="_blank" class="custom-link" rel="noopener noreferrer">开发信息</a>，请点击</p>
+        </footer>
+    </div> <!-- 容器结束 -->
 
     <script>
         // 显示原弹窗
@@ -526,6 +543,14 @@
                     this.style.display = "none";
                 }
             });
+        });
+        
+        // 按ESC键关闭弹窗
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeAlert();
+                closeProgressModal();
+            }
         });
     </script>
 </body>
