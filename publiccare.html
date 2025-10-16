@@ -13,6 +13,7 @@
         .custom-link { color: #165DFF; text-decoration: underline; }
         .custom-link:hover { color: #0E42D2; }
         footer p { line-height: 1.4; margin: 0.3rem 0 !important; }
+        .line-clamp-1 { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -34,7 +35,7 @@
     <div class="w-full max-w-7xl mx-auto px-4 py-2 md:py-4">
         <div class="relative">
             <h1 class="text-2xl md:text-3xl font-bold text-gray-900">秋风公益互助平台</h1>
-            <p class="hidden md:absolute right-0 bottom-0 text-sm text-gray-400">秋风Auting，致力于为更美好的世界服务</p>
+            <p class="md:block absolute right-0 bottom-0 text-sm text-gray-400">秋风Auting，致力于为更美好的世界服务</p>
             <p class="md:hidden mt-1 text-sm text-gray-400">秋风Auting，致力于为更美好的世界服务</p>
         </div>
     </div>
@@ -58,17 +59,18 @@
         </section>
     </main>
 
-    <!-- 提交互助信息区域 -->
-    <section class="w-full max-w-7xl mx-auto px-4 py-6 mb-6">
+    <!-- 提交互助信息区域：修复图标标签 -->
+    <section class="w-full max-w-7xl mx-auto px-4 py-4 mb-2">
         <div class="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-6">
             <h2 class="text-xl font-semibold text-gray-800 mb-4 text-center">联系我们提交互助信息</h2>
             <div class="flex flex-col md:flex-row justify-center gap-6 items-center">
+                <!-- 修复后的图标标签 -->
                 <div class="flex items-center">
-                    <<i class="fa-solid fa-envelope text-blue-600 mr-3 text-xl"></</i>
+                    <i class="fa-solid fa-envelope text-blue-600 mr-3 text-xl"></i>
                     <span class="text-gray-700">邮箱：458299675@qq.com</span>
                 </div>
                 <div class="flex items-center">
-                    <<i class="fa-solid fa-user-group text-blue-600 mr-3 text-xl"></</i>
+                    <i class="fa-solid fa-user-group text-blue-600 mr-3 text-xl"></i>
                     <span class="text-gray-700">QQ：458299675</span>
                 </div>
             </div>
@@ -76,7 +78,7 @@
     </section>
 
     <!-- 页脚 -->
-    <footer class="w-full max-w-7xl mx-auto px-4 py-4 bg-gray-100 mt-10 text-sm text-gray-600 text-center">
+    <footer class="w-full max-w-7xl mx-auto px-4 py-4 mt-2 text-sm text-gray-600 text-center">
         <p>秋风Auting个人账号：QQ:3788553277（秋风·雨）;2172701924（秋风·誮）；抖音:AutumnWind_Feng</p>
         <p>关于本网站的特殊协议，请点击：<a href="https://auting-awf.github.io/publiccare/agreement" target="_blank" class="custom-link" rel="noopener noreferrer">《秋风公益互助中心用户协议》</a></p>
         <p>Copyright©Auting网页工作组 2025-至今_20251016</p>
@@ -95,7 +97,7 @@
     </div>
 
     <script>
-        // 核心配置（匹配你的公开仓库）
+        // 核心配置
         const REPO_CONFIG = {
             owner: "auting-AWF",
             repo: "auting-AWF.github.io",
@@ -103,7 +105,7 @@
             dir: "information"
         };
 
-        // 获取文件列表（匿名访问公开仓库的Contents API）
+        // 获取文件列表
         async function fetchFileList() {
             try {
                 const res = await fetch(
@@ -117,19 +119,27 @@
                 };
             } catch (err) {
                 console.error("文件列表错误：", err);
-                return { success: false };
+                return { success: false, error: err.message };
             }
         }
 
-        // 获取单个互助信息（匿名访问公开仓库的Raw文件）
+        // 获取单个互助信息
         async function fetchHelpItem(fileName) {
             try {
                 const rawUrl = `https://raw.githubusercontent.com/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/${REPO_CONFIG.branch}/${REPO_CONFIG.dir}/${encodeURIComponent(fileName)}`;
                 const res = await fetch(rawUrl);
                 if (!res.ok) throw new Error(`文件${fileName}加载失败`);
-                return await res.json();
+                const data = await res.json();
+                
+                // 验证必要字段
+                if (!data.title || !data["完成情况"]) {
+                    console.warn(`文件 ${fileName} 缺少必要字段`);
+                    return null;
+                }
+                
+                return data;
             } catch (err) {
-                console.error("互助信息错误：", err);
+                console.error(`互助信息错误 ${fileName}:`, err);
                 return null;
             }
         }
@@ -141,7 +151,7 @@
             card.innerHTML = `
                 <h3 class="font-semibold text-gray-900 mb-2 line-clamp-1">${data.title || "未命名互助"}</h3>
                 <div class="text-xs text-gray-500 mb-2">
-                    ${data.label ? data.label.map(tag => `#${tag}`).join(" ") : "无标签"}
+                    ${data.label && data.label.length ? data.label.map(tag => `#${tag}`).join(" ") : "无标签"}
                 </div>
                 <p class="text-xs text-gray-400">${data.time || "未知时间"}发布</p>
             `;
@@ -160,24 +170,29 @@
                     <span>${data.time || "未知时间"}发布</span>
                 </div>
                 <div class="mb-4">
-                    ${data.label ? data.label.map(tag => `<span class="inline-block bg-gray-100 text-xs px-2 py-1 rounded mr-2 mb-2">#${tag}</span>`).join("") : "无标签"}
+                    ${data.label && data.label.length ? 
+                        data.label.map(tag => `<span class="inline-block bg-gray-100 text-xs px-2 py-1 rounded mr-2 mb-2">#${tag}</span>`).join("") : 
+                        "无标签"}
                 </div>
                 <div class="text-gray-800 mb-4">
-                    <h4 class="font-semibold mb-2">事件过程</h4>
-                    <p>${data.process || "无详细过程"}</p>
+                    <h4 class="font-semibold mb-2 text-base">事件过程</h4>
+                    <p class="text-sm">${data.process || "无详细过程"}</p>
                 </div>
                 <div class="bg-blue-50 p-3 rounded mb-4">
-                    <h4 class="font-semibold text-blue-800 mb-2">互助请求</h4>
-                    <p class="text-blue-700">${data.request || "无明确请求"}</p>
+                    <h4 class="font-semibold text-blue-800 mb-2 text-base">互助请求</h4>
+                    <p class="text-sm text-blue-700">${data.request || "无明确请求"}</p>
                 </div>
                 <div class="text-gray-800">
-                    <h4 class="font-semibold mb-2">联系方式</h4>
-                    <p>${data.contact || "未提供联系方式"}</p>
+                    <h4 class="font-semibold mb-2 text-base">联系方式</h4>
+                    <p class="text-sm">${data.contact || "未提供联系方式"}</p>
                 </div>
             `;
             modal.style.display = "flex";
-            document.getElementById("close-modal").onclick = () => modal.style.display = "none";
-            modal.onclick = (e) => e.target === modal && (modal.style.display = "none");
+            
+            // 关闭模态框事件
+            const closeModal = () => modal.style.display = "none";
+            document.getElementById("close-modal").onclick = closeModal;
+            modal.onclick = (e) => e.target === modal && closeModal();
         }
 
         // 渲染无内容状态
@@ -191,11 +206,21 @@
         }
 
         // 渲染错误状态
-        function renderErrorState(container) {
+        function renderErrorState(container, message = "请刷新网站重试") {
             container.innerHTML = `
                 <div class="col-span-full flex flex-col items-center justify-center py-10 text-center">
                     <p class="text-lg text-gray-700">当前无法获取互助信息</p>
-                    <p class="text-lg text-gray-700 mt-1">请刷新网站重试</p>
+                    <p class="text-lg text-gray-700 mt-1">${message}</p>
+                </div>
+            `;
+        }
+
+        // 渲染加载状态
+        function renderLoadingState(container) {
+            container.innerHTML = `
+                <div class="col-span-full flex flex-col items-center justify-center py-10 text-center">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+                    <p class="text-gray-700">加载中...</p>
                 </div>
             `;
         }
@@ -205,41 +230,87 @@
             const ongoingContainer = document.getElementById("ongoing-container");
             const completedContainer = document.getElementById("completed-container");
 
+            // 显示加载状态
+            renderLoadingState(ongoingContainer);
+            renderLoadingState(completedContainer);
+
             // 获取文件列表
             const fileListRes = await fetchFileList();
             if (!fileListRes.success) {
-                renderErrorState(ongoingContainer);
-                renderErrorState(completedContainer);
+                renderErrorState(ongoingContainer, "网络连接失败，请检查网络后刷新");
+                renderErrorState(completedContainer, "网络连接失败，请检查网络后刷新");
+                return;
+            }
+
+            if (!fileListRes.files || fileListRes.files.length === 0) {
+                renderEmptyState(ongoingContainer);
+                renderEmptyState(completedContainer);
                 return;
             }
 
             // 加载互助信息
             const ongoingData = [];
             const completedData = [];
+            let loadedCount = 0;
+
             for (const fileName of fileListRes.files) {
                 const data = await fetchHelpItem(fileName);
-                if (!data) continue;
-                if (data["完成情况"] === "进行中") {
-                    ongoingData.push(data);
-                } else if (data["完成情况"] === "已完成") {
-                    completedData.push(data);
+                if (data) {
+                    if (data["完成情况"] === "进行中") {
+                        ongoingData.push(data);
+                    } else if (data["完成情况"] === "已完成") {
+                        completedData.push(data);
+                    }
+                }
+                loadedCount++;
+                
+                // 更新加载进度（可选）
+                if (loadedCount % 2 === 0) {
+                    const progress = Math.round((loadedCount / fileListRes.files.length) * 100);
+                    console.log(`加载进度: ${progress}%`);
                 }
             }
 
             // 渲染进行中
             ongoingContainer.innerHTML = "";
-            if (ongoingData.length === 0) renderEmptyState(ongoingContainer);
-            else ongoingData.forEach(item => ongoingContainer.appendChild(createHelpCard(item)));
+            if (ongoingData.length === 0) {
+                renderEmptyState(ongoingContainer);
+            } else {
+                ongoingData.forEach(item => ongoingContainer.appendChild(createHelpCard(item)));
+            }
 
             // 渲染已完成
             completedContainer.innerHTML = "";
             const isMobile = window.innerWidth < 768;
-            const limitedCompleted = completedData.slice(0, isMobile ? 4 : 8);
-            if (limitedCompleted.length === 0) renderEmptyState(completedContainer);
-            else limitedCompleted.forEach(item => completedContainer.appendChild(createHelpCard(item)));
+            const limitedCompleted = isMobile ? completedData.slice(0, 4) : completedData.slice(0, 8);
+            
+            if (limitedCompleted.length === 0) {
+                renderEmptyState(completedContainer);
+            } else {
+                limitedCompleted.forEach(item => completedContainer.appendChild(createHelpCard(item)));
+            }
         }
 
-        window.addEventListener("load", init);
+        // 页面加载完成后初始化
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+
+        // 窗口大小变化时重新调整显示数量
+        window.addEventListener('resize', function() {
+            const completedContainer = document.getElementById("completed-container");
+            if (completedContainer.children.length > 0 && !completedContainer.querySelector('.col-span-full')) {
+                const isMobile = window.innerWidth < 768;
+                const currentItems = Array.from(completedContainer.children);
+                const newLimit = isMobile ? 4 : 8;
+                
+                currentItems.forEach((item, index) => {
+                    item.style.display = index < newLimit ? 'block' : 'none';
+                });
+            }
+        });
     </script>
 </body>
 </html>
