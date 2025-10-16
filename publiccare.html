@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>秋风公益互助平台</title>
+    <!-- 引入Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入Font Awesome（用于联系方式图标） -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-5px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+        .custom-link { color: #165DFF; text-decoration: underline; }
+        .custom-link:hover { color: #0E42D2; }
+        footer p { line-height: 1.2; margin-top: 0.5rem !important; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 1. 页头 -->
+    <header class="w-full max-w-7xl mx-auto px-4 py-3 flex items-center">
+        <div class="hidden md:flex items-center">
+            <a href="https://auting-awf.github.io" target="_blank" rel="noopener noreferrer">
+                <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/refs/heads/index/Autinglogo.png" 
+                     alt="Autinglogo" class="h-10 w-auto mr-2">
+            </a>
+            <span class="text-xl font-bold text-gray-800">×秋风公益互助平台</span>
+        </div>
+        <div class="md:hidden">
+            <span class="text-xl font-bold text-gray-800">秋风公益互助平台</span>
+        </div>
+    </header>
+
+    <!-- 2. 标题区 -->
+    <div class="w-full max-w-7xl mx-auto px-4 py-2 md:py-4">
+        <div class="relative">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900">秋风公益互助平台</h1>
+            <p class="hidden md:absolute right-0 bottom-0 text-sm text-gray-400">秋风Auting，致力于为更美好的世界服务</p>
+            <p class="md:hidden mt-1 text-sm text-gray-400">秋风Auting，致力于为更美好的世界服务</p>
+        </div>
+    </div>
+
+    <!-- 3. 主内容区 -->
+    <main class="w-full max-w-7xl mx-auto px-4 py-6">
+        <!-- 3.1 进行中板块（浅红渐变背景） -->
+        <section class="mb-10 bg-gradient-to-r from-rose-50 to-rose-100 rounded-xl p-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">进行中</h2>
+            <div id="ongoing-container" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <!-- JS动态加载 -->
+            </div>
+        </section>
+
+        <!-- 3.2 已完成板块（浅绿渐变背景） -->
+        <section class="bg-gradient-to-r from-emerald-50 to-emerald-100 rounded-xl p-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">已完成</h2>
+            <div id="completed-container" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <!-- JS动态加载 -->
+            </div>
+        </section>
+    </main>
+
+    <!-- 4. 提交互助信息区域（页脚上方） -->
+    <section class="w-full max-w-7xl mx-auto px-4 py-6 mb-6">
+        <div class="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">联系我们提交互助信息</h2>
+            <div class="flex flex-wrap gap-8 items-center">
+                <div class="flex items-center">
+                    <<i class="fa-solid fa-envelope text-blue-600 mr-3 text-xl"></</i>
+                    <span class="text-gray-700">邮箱：458299675@qq.com</span>
+                </div>
+                <div class="flex items-center">
+                    <<i class="fa-solid fa-user-group text-blue-600 mr-3 text-xl"></</i>
+                    <span class="text-gray-700">QQ：458299675</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. 页脚（居中+行间距减小+协议前缀） -->
+    <footer class="w-full max-w-7xl mx-auto px-4 py-4 bg-gray-100 mt-10 text-sm text-gray-600 text-center">
+        <p>秋风Auting个人账号：QQ:3788553277（秋风·雨）;2172701924（秋风·誮）；抖音:AutumnWind_Feng</p>
+        <p>关于本网站的特殊协议，请点击：<a href="https://auting-awf.github.io/publiccare/agreement" target="_blank" class="custom-link" rel="noopener noreferrer">《秋风公益互助中心用户协议》</a></p>
+        <p>Copyright©Auting网页工作组 2025-至今_20251016</p>
+        <p>网页问题反馈：Chunguoquestion@163.com（春国工作室答疑解惑中心）</p>
+        <p>关于此网站的更多<a href="https://auting-awf.github.io/about" target="_blank" class="custom-link" rel="noopener noreferrer">开发信息</a>，请点击</p>
+    </footer>
+
+    <!-- 6. 互助详情弹窗 -->
+    <div id="detail-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg p-6 relative">
+            <button id="close-modal" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-xl">×</button>
+            <div id="detail-content">
+                <!-- JS动态加载 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // -------------------------- 核心配置（需替换PAT令牌） --------------------------
+        const GITHUB_TOKEN = "YOUR_PAT_TOKEN"; // 替换为你生成的Personal Access Token
+        const REPO_CONFIG = {
+            owner: "auting-awf",
+            repo: "auting-awf.github.io",
+            branch: "publiccare",
+            dir: "information"
+        };
+
+        // -------------------------- 工具函数 --------------------------
+        // 获取仓库中information文件夹的JSON文件列表
+        async function fetchFileList() {
+            try {
+                const res = await fetch(
+                    `https://api.github.com/repos/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/contents/${REPO_CONFIG.dir}?ref=${REPO_CONFIG.branch}`,
+                    { headers: { Authorization: `token ${GITHUB_TOKEN}` } }
+                );
+                if (!res.ok) throw new Error("文件列表获取失败");
+                const contents = await res.json();
+                return { 
+                    success: true, 
+                    files: contents.filter(item => item.name.endsWith(".json")).map(item => item.name) 
+                };
+            } catch (err) {
+                console.error("文件列表请求错误：", err);
+                return { success: false };
+            }
+        }
+
+        // 获取单个互助信息JSON
+        async function fetchHelpItem(fileName) {
+            try {
+                const res = await fetch(
+                    `https://raw.githubusercontent.com/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/${REPO_CONFIG.branch}/${REPO_CONFIG.dir}/${fileName}`,
+                    { headers: { Authorization: `token ${GITHUB_TOKEN}` } }
+                );
+                if (!res.ok) throw new Error(`文件${fileName}加载失败`);
+                return await res.json();
+            } catch (err) {
+                console.error("互助信息加载错误：", err);
+                return null;
+            }
+        }
+
+        // 生成互助卡片
+        function createHelpCard(data) {
+            const card = document.createElement("div");
+            card.className = "bg-white rounded-lg p-4 shadow-sm card-hover cursor-pointer";
+            card.innerHTML = `
+                <h3 class="font-semibold text-gray-900 mb-2 line-clamp-1">${data.title || "未命名互助"}</h3>
+                <div class="text-xs text-gray-500 mb-2">
+                    ${data.label ? data.label.map(tag => `#${tag}`).join(" ") : "无标签"}
+                </div>
+                <p class="text-xs text-gray-400">${data.time || "未知时间"}发布</p>
+            `;
+            card.addEventListener("click", () => showDetail(data));
+            return card;
+        }
+
+        // 显示详情弹窗
+        function showDetail(data) {
+            const modal = document.getElementById("detail-modal");
+            const content = document.getElementById("detail-content");
+            content.innerHTML = `
+                <h2 class="text-xl font-bold text-gray-900 mb-2">${data.title || "未命名互助"}</h2>
+                <div class="text-sm text-gray-500 mb-3">
+                    <span>${data.titles || "无简要信息"}</span> · 
+                    <span>${data.time || "未知时间"}发布</span>
+                </div>
+                <div class="mb-4">
+                    ${data.label ? data.label.map(tag => `<span class="inline-block bg-gray-100 text-xs px-2 py-1 rounded mr-2 mb-2">#${tag}</span>`).join("") : "无标签"}
+                </div>
+                <div class="text-gray-800 mb-4">
+                    <h4 class="font-semibold mb-2">事件过程</h4>
+                    <p>${data.process || "无详细过程"}</p>
+                </div>
+                <div class="bg-blue-50 p-3 rounded mb-4">
+                    <h4 class="font-semibold text-blue-800 mb-2">互助请求</h4>
+                    <p class="text-blue-700">${data.request || "无明确请求"}</p>
+                </div>
+                <div class="text-gray-800">
+                    <h4 class="font-semibold mb-2">联系方式</h4>
+                    <p>${data.contact || "未提供联系方式"}</p>
+                </div>
+            `;
+            modal.style.display = "flex";
+            document.getElementById("close-modal").onclick = () => modal.style.display = "none";
+            modal.onclick = (e) => e.target === modal && (modal.style.display = "none");
+        }
+
+        // 渲染无内容状态
+        function renderEmptyState(container) {
+            container.innerHTML = `
+                <div class="col-span-full flex flex-col items-center justify-center py-10 text-center">
+                    <p class="text-lg text-gray-700 mb-2">当前没有互助信息</p>
+                    <p class="text-sm text-gray-400">如有互助需要，请在页面最下方联系我们</p>
+                </div>
+            `;
+        }
+
+        // 渲染加载失败状态
+        function renderErrorState(container) {
+            container.innerHTML = `
+                <div class="col-span-full flex flex-col items-center justify-center py-10 text-center">
+                    <p class="text-lg text-gray-700">当前无法获取互助信息</p>
+                    <p class="text-lg text-gray-700 mt-1">请刷新网站重试</p>
+                </div>
+            `;
+        }
+
+        // -------------------------- 页面初始化 --------------------------
+        async function init() {
+            const ongoingContainer = document.getElementById("ongoing-container");
+            const completedContainer = document.getElementById("completed-container");
+
+            // 1. 获取文件列表
+            const fileListRes = await fetchFileList();
+            if (!fileListRes.success) {
+                renderErrorState(ongoingContainer);
+                renderErrorState(completedContainer);
+                return;
+            }
+
+            // 2. 加载所有互助信息并分类
+            const ongoingData = [];
+            const completedData = [];
+            for (const fileName of fileListRes.files) {
+                const data = await fetchHelpItem(fileName);
+                if (!data) continue;
+                data["完成情况"] === "进行中" ? ongoingData.push(data) : completedData.push(data);
+            }
+
+            // 3. 渲染进行中板块（无行数限制）
+            ongoingContainer.innerHTML = "";
+            if (ongoingData.length === 0) renderEmptyState(ongoingContainer);
+            else ongoingData.forEach(item => ongoingContainer.appendChild(createHelpCard(item)));
+
+            // 4. 渲染已完成板块（电脑端最多8个，手机端最多4个）
+            completedContainer.innerHTML = "";
+            const isMobile = window.innerWidth < 768;
+            const limitedCompleted = completedData.slice(0, isMobile ? 4 : 8);
+            if (limitedCompleted.length === 0) renderEmptyState(completedContainer);
+            else limitedCompleted.forEach(item => completedContainer.appendChild(createHelpCard(item)));
+        }
+
+        // 窗口大小变化时重新渲染已完成板块
+        window.addEventListener("resize", init);
+        // 页面加载完成初始化
+        window.addEventListener("load", init);
+    </script>
+</body>
+</html>
