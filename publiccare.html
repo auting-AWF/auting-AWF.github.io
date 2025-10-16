@@ -95,21 +95,19 @@
     </div>
 
     <script>
-        // 核心配置（修正大小写+匹配你的仓库）
-        const GITHUB_TOKEN = "ghp_8E3IzLHTQk5pVGBfQzfuDPLVLL133i49e3kq"; // 替换为你的PAT令牌
+        // 核心配置（匹配你的公开仓库）
         const REPO_CONFIG = {
-            owner: "auting-AWF", // 修正为你的仓库实际大写owner
+            owner: "auting-AWF",
             repo: "auting-AWF.github.io",
             branch: "publiccare",
             dir: "information"
         };
 
-        // 获取文件列表
+        // 获取文件列表（匿名访问公开仓库的Contents API）
         async function fetchFileList() {
             try {
                 const res = await fetch(
-                    `https://api.github.com/repos/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/contents/${REPO_CONFIG.dir}?ref=${REPO_CONFIG.branch}`,
-                    { headers: { Authorization: `token ${GITHUB_TOKEN}` } }
+                    `https://api.github.com/repos/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/contents/${REPO_CONFIG.dir}?ref=${REPO_CONFIG.branch}`
                 );
                 if (!res.ok) throw new Error("文件列表获取失败");
                 const contents = await res.json();
@@ -123,14 +121,11 @@
             }
         }
 
-        // 获取单个互助信息
+        // 获取单个互助信息（匿名访问公开仓库的Raw文件）
         async function fetchHelpItem(fileName) {
             try {
-                // 修正Raw链接（匹配你的文件路径）
                 const rawUrl = `https://raw.githubusercontent.com/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/${REPO_CONFIG.branch}/${REPO_CONFIG.dir}/${encodeURIComponent(fileName)}`;
-                const res = await fetch(rawUrl, {
-                    headers: { Authorization: `token ${GITHUB_TOKEN}` }
-                });
+                const res = await fetch(rawUrl);
                 if (!res.ok) throw new Error(`文件${fileName}加载失败`);
                 return await res.json();
             } catch (err) {
