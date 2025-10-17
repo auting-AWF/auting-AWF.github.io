@@ -14,29 +14,30 @@
         .custom-link:hover { color: #0E42D2; }
         footer p { line-height: 1.4; margin: 0.3rem 0 !important; }
         .line-clamp-1 { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+        /* 弹窗打开时锁定背景滚动 */
+        body.modal-open { overflow: hidden; }
+        #detail-modal { overflow-y: auto; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
-    <!-- 页头 -->
-    <header class="w-full max-w-7xl mx-auto px-4 py-3 flex items-center">
-        <div class="hidden md:flex items-center">
+    <!-- 页头 - 手机端隐藏 -->
+    <header class="w-full max-w-7xl mx-auto px-4 py-3 md:flex items-center hidden">
+        <div class="flex items-center">
             <a href="https://auting-awf.github.io" target="_blank" rel="noopener noreferrer">
                 <img src="https://raw.githubusercontent.com/auting-AWF/auting-AWF.github.io/refs/heads/index/Autinglogo.png" 
                      alt="Autinglogo" class="h-10 w-auto mr-2">
             </a>
             <span class="text-xl font-bold text-gray-800">×秋风公益互助平台</span>
         </div>
-        <div class="md:hidden">
-            <span class="text-xl font-bold text-gray-800">秋风公益互助平台</span>
-        </div>
     </header>
 
-    <!-- 标题区 -->
+    <!-- 标题区 - 修复手机端显示问题 -->
     <div class="w-full max-w-7xl mx-auto px-4 py-2 md:py-4">
         <div class="relative">
             <h1 class="text-2xl md:text-3xl font-bold text-gray-900">秋风公益互助平台</h1>
-            <p class="md:block absolute right-0 bottom-0 text-sm text-gray-400">秋风Auting，致力于为更美好的世界服务</p>
-            <p class="md:hidden mt-1 text-sm text-gray-400">秋风Auting，致力于为更美好的世界服务</p>
+            <!-- 电脑端显示 -->
+            <p class="hidden md:block absolute right-0 bottom-0 text-sm text-gray-400">秋风Auting，致力于为更美好的世界服务</p>
+            <!-- 手机端不显示副标题 -->
         </div>
     </div>
 
@@ -79,7 +80,7 @@
     <!-- 页脚 -->
     <footer class="w-full max-w-7xl mx-auto px-4 py-4 mt-2 text-sm text-gray-600 text-center">
         <p>秋风Auting个人账号：QQ:3788553277（秋风·雨）;2172701924（秋风·誮）；抖音:AutumnWind_Feng</p>
-        <p>关于本网站的特殊协议，请点击：<a href="https://auting-awf.github.io/terms.html" target="_blank" class="custom-link" rel="noopener noreferrer">《秋风公益互助中心用户协议》</a></p>
+        <p>关于本网站的特殊协议，请点击：<a href="https://auting-awf.github.io/publiccare/terms.html" target="_blank" class="custom-link" rel="noopener noreferrer">《秋风公益互助中心用户协议》</a></p>
         <p>Copyright©Auting网页工作组 2025-至今_20251016</p>
         <p>网页问题反馈：Chunguoquestion@163.com（春国工作室答疑解惑中心）</p>
         <p>关于此网站的更多<a href="https://auting-awf.github.io/about" target="_blank" class="custom-link" rel="noopener noreferrer">开发信息</a>，请点击</p>
@@ -96,7 +97,7 @@
     </div>
 
     <script>
-        // 核心配置 - 简化路径配置
+        // 核心配置
         const REPO_CONFIG = {
             owner: "auting-AWF",
             repo: "auting-AWF.github.io",
@@ -104,12 +105,11 @@
             dir: "information"
         };
 
-        // 获取文件列表 - 使用更稳定的方法
+        // 获取文件列表
         async function fetchFileList() {
             try {
                 console.log("开始获取文件列表...");
                 
-                // 方法1: 直接使用GitHub API
                 const apiUrl = `https://api.github.com/repos/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/contents/${REPO_CONFIG.dir}?ref=${REPO_CONFIG.branch}`;
                 console.log("API URL:", apiUrl);
                 
@@ -118,15 +118,12 @@
                     headers: {
                         'Accept': 'application/vnd.github.v3+json',
                     },
-                    // 添加缓存避免重复请求
                     cache: 'no-cache'
                 });
                 
                 console.log("API响应状态:", res.status, res.statusText);
                 
                 if (!res.ok) {
-                    // 如果API失败，尝试备用方法
-                    console.warn("GitHub API失败，尝试备用方法...");
                     return await fetchFileListFallback();
                 }
                 
@@ -144,20 +141,17 @@
                 };
             } catch (err) {
                 console.error("文件列表获取错误:", err);
-                // 尝试备用方法
                 return await fetchFileListFallback();
             }
         }
 
-        // 备用方法：直接尝试已知文件名
+        // 备用方法
         async function fetchFileListFallback() {
             console.log("使用备用方法获取文件列表...");
             
-            // 这里可以预设一些可能的文件名，或者尝试直接读取特定文件
             const possibleFiles = ['help1.json', 'help2.json', 'data.json', 'example.json'];
             const availableFiles = [];
             
-            // 测试哪些文件存在
             for (const fileName of possibleFiles) {
                 try {
                     const testUrl = `https://raw.githubusercontent.com/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/${REPO_CONFIG.branch}/${REPO_CONFIG.dir}/${fileName}`;
@@ -166,7 +160,7 @@
                         availableFiles.push(fileName);
                     }
                 } catch (e) {
-                    // 忽略单个文件测试错误
+                    // 忽略错误
                 }
             }
             
@@ -196,7 +190,6 @@
                 const data = await res.json();
                 console.log("文件内容:", data);
                 
-                // 宽松验证，只要是个对象就接受
                 if (typeof data === 'object' && data !== null) {
                     return data;
                 }
@@ -213,7 +206,6 @@
             const card = document.createElement("div");
             card.className = "bg-white rounded-lg p-4 shadow-sm card-hover cursor-pointer";
             
-            // 安全地处理可能缺失的字段
             const title = data.title || data.标题 || "未命名互助";
             const labels = data.label || data.标签 || data.tags || [];
             const time = data.time || data.时间 || data.发布时间 || "未知时间";
@@ -229,12 +221,14 @@
             return card;
         }
 
-        // 显示详情
+        // 显示详情 - 修复滚动锁定问题
         function showDetail(data) {
             const modal = document.getElementById("detail-modal");
             const content = document.getElementById("detail-content");
             
-            // 安全地处理数据字段
+            // 锁定背景滚动
+            document.body.classList.add('modal-open');
+            
             const title = data.title || data.标题 || "未命名互助";
             const subtitle = data.titles || data.副标题 || data.简要信息 || "无简要信息";
             const time = data.time || data.时间 || data.发布时间 || "未知时间";
@@ -269,9 +263,20 @@
             `;
             modal.style.display = "flex";
             
-            const closeModal = () => modal.style.display = "none";
+            const closeModal = () => {
+                modal.style.display = "none";
+                // 恢复背景滚动
+                document.body.classList.remove('modal-open');
+            };
+            
             document.getElementById("close-modal").onclick = closeModal;
             modal.onclick = (e) => e.target === modal && closeModal();
+            
+            // 阻止弹窗内部内容滚动时影响到背景
+            const modalContent = modal.querySelector('.bg-white');
+            modalContent.addEventListener('scroll', function(e) {
+                e.stopPropagation();
+            });
         }
 
         // 渲染无内容状态
@@ -314,12 +319,10 @@
             const ongoingContainer = document.getElementById("ongoing-container");
             const completedContainer = document.getElementById("completed-container");
 
-            // 显示加载状态
             renderLoadingState(ongoingContainer);
             renderLoadingState(completedContainer);
 
             try {
-                // 获取文件列表
                 const fileListRes = await fetchFileList();
                 console.log("文件列表结果:", fileListRes);
                 
@@ -333,14 +336,12 @@
                     return;
                 }
 
-                // 加载互助信息
                 const ongoingData = [];
                 const completedData = [];
                 
                 for (const fileName of fileListRes.files) {
                     const data = await fetchHelpItem(fileName);
                     if (data) {
-                        // 使用更灵活的状态判断
                         const status = data["完成情况"] || data.status || data.state || "进行中";
                         if (status === "已完成" || status === "完成") {
                             completedData.push(data);
@@ -350,7 +351,6 @@
                     }
                 }
 
-                // 渲染进行中
                 ongoingContainer.innerHTML = "";
                 if (ongoingData.length === 0) {
                     renderEmptyState(ongoingContainer);
@@ -358,7 +358,6 @@
                     ongoingData.forEach(item => ongoingContainer.appendChild(createHelpCard(item)));
                 }
 
-                // 渲染已完成
                 completedContainer.innerHTML = "";
                 const isMobile = window.innerWidth < 768;
                 const limitedCompleted = isMobile ? completedData.slice(0, 4) : completedData.slice(0, 8);
@@ -385,7 +384,6 @@
             init();
         }
 
-        // 添加调试信息
         console.log("秋风公益互助平台已加载");
         console.log("仓库配置:", REPO_CONFIG);
     </script>
