@@ -14,7 +14,6 @@
         .custom-link:hover { color: #0E42D2; }
         footer p { line-height: 1.4; margin: 0.3rem 0 !important; }
         .line-clamp-1 { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
-        /* 弹窗打开时锁定背景滚动 */
         body.modal-open { overflow: hidden; }
         #detail-modal { overflow-y: auto; }
     </style>
@@ -31,13 +30,11 @@
         </div>
     </header>
 
-    <!-- 标题区 - 修复手机端显示问题 -->
+    <!-- 标题区 -->
     <div class="w-full max-w-7xl mx-auto px-4 py-2 md:py-4">
         <div class="relative">
             <h1 class="text-2xl md:text-3xl font-bold text-gray-900">秋风公益互助平台</h1>
-            <!-- 电脑端显示 -->
             <p class="hidden md:block absolute right-0 bottom-0 text-sm text-gray-400">秋风Auting，致力于为更美好的世界服务</p>
-            <!-- 手机端不显示副标题 -->
         </div>
     </div>
 
@@ -97,7 +94,7 @@
     </div>
 
     <script>
-        // 核心配置
+        // 核心配置（指向你的仓库目录）
         const REPO_CONFIG = {
             owner: "auting-AWF",
             repo: "auting-AWF.github.io",
@@ -105,98 +102,62 @@
             dir: "information"
         };
 
-        // 获取文件列表
+        // 动态获取目录下所有JSON文件（核心修复：添加User-Agent头）
         async function fetchFileList() {
             try {
-                console.log("开始获取文件列表...");
+                console.log("开始获取目录下所有文件...");
                 
+                // GitHub API地址（获取目录内容）
                 const apiUrl = `https://api.github.com/repos/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/contents/${REPO_CONFIG.dir}?ref=${REPO_CONFIG.branch}`;
-                console.log("API URL:", apiUrl);
+                console.log("请求目录API:", apiUrl);
                 
                 const res = await fetch(apiUrl, {
                     method: 'GET',
                     headers: {
                         'Accept': 'application/vnd.github.v3+json',
+                        'User-Agent': 'Mozilla/5.0' // 关键修复：添加User-Agent头，避免403
                     },
                     cache: 'no-cache'
                 });
                 
-                console.log("API响应状态:", res.status, res.statusText);
+                console.log("API响应状态:", res.status);
                 
                 if (!res.ok) {
-                    return await fetchFileListFallback();
+                    throw new Error(`API请求失败: ${res.status}`);
                 }
                 
                 const contents = await res.json();
-                console.log("获取到的文件:", contents);
+                console.log("目录下所有文件:", contents);
                 
+                // 筛选出JSON文件
                 const jsonFiles = contents
                     .filter(item => item.type === 'file' && item.name.endsWith('.json'))
-                    .map(item => item.name);
+                    .map(item => item.name); // 提取文件名（包含空格等特殊字符）
                 
-                console.log("JSON文件列表:", jsonFiles);
-                return { 
-                    success: true, 
-                    files: jsonFiles 
-                };
+                console.log("筛选后的JSON文件:", jsonFiles);
+                return { success: true, files: jsonFiles };
             } catch (err) {
-                console.error("文件列表获取错误:", err);
-                return await fetchFileListFallback();
+                console.error("获取文件列表失败:", err);
+                return { success: false, error: "无法获取文件列表，请检查网络或仓库配置" };
             }
         }
 
-        // 备用方法
-        async function fetchFileListFallback() {
-            console.log("使用备用方法获取文件列表...");
-            
-            const possibleFiles = ['help1.json', 'help2.json', 'data.json', 'example.json'];
-            const availableFiles = [];
-            
-            for (const fileName of possibleFiles) {
-                try {
-                    const testUrl = `https://raw.githubusercontent.com/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/${REPO_CONFIG.branch}/${REPO_CONFIG.dir}/${fileName}`;
-                    const testRes = await fetch(testUrl);
-                    if (testRes.ok) {
-                        availableFiles.push(fileName);
-                    }
-                } catch (e) {
-                    // 忽略错误
-                }
-            }
-            
-            if (availableFiles.length > 0) {
-                console.log("备用方法找到文件:", availableFiles);
-                return { success: true, files: availableFiles };
-            }
-            
-            return { 
-                success: false, 
-                error: "无法获取文件列表，请检查仓库配置和网络连接" 
-            };
-        }
-
-        // 获取单个互助信息
+        // 获取单个JSON文件内容
         async function fetchHelpItem(fileName) {
             try {
+                // 处理包含空格的文件名（GitHub会自动编码，但保持原格式更稳妥）
                 const rawUrl = `https://raw.githubusercontent.com/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/${REPO_CONFIG.branch}/${REPO_CONFIG.dir}/${fileName}`;
-                console.log("获取文件:", rawUrl);
+                console.log("加载文件:", rawUrl);
                 
                 const res = await fetch(rawUrl);
                 if (!res.ok) {
-                    console.warn(`文件 ${fileName} 加载失败:`, res.status);
+                    console.warn(`文件${fileName}加载失败: ${res.status}`);
                     return null;
                 }
                 
-                const data = await res.json();
-                console.log("文件内容:", data);
-                
-                if (typeof data === 'object' && data !== null) {
-                    return data;
-                }
-                
-                return null;
+                return await res.json();
             } catch (err) {
-                console.error(`互助信息错误 ${fileName}:`, err);
+                console.error(`文件${fileName}解析错误:`, err);
                 return null;
             }
         }
@@ -208,7 +169,7 @@
             
             const title = data.title || data.标题 || "未命名互助";
             const labels = data.label || data.标签 || data.tags || [];
-            const time = data.time || data.时间 || data.发布时间 || "未知时间";
+            const time = data.time || data.时间 || "未知时间";
             
             card.innerHTML = `
                 <h3 class="font-semibold text-gray-900 mb-2 line-clamp-1">${title}</h3>
@@ -221,21 +182,20 @@
             return card;
         }
 
-        // 显示详情 - 修复滚动锁定问题
+        // 显示详情弹窗
         function showDetail(data) {
             const modal = document.getElementById("detail-modal");
             const content = document.getElementById("detail-content");
             
-            // 锁定背景滚动
             document.body.classList.add('modal-open');
             
             const title = data.title || data.标题 || "未命名互助";
-            const subtitle = data.titles || data.副标题 || data.简要信息 || "无简要信息";
-            const time = data.time || data.时间 || data.发布时间 || "未知时间";
-            const labels = data.label || data.标签 || data.tags || [];
-            const process = data.process || data.过程 || data.事件过程 || "无详细过程";
-            const request = data.request || data.请求 || data.互助请求 || "无明确请求";
-            const contact = data.contact || data.联系方式 || data.联系 || "未提供联系方式";
+            const subtitle = data.titles || data.副标题 || "无简要信息";
+            const time = data.time || data.时间 || "未知时间";
+            const labels = data.label || data.标签 || [];
+            const process = data.process || data.过程 || "无详细过程";
+            const request = data.request || data.请求 || "无明确请求";
+            const contact = data.contact || data.联系方式 || "未提供联系方式";
             
             content.innerHTML = `
                 <h2 class="text-xl font-bold text-gray-900 mb-2">${title}</h2>
@@ -244,9 +204,7 @@
                     <span>${time}发布</span>
                 </div>
                 <div class="mb-4">
-                    ${labels.length ? 
-                        labels.map(tag => `<span class="inline-block bg-gray-100 text-xs px-2 py-1 rounded mr-2 mb-2">#${tag}</span>`).join("") : 
-                        "无标签"}
+                    ${labels.map(tag => `<span class="inline-block bg-gray-100 text-xs px-2 py-1 rounded mr-2 mb-2">#${tag}</span>`).join("")}
                 </div>
                 <div class="text-gray-800 mb-4">
                     <h4 class="font-semibold mb-2 text-base">事件过程</h4>
@@ -265,21 +223,14 @@
             
             const closeModal = () => {
                 modal.style.display = "none";
-                // 恢复背景滚动
                 document.body.classList.remove('modal-open');
             };
             
             document.getElementById("close-modal").onclick = closeModal;
             modal.onclick = (e) => e.target === modal && closeModal();
-            
-            // 阻止弹窗内部内容滚动时影响到背景
-            const modalContent = modal.querySelector('.bg-white');
-            modalContent.addEventListener('scroll', function(e) {
-                e.stopPropagation();
-            });
         }
 
-        // 渲染无内容状态
+        // 渲染空状态
         function renderEmptyState(container) {
             container.innerHTML = `
                 <div class="col-span-full flex flex-col items-center justify-center py-10 text-center">
@@ -290,13 +241,13 @@
         }
 
         // 渲染错误状态
-        function renderErrorState(container, message = "请刷新网站重试") {
+        function renderErrorState(container, message) {
             container.innerHTML = `
                 <div class="col-span-full flex flex-col items-center justify-center py-10 text-center">
-                    <p class="text-lg text-gray-700">当前无法获取互助信息</p>
-                    <p class="text-lg text-gray-700 mt-1">${message}</p>
-                    <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
-                        刷新页面
+                    <p class="text-lg text-gray-700">加载失败</p>
+                    <p class="text-sm text-gray-500 mt-1">${message}</p>
+                    <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                        刷新重试
                     </button>
                 </div>
             `;
@@ -312,10 +263,8 @@
             `;
         }
 
-        // 初始化
+        // 初始化页面
         async function init() {
-            console.log("初始化互助平台...");
-            
             const ongoingContainer = document.getElementById("ongoing-container");
             const completedContainer = document.getElementById("completed-container");
 
@@ -323,27 +272,29 @@
             renderLoadingState(completedContainer);
 
             try {
+                // 1. 获取目录下所有JSON文件
                 const fileListRes = await fetchFileList();
-                console.log("文件列表结果:", fileListRes);
-                
                 if (!fileListRes.success) {
-                    throw new Error(fileListRes.error || "无法获取文件列表");
+                    throw new Error(fileListRes.error);
                 }
 
-                if (!fileListRes.files || fileListRes.files.length === 0) {
+                const { files } = fileListRes;
+                if (files.length === 0) {
                     renderEmptyState(ongoingContainer);
                     renderEmptyState(completedContainer);
                     return;
                 }
 
+                // 2. 加载所有文件内容并分类
                 const ongoingData = [];
                 const completedData = [];
                 
-                for (const fileName of fileListRes.files) {
+                for (const fileName of files) {
                     const data = await fetchHelpItem(fileName);
                     if (data) {
+                        // 根据状态分类（支持多种字段名：完成情况/status/state）
                         const status = data["完成情况"] || data.status || data.state || "进行中";
-                        if (status === "已完成" || status === "完成") {
+                        if (status.includes("已完成") || status.includes("完成")) {
                             completedData.push(data);
                         } else {
                             ongoingData.push(data);
@@ -351,6 +302,7 @@
                     }
                 }
 
+                // 3. 渲染进行中板块
                 ongoingContainer.innerHTML = "";
                 if (ongoingData.length === 0) {
                     renderEmptyState(ongoingContainer);
@@ -358,34 +310,26 @@
                     ongoingData.forEach(item => ongoingContainer.appendChild(createHelpCard(item)));
                 }
 
+                // 4. 渲染已完成板块
                 completedContainer.innerHTML = "";
-                const isMobile = window.innerWidth < 768;
-                const limitedCompleted = isMobile ? completedData.slice(0, 4) : completedData.slice(0, 8);
-                
-                if (limitedCompleted.length === 0) {
+                if (completedData.length === 0) {
                     renderEmptyState(completedContainer);
                 } else {
-                    limitedCompleted.forEach(item => completedContainer.appendChild(createHelpCard(item)));
+                    // 移动端最多显示4个，桌面端最多显示8个
+                    const isMobile = window.innerWidth < 768;
+                    const displayData = isMobile ? completedData.slice(0, 4) : completedData.slice(0, 8);
+                    displayData.forEach(item => completedContainer.appendChild(createHelpCard(item)));
                 }
-                
-                console.log("初始化完成，进行中:", ongoingData.length, "已完成:", completedData.length);
-                
+
             } catch (error) {
-                console.error("初始化错误:", error);
+                console.error("初始化失败:", error);
                 renderErrorState(ongoingContainer, error.message);
                 renderErrorState(completedContainer, error.message);
             }
         }
 
         // 页面加载完成后初始化
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', init);
-        } else {
-            init();
-        }
-
-        console.log("秋风公益互助平台已加载");
-        console.log("仓库配置:", REPO_CONFIG);
+        document.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
 </html>
