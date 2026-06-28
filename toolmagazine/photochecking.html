@@ -1,384 +1,1030 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>图片查重管理工具 Pro</title>
-  <!-- 全局加载 JSZip -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <style>
-    :root {
-      --bg: #0f0f1a;
-      --surface: #1a1a2e;
-      --border: #2a2a40;
-      --accent: #4a9eff;
-      --text: #e0e0e0;
-      --text-secondary: #888;
-      --danger: #ff6b6b;
-      --success: #51cf66;
-      --warning: #ffb84d;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
-    /* 工具栏 */
-    .toolbar { background: var(--surface); padding: 8px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-    .toolbar button, .toolbar .btn { background: #2a2a44; color: var(--text); border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 6px; transition: background 0.2s; }
-    .toolbar button:hover { background: #3a3a5c; }
-    .toolbar button.accent { background: var(--accent); color: #fff; }
-    .toolbar button.accent:hover { background: #6ab4ff; }
-    .toolbar button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .toolbar .btn { display: inline-flex; }
-    input[type="file"] { display: none; }
-    .threshold-group { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-    .threshold-group input { width: 100px; }
-    .drop-zone { flex: 1; margin: 16px; border: 2px dashed var(--border); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 1.1em; transition: all 0.2s; }
-    .drop-zone.drag-over { border-color: var(--accent); background: #1e1e3a; }
-    .progress { padding: 10px 16px; background: var(--surface); border-radius: 8px; margin: 0 16px 16px; display: none; align-items: center; gap: 10px; }
-    .progress.active { display: flex; }
-    .progress-bar { flex: 1; height: 6px; background: #2a2a44; border-radius: 3px; overflow: hidden; }
-    .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
-    /* 主布局 */
-    .main-layout { display: grid; grid-template-columns: 250px 1fr 250px; grid-template-rows: 1fr 1fr; gap: 10px; padding: 10px; flex: 1; overflow: hidden; }
-    .panel { background: var(--surface); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; }
-    .panel-header { padding: 8px 12px; background: #2a2a3e; font-weight: 600; font-size: 0.9em; display: flex; justify-content: space-between; align-items: center; }
-    .scroll-area { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px; }
-    /* 通用图片卡片 */
-    .image-card { width: 70px; background: #2a2a40; border-radius: 6px; padding: 4px; cursor: pointer; transition: all 0.15s; position: relative; display: flex; flex-direction: column; }
-    .image-card:hover { background: #3a3a55; transform: translateY(-1px); }
-    .image-card.selected { outline: 2px solid var(--accent); }
-    .image-card .thumb { width: 100%; height: 50px; object-fit: cover; border-radius: 4px; background: #1a1a2e; flex-shrink: 0; }
-    .image-card .fname { font-size: 10px; color: var(--text-secondary); word-break: break-all; margin-top: 3px; line-height: 1.2; max-height: 24px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-    .image-card.base-badge::after { content: "★"; position: absolute; top: 2px; right: 2px; background: var(--accent); color: #fff; font-size: 10px; padding: 1px 4px; border-radius: 3px; }
-    /* 候选区特殊卡片：文件名优先 */
-    .candidate-pool { background: #1e1e36; border: 1px solid var(--accent); }
-    .candidate-card { width: 100%; background: #2a2a40; border-radius: 6px; padding: 6px; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: background 0.15s; }
-    .candidate-card:hover { background: #3a3a55; }
-    .candidate-card .fname-full { flex: 1; font-size: 13px; word-break: break-all; line-height: 1.3; }
-    .candidate-card .thumb-small { width: 50px; height: 40px; object-fit: cover; border-radius: 4px; background: #1a1a2e; flex-shrink: 0; }
-    .candidate-card.current-base { outline: 2px solid var(--warning); }
-    .candidate-actions { padding: 8px; display: flex; gap: 8px; }
-    /* 分组文件夹 */
-    .group-folder { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; }
-    .group-folder .group-header { padding: 6px 8px; background: #2a2a3e; display: flex; align-items: center; gap: 6px; }
-    .group-folder .group-name-input { background: transparent; border: none; color: var(--text); font-weight: 600; font-size: 0.85em; width: auto; min-width: 60px; }
-    .group-folder .group-name-input:focus { outline: 1px solid var(--accent); border-radius: 3px; }
-    .group-folder .group-images { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; }
-    .empty-hint { color: #555; padding: 20px; text-align: center; font-size: 0.9em; }
-    /* 预览模态框 */
-    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-    .modal-overlay img { max-width: 90vw; max-height: 90vh; border-radius: 8px; box-shadow: 0 0 30px rgba(0,0,0,0.5); }
-    .modal-overlay .close { position: absolute; top: 20px; right: 30px; color: #fff; font-size: 30px; cursor: pointer; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图片查重管理工具 Pro</title>
+<!-- 全局加载 JSZip -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root {
+    --bg: #0f0f1a;
+    --surface: #1a1a2e;
+    --border: #2a2a40;
+    --accent: #4a9eff;
+    --text: #e0e0e0;
+    --text-secondary: #888;
+    --danger: #ff6b6b;
+    --success: #51cf66;
+    --warning: #ffb84d;
+}
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+/* 工具栏 */
+.toolbar {
+    background: var(--surface);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+.toolbar button, .toolbar .btn {
+    background: #2a2a44;
+    color: var(--text);
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.2s;
+}
+.toolbar button:hover {
+    background: #3a3a5c;
+}
+.toolbar button.accent {
+    background: var(--accent);
+    color: #fff;
+}
+.toolbar button.accent:hover {
+    background: #6ab4ff;
+}
+.toolbar button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.toolbar .btn {
+    display: inline-flex;
+}
+input[type="file"] {
+    display: none;
+}
+.threshold-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+.threshold-group input {
+    width: 100px;
+}
+.drop-zone {
+    flex: 1;
+    margin: 16px;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 1.1em;
+    transition: all 0.2s;
+}
+.drop-zone.drag-over {
+    border-color: var(--accent);
+    background: #1e1e3a;
+}
+.progress {
+    padding: 10px 16px;
+    background: var(--surface);
+    border-radius: 8px;
+    margin: 0 16px 16px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+}
+.progress.active {
+    display: flex;
+}
+.progress-bar {
+    flex: 1;
+    height: 6px;
+    background: #2a2a44;
+    border-radius: 3px;
+    overflow: hidden;
+}
+.progress-fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.3s;
+}
+/* 主布局 */
+.main-layout {
+    display: grid;
+    grid-template-columns: 250px 1fr 250px;
+    grid-template-rows: 1fr 1fr;
+    gap: 10px;
+    padding: 10px;
+    flex: 1;
+    overflow: hidden;
+}
+.panel {
+    background: var(--surface);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.panel-header {
+    padding: 8px 12px;
+    background: #2a2a3e;
+    font-weight: 600;
+    font-size: 0.9em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 6px;
+}
+/* 通用图片卡片 */
+.image-card {
+    width: 70px;
+    background: #2a2a40;
+    border-radius: 6px;
+    padding: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+.image-card:hover {
+    background: #3a3a55;
+    transform: translateY(-1px);
+}
+.image-card.selected {
+    outline: 2px solid var(--accent);
+}
+.image-card .thumb {
+    width: 100%;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 4px;
+    background: #1a1a2e;
+    flex-shrink: 0;
+}
+.image-card .fname {
+    font-size: 10px;
+    color: var(--text-secondary);
+    word-break: break-all;
+    margin-top: 3px;
+    line-height: 1.2;
+    max-height: 24px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+.image-card.base-badge::after {
+    content: "★";
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 10px;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+/* 候选区特殊卡片：文件名优先 */
+.candidate-pool {
+    background: #1e1e36;
+    border: 1px solid var(--accent);
+}
+.candidate-card {
+    width: 100%;
+    background: #2a2a40;
+    border-radius: 6px;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.candidate-card:hover {
+    background: #3a3a55;
+}
+.candidate-card .fname-full {
+    flex: 1;
+    font-size: 13px;
+    word-break: break-all;
+    line-height: 1.3;
+}
+.candidate-card .thumb-small {
+    width: 50px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 4px;
+    background: #1a1a2e;
+    flex-shrink: 0;
+}
+.candidate-card.current-base {
+    outline: 2px solid var(--warning);
+}
+.candidate-actions {
+    padding: 8px;
+    display: flex;
+    gap: 8px;
+}
+/* 分组文件夹 */
+.group-folder {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+.group-folder .group-header {
+    padding: 6px 8px;
+    background: #2a2a3e;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.group-folder .group-name-input {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-weight: 600;
+    font-size: 0.85em;
+    width: auto;
+    min-width: 60px;
+}
+.group-folder .group-name-input:focus {
+    outline: 1px solid var(--accent);
+    border-radius: 3px;
+}
+.group-folder .group-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px;
+}
+.empty-hint {
+    color: #555;
+    padding: 20px;
+    text-align: center;
+    font-size: 0.9em;
+}
+/* 预览模态框 */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+.modal-overlay img {
+    max-width: 90vw;
+    max-height: 90vh;
+    border-radius: 8px;
+    box-shadow: 0 0 30px rgba(0,0,0,0.5);
+}
+.modal-overlay .close {
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    color: #fff;
+    font-size: 30px;
+    cursor: pointer;
+}
+</style>
 </head>
 <body>
-  <div class="toolbar">
+<div class="toolbar">
     <input type="file" id="fileInput" accept=".zip">
     <label for="fileInput" class="btn">📁 打开压缩包</label>
     <button id="exportBtn" class="accent" disabled>📦 导出分组为ZIP</button>
     <button id="importBtn" class="btn">📥 导入进度</button>
     <input type="file" id="importFile" accept=".json">
     <div class="threshold-group">
-      <span>相似阈值</span>
-      <input type="range" id="threshold" min="0" max="32" value="8">
-      <span id="thresholdVal">8</span>
+        <span>相似阈值</span>
+        <input type="range" id="threshold" min="0" max="32" value="8">
+        <span id="thresholdVal">8</span>
     </div>
-  </div>
-  <div id="dropZone" class="drop-zone">拖放 ZIP 压缩包至此（图片格式：jpg/png/webp等）</div>
-  <div id="progressBar" class="progress">
-    <span>⏳ 预处理中...</span>
-    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-    <span id="progressText">0%</span>
-  </div>
+</div>
 
-  <div class="main-layout" id="mainLayout" style="display:none">
+<div id="dropZone" class="drop-zone">拖放 ZIP 压缩包至此（图片格式：jpg/png/webp等）</div>
+
+<div id="progressBar" class="progress">
+    <span>⏳ 预处理中...</span>
+    <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <span id="progressText">0%</span>
+</div>
+
+<div class="main-layout" id="mainLayout" style="display:none">
     <!-- 待处理区 -->
     <div class="panel" style="grid-row: 1 / 3;">
-      <div class="panel-header">📋 待处理 <span id="pendingCount">0</span></div>
-      <div class="scroll-area" id="pendingGrid"></div>
+        <div class="panel-header">
+            📋 待处理 <span id="pendingCount">0</span>
+        </div>
+        <div class="scroll-area" id="pendingGrid"></div>
     </div>
+
     <!-- 中间上：候选区 -->
     <div class="panel candidate-pool" id="candidatePanel" style="display:none;">
-      <div class="panel-header">🔍 相似图片候选 (点击空白处设为初始图片)</div>
-      <div class="scroll-area" id="candidateGrid" style="flex-direction:column; flex-wrap:nowrap;"></div>
-      <div class="candidate-actions">
-        <button id="cancelCandidateBtn">取消</button>
-      </div>
+        <div class="panel-header">🔍 相似图片候选 (点击空白处设为初始图片)</div>
+        <div class="scroll-area" id="candidateGrid" style="flex-direction:column; flex-wrap:nowrap;"></div>
+        <div class="candidate-actions">
+            <button id="cancelCandidateBtn">取消</button>
+        </div>
     </div>
+
     <!-- 中间下：重复图片区 -->
     <div class="panel" id="duplicatePanel">
-      <div class="panel-header">🔄 重复图片组</div>
-      <div class="scroll-area" id="dupGroups"></div>
+        <div class="panel-header">🔄 重复图片组</div>
+        <div class="scroll-area" id="dupGroups"></div>
     </div>
+
     <!-- 右侧：初始图片栏（可分组） -->
     <div class="panel" style="grid-row: 1 / 3;">
-      <div class="panel-header">⭐ 初始图片组 <button id="addGroupBtn" class="btn" style="padding:2px 8px;">+新建组</button></div>
-      <div class="scroll-area" id="baseGroups"></div>
+        <div class="panel-header">
+            ⭐ 初始图片组
+            <button id="addGroupBtn" class="btn" style="padding:2px 8px;">+新建组</button>
+        </div>
+        <div class="scroll-area" id="baseGroups"></div>
     </div>
-  </div>
+</div>
 
-  <!-- 图片预览模态框 -->
-  <div id="previewModal" style="display:none" class="modal-overlay">
+<!-- 图片预览模态框 -->
+<div id="previewModal" style="display:none" class="modal-overlay">
     <span class="close" id="closePreview">&times;</span>
     <img id="previewImg" src="" alt="预览">
-  </div>
+</div>
 
-  <script type="importmap">
-    { "imports": { "@zip.js/zip.js": "https://cdn.jsdelivr.net/npm/@zip.js/zip.js@2.7.34/index.js" } }
-  </script>
+<script type="importmap">
+{
+    "imports": {
+        "@zip.js/zip.js": "https://cdn.jsdelivr.net/npm/@zip.js/zip.js@2.7.34/index.js"
+    }
+}
+</script>
 
-  <script type="module">
-    import { ZipReader, BlobReader, BlobWriter } from '@zip.js/zip.js';
+<script type="module">
+import { ZipReader, BlobReader, BlobWriter } from '@zip.js/zip.js';
 
-    // -------------------- 全局状态 --------------------
-    let zipReader = null;
-    let entries = [];
-    let imageHashMap = new Map();
-    let statusMap = new Map();
-    let duplicateGroups = new Map();
-    let baseGroups = new Map();
-    let currentCandidateBase = null;
-    let candidateList = [];
-    let zipFileName = '', zipFileSize = 0;
+// -------------------- 全局状态 --------------------
+let zipReader = null;
+let entries = [];
+let imageHashMap = new Map();
+let statusMap = new Map();
+let duplicateGroups = new Map();
+let baseGroups = new Map();
+let currentCandidateBase = null;
+let candidateList = [];
+let zipFileName = '', zipFileSize = 0;
 
-    const THRESHOLD = document.getElementById('threshold');
-    const thresholdVal = document.getElementById('thresholdVal');
-    THRESHOLD.addEventListener('input', ()=> thresholdVal.textContent = THRESHOLD.value);
+const THRESHOLD = document.getElementById('threshold');
+const thresholdVal = document.getElementById('thresholdVal');
+THRESHOLD.addEventListener('input', ()=> thresholdVal.textContent = THRESHOLD.value);
 
-    // -------------------- IndexedDB --------------------
-    const DB_NAME = 'DupFinderProDB', STORE_NAME = 'images';
-    function openDB() { /* 同前 */ return new Promise((resolve, reject) => { const req = indexedDB.open(DB_NAME, 1); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: 'filename' }); }; req.onsuccess = (e) => resolve(e.target.result); req.onerror = (e) => reject(e.target.error); }); }
-    async function saveFullState() { const db = await openDB(); const tx = db.transaction(STORE_NAME, 'readwrite'); const store = tx.objectStore(STORE_NAME); await store.clear(); for (let [fname, hash] of imageHashMap) await store.put({ filename: fname, hash, status: statusMap.get(fname) || 'pending' }); await store.put({ filename: '__dupGroups__', value: JSON.stringify([...duplicateGroups]) }); await store.put({ filename: '__baseGroups__', value: JSON.stringify([...baseGroups]) }); await store.put({ filename: '__meta__', fileName: zipFileName, fileSize: zipFileSize }); await tx.done; }
-    async function loadStateFromDB() { const db = await openDB(); const tx = db.transaction(STORE_NAME, 'readonly'); const store = tx.objectStore(STORE_NAME); const all = await store.getAll(); await tx.done; imageHashMap.clear(); statusMap.clear(); duplicateGroups.clear(); baseGroups.clear(); for (let item of all) { if (item.filename === '__dupGroups__') duplicateGroups = new Map(JSON.parse(item.value)); else if (item.filename === '__baseGroups__') baseGroups = new Map(JSON.parse(item.value)); else if (item.filename === '__meta__') continue; else { imageHashMap.set(item.filename, item.hash); statusMap.set(item.filename, item.status || 'pending'); } } }
+// -------------------- IndexedDB 【修复部分，新增2个工具函数】 --------------------
+const DB_NAME = 'DupFinderProDB', STORE_NAME = 'images';
 
-    // -------------------- Worker 哈希池 --------------------
-    const workerBlob = new Blob([`self.onmessage=async function(e){const{blob,index}=e.data;try{const img=await createImageBitmap(blob,{resizeWidth:9,resizeHeight:8,resizeQuality:'pixelated'});const c=new OffscreenCanvas(9,8),ctx=c.getContext('2d');ctx.drawImage(img,0,0);const d=ctx.getImageData(0,0,9,8).data;let h=0n;for(let y=0;y<8;y++)for(let x=0;x<8;x++){const i=(y*9+x)*4,j=(y*9+x+1)*4,g=d[i]*.299+d[i+1]*.587+d[i+2]*.114,g2=d[j]*.299+d[j+1]*.587+d[j+2]*.114;h<<=1n;if(g>g2)h|=1n}img.close();self.postMessage({index,hash:h.toString(16).padStart(16,'0')})}catch(err){self.postMessage({index,error:err.message})}}`],{type:'application/javascript'});
-    const workerUrl = URL.createObjectURL(workerBlob);
-    const MAX_WORKERS = Math.min(navigator.hardwareConcurrency || 4, 4);
-    let workers = [], workerBusy = [], taskQueue = [];
+// 新增：把 IDBRequest 转为 Promise
+function promisifyRequest(request) {
+    return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
 
-    function initWorkers() { workers.forEach(w=>w.terminate()); workers=[]; workerBusy=new Array(MAX_WORKERS).fill(false); for(let i=0;i<MAX_WORKERS;i++){const w=new Worker(workerUrl);w.onmessage=(e)=>{workerBusy[i]=false;const{index,hash,error}=e.data;if(!error){imageHashMap.set(entries[index].filename,hash);processedCount++;updateProgressUI();}else{processedCount++;updateProgressUI();}processQueue();};workers.push(w);} }
-    function processQueue() { if(taskQueue.length===0) return; const free=workerBusy.findIndex(b=>!b); if(free===-1) return; const{blob,index}=taskQueue.shift(); workerBusy[free]=true; workers[free].postMessage({blob,index},[blob]); }
-    function dispatchHashTask(blob,index) { taskQueue.push({blob,index}); processQueue(); }
+// 新增：等待事务完成
+function waitTransaction(tx) {
+    return new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+    });
+}
 
-    // -------------------- 预处理 --------------------
-    let totalImages=0, processedCount=0;
-    const dropZone=document.getElementById('dropZone'), fileInput=document.getElementById('fileInput'), progressBar=document.getElementById('progressBar'), progressFill=document.getElementById('progressFill'), progressText=document.getElementById('progressText'), mainLayout=document.getElementById('mainLayout');
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: 'filename' });
+            }
+        };
+        req.onsuccess = (e) => resolve(e.target.result);
+        req.onerror = (e) => reject(e.target.error);
+    });
+}
 
-    function updateProgressUI() { const pct=Math.round((processedCount/totalImages)*100); progressFill.style.width=pct+'%'; progressText.textContent=`${pct}% (${processedCount}/${totalImages})`; if(processedCount===totalImages){progressBar.classList.remove('active'); onPreprocessingDone();} }
+// 【修复 getAll / put / clear 直接await报错】
+async function saveFullState() {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
 
-    async function startPreprocessing(file) {
-      if (zipReader) { if(file.name===zipFileName&&file.size===zipFileSize) { await loadStateFromDB(); if(imageHashMap.size>0) { onPreprocessingDone(); return; } } }
-      imageHashMap.clear(); statusMap.clear(); duplicateGroups.clear(); baseGroups.clear(); currentCandidateBase=null; candidateList=[]; zipFileName=file.name; zipFileSize=file.size;
-      dropZone.style.display='none'; progressBar.classList.add('active'); progressFill.style.width='0%'; progressText.textContent='读取压缩包...';
-      try {
+    await promisifyRequest(store.clear());
+
+    for (let [fname, hash] of imageHashMap) {
+        await promisifyRequest(store.put({
+            filename: fname,
+            hash,
+            status: statusMap.get(fname) || 'pending'
+        }));
+    }
+
+    await promisifyRequest(store.put({
+        filename: '__dupGroups__',
+        value: JSON.stringify([...duplicateGroups])
+    }));
+    await promisifyRequest(store.put({
+        filename: '__baseGroups__',
+        value: JSON.stringify([...baseGroups])
+    }));
+    await promisifyRequest(store.put({
+        filename: '__meta__',
+        fileName: zipFileName,
+        fileSize: zipFileSize
+    }));
+
+    await waitTransaction(tx);
+}
+
+// 【修复 const all = await store.getAll() 导致 all not iterable】
+async function loadStateFromDB() {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+
+    // 修复：包装 getAll 请求
+    const all = await promisifyRequest(store.getAll());
+    await waitTransaction(tx);
+
+    imageHashMap.clear();
+    statusMap.clear();
+    duplicateGroups.clear();
+    baseGroups.clear();
+
+    for (let item of all) {
+        if (item.filename === '__dupGroups__') {
+            duplicateGroups = new Map(JSON.parse(item.value));
+        } else if (item.filename === '__baseGroups__') {
+            baseGroups = new Map(JSON.parse(item.value));
+        } else if (item.filename === '__meta__') {
+            continue;
+        } else {
+            imageHashMap.set(item.filename, item.hash);
+            statusMap.set(item.filename, item.status || 'pending');
+        }
+    }
+}
+
+// -------------------- Worker 哈希池 --------------------
+const workerBlob = new Blob([`self.onmessage=async function(e){const{blob,index}=e.data;try{const img=await createImageBitmap(blob,{resizeWidth:9,resizeHeight:8,resizeQuality:'pixelated'});const c=new OffscreenCanvas(9,8),ctx=c.getContext('2d');ctx.drawImage(img,0,0);const d=ctx.getImageData(0,0,9,8).data;let h=0n;for(let y=0;y<8;y++)for(let x=0;x<8;x++){const i=(y*9+x)*4,j=(y*9+x+1)*4,g=d[i]*.299+d[i+1]*.587+d[i+2]*.114,g2=d[j]*.299+d[j+1]*.587+d[j+2]*.114;h<<=1n;if(g>g2)h|=1n}img.close();self.postMessage({index,hash:h.toString(16).padStart(16,'0')})}catch(err){self.postMessage({index,error:err.message})}}`],{type:'application/javascript'});
+const workerUrl = URL.createObjectURL(workerBlob);
+const MAX_WORKERS = Math.min(navigator.hardwareConcurrency || 4, 4);
+let workers = [], workerBusy = [], taskQueue = [];
+
+function initWorkers() {
+    workers.forEach(w=>w.terminate());
+    workers=[];
+    workerBusy=new Array(MAX_WORKERS).fill(false);
+    for(let i=0;i<MAX_WORKERS;i++){
+        const w=new Worker(workerUrl);
+        w.onmessage=(e)=>{
+            workerBusy[i]=false;
+            const{index,hash,error}=e.data;
+            if(!error){
+                imageHashMap.set(entries[index].filename,hash);
+                processedCount++;
+                updateProgressUI();
+            }else{
+                processedCount++;
+                updateProgressUI();
+            }
+            processQueue();
+        };
+        workers.push(w);
+    }
+}
+
+function processQueue() {
+    if(taskQueue.length===0) return;
+    const free=workerBusy.findIndex(b=>!b);
+    if(free===-1) return;
+    const{blob,index}=taskQueue.shift();
+    workerBusy[free]=true;
+    workers[free].postMessage({blob,index},[blob]);
+}
+
+function dispatchHashTask(blob,index) {
+    taskQueue.push({blob,index});
+    processQueue();
+}
+
+// -------------------- 预处理 --------------------
+let totalImages=0, processedCount=0;
+const dropZone=document.getElementById('dropZone'),
+fileInput=document.getElementById('fileInput'),
+progressBar=document.getElementById('progressBar'),
+progressFill=document.getElementById('progressFill'),
+progressText=document.getElementById('progressText'),
+mainLayout=document.getElementById('mainLayout');
+
+function updateProgressUI() {
+    const pct=Math.round((processedCount/totalImages)*100);
+    progressFill.style.width=pct+'%';
+    progressText.textContent=`${pct}% (${processedCount}/${totalImages})`;
+    if(processedCount===totalImages){
+        progressBar.classList.remove('active');
+        onPreprocessingDone();
+    }
+}
+
+async function startPreprocessing(file) {
+    if (zipReader) {
+        if(file.name===zipFileName&&file.size===zipFileSize) {
+            await loadStateFromDB();
+            if(imageHashMap.size>0) {
+                onPreprocessingDone();
+                return;
+            }
+        }
+    }
+
+    imageHashMap.clear();
+    statusMap.clear();
+    duplicateGroups.clear();
+    baseGroups.clear();
+    currentCandidateBase=null;
+    candidateList=[];
+    zipFileName=file.name;
+    zipFileSize=file.size;
+
+    dropZone.style.display='none';
+    progressBar.classList.add('active');
+    progressFill.style.width='0%';
+    progressText.textContent='读取压缩包...';
+
+    try {
         zipReader = new ZipReader(new BlobReader(file));
         const allEntries = await zipReader.getEntries();
         entries = allEntries.filter(e=>!e.directory&&/\.(jpg|jpeg|png|webp|bmp|gif|tiff?)$/i.test(e.filename));
-        totalImages=entries.length; processedCount=0;
+        totalImages=entries.length;
+        processedCount=0;
         if(totalImages===0) throw new Error('无图片');
-        const db=await openDB(); const tx=db.transaction(STORE_NAME,'readonly'); const meta=await tx.objectStore(STORE_NAME).get('__meta__');
-        if(meta&&meta.fileName===file.name&&meta.fileSize===file.size) { await loadStateFromDB(); await tx.done; progressBar.classList.remove('active'); onPreprocessingDone(); return; }
-        await tx.done;
+
+        // 【修复这里 tx.objectStore().get() 直接await报错】
+        const db=await openDB();
+        const tx=db.transaction(STORE_NAME,'readonly');
+        const meta=await promisifyRequest(tx.objectStore(STORE_NAME).get('__meta__'));
+
+        if(meta&&meta.fileName===file.name&&meta.fileSize===file.size) {
+            await loadStateFromDB();
+            await waitTransaction(tx);
+            progressBar.classList.remove('active');
+            onPreprocessingDone();
+            return;
+        }
+        await waitTransaction(tx);
+
         initWorkers();
-        const CONCURRENT=4; let readIdx=0;
-        const readNext=async()=>{if(readIdx>=totalImages)return;const idx=readIdx++;const blob=await entries[idx].getData(new BlobWriter());dispatchHashTask(blob,idx);await readNext();};
+        const CONCURRENT=4;
+        let readIdx=0;
+        const readNext=async()=>{
+            if(readIdx>=totalImages)return;
+            const idx=readIdx++;
+            const blob=await entries[idx].getData(new BlobWriter());
+            dispatchHashTask(blob,idx);
+            await readNext();
+        };
         await Promise.all(Array(CONCURRENT).fill(0).map(()=>readNext()));
+
         while(processedCount<totalImages) await new Promise(r=>setTimeout(r,200));
         entries.forEach(e=>statusMap.set(e.filename,'pending'));
         await saveFullState();
-      } catch(err) { alert('预处理失败: '+err.message); dropZone.style.display='flex'; progressBar.classList.remove('active'); }
+    } catch(err) {
+        alert('预处理失败: '+err.message);
+        dropZone.style.display='flex';
+        progressBar.classList.remove('active');
     }
+}
 
-    function onPreprocessingDone() { mainLayout.style.display='grid'; document.getElementById('exportBtn').disabled=false; renderAll(); }
+function onPreprocessingDone() {
+    mainLayout.style.display='grid';
+    document.getElementById('exportBtn').disabled=false;
+    renderAll();
+}
 
-    // -------------------- 查重逻辑 --------------------
-    function hammingDistance(h1,h2) { let d=0; for(let i=0;i<h1.length;i++){ let xor=parseInt(h1[i],16)^parseInt(h2[i],16); while(xor){d+=xor&1;xor>>=1;} } return d; }
-    function findSimilar(baseFilename) { const hash=imageHashMap.get(baseFilename); if(!hash)return[]; const t=parseInt(THRESHOLD.value); const s=[]; for(let[f,h]of imageHashMap) if(hammingDistance(hash,h)<=t) s.push(f); return s; }
-
-    function startCandidateCheck(filename) { if(statusMap.get(filename)!=='pending') return; currentCandidateBase=filename; candidateList=findSimilar(filename); if(!candidateList.includes(filename)) candidateList.unshift(filename); renderCandidatePanel(); document.getElementById('candidatePanel').style.display='flex'; }
-    function cancelCandidate() { currentCandidateBase=null; candidateList=[]; document.getElementById('candidatePanel').style.display='none'; }
-    function setAsInitial(initialFilename) { if(!candidateList.includes(initialFilename)) return; const others=candidateList.filter(f=>f!==initialFilename); statusMap.set(initialFilename,'base'); others.forEach(f=>statusMap.set(f,'duplicate')); const gid=Date.now().toString(); duplicateGroups.set(gid,{base:initialFilename,duplicates:others}); cancelCandidate(); saveFullState(); renderAll(); }
-    function markAsUnique(filename) { if(statusMap.get(filename)!=='pending') return; statusMap.set(filename,'unique'); saveFullState(); renderAll(); }
-
-    // -------------------- 初始图片分组 --------------------
-    function createNewGroup() { const gid=Date.now().toString(); baseGroups.set(gid,{name:'新分组',images:[]}); saveFullState(); renderBaseGroups(); }
-    function renameGroup(gid,newName) { const g=baseGroups.get(gid); if(g){g.name=newName;saveFullState();} }
-    function addImageToGroup(gid,filename) { for(let[_,g]of baseGroups) g.images=g.images.filter(f=>f!==filename); baseGroups.get(gid)?.images.push(filename); saveFullState(); renderBaseGroups(); }
-    function removeImageFromGroup(gid,filename) { const g=baseGroups.get(gid); if(g){g.images=g.images.filter(f=>f!==filename);saveFullState();renderBaseGroups();} }
-
-    // -------------------- 导出 ZIP --------------------
-    async function exportGroupsAsZip() { if(baseGroups.size===0){alert('无分组');return;} const zip=new JSZip(); for(let[gid,group]of baseGroups) { const folder=zip.folder(group.name); for(let fname of group.images) { const entry=entries.find(e=>e.filename===fname); if(entry) { const blob=await entry.getData(new BlobWriter()); folder.file(fname,blob); } } } const content=await zip.generateAsync({type:'blob'}); const url=URL.createObjectURL(content); const a=document.createElement('a'); a.href=url; a.download='grouped_images.zip'; a.click(); URL.revokeObjectURL(url); }
-
-    // -------------------- 懒加载 IntersectionObserver --------------------
-    const lazyObserver = new IntersectionObserver((entriesObs) => {
-      entriesObs.forEach(entry => {
-        if (entry.isIntersecting) {
-          const img = entry.target;
-          const filename = img.dataset.filename;
-          if (filename && !img.src) {
-            loadThumbnail(filename).then(url => { if (url && img.dataset.filename === filename) img.src = url; });
-          }
-          lazyObserver.unobserve(img);
+// -------------------- 查重逻辑 --------------------
+function hammingDistance(h1,h2) {
+    let d=0;
+    for(let i=0;i<h1.length;i++){
+        let xor=parseInt(h1[i],16)^parseInt(h2[i],16);
+        while(xor){
+            d+=xor&1;
+            xor>>=1;
         }
-      });
-    }, { rootMargin: '200px' });
-
-    async function loadThumbnail(filename) {
-      const entry = entries.find(e => e.filename === filename);
-      if (!entry) return null;
-      const blob = await entry.getData(new BlobWriter());
-      return URL.createObjectURL(blob);
     }
+    return d;
+}
 
-    function previewImage(filename) {
-      document.getElementById('previewModal').style.display = 'flex';
-      const previewImg = document.getElementById('previewImg');
-      previewImg.src = '';
-      loadThumbnail(filename).then(url => { previewImg.src = url; });
+function findSimilar(baseFilename) {
+    const hash=imageHashMap.get(baseFilename);
+    if(!hash)return[];
+    const t=parseInt(THRESHOLD.value);
+    const s=[];
+    for(let[f,h]of imageHashMap) {
+        if(hammingDistance(hash,h)<=t) s.push(f);
     }
+    return s;
+}
 
-    // 创建待处理/分组用卡片（缩略图为主）
-    function createStandardCard(filename, extraClass = '') {
-      const card = document.createElement('div');
-      card.className = 'image-card ' + extraClass;
-      card.dataset.filename = filename;
-      const img = document.createElement('img');
-      img.className = 'thumb';
-      img.dataset.filename = filename;
-      lazyObserver.observe(img);
-      card.appendChild(img);
-      const nameDiv = document.createElement('div');
-      nameDiv.className = 'fname';
-      nameDiv.textContent = filename;
-      card.appendChild(nameDiv);
-      card.addEventListener('click', (e) => { e.stopPropagation(); previewImage(filename); });
-      return card;
+function startCandidateCheck(filename) {
+    if(statusMap.get(filename)!=='pending') return;
+    currentCandidateBase=filename;
+    candidateList=findSimilar(filename);
+    if(!candidateList.includes(filename)) candidateList.unshift(filename);
+    renderCandidatePanel();
+    document.getElementById('candidatePanel').style.display='flex';
+}
+
+function cancelCandidate() {
+    currentCandidateBase=null;
+    candidateList=[];
+    document.getElementById('candidatePanel').style.display='none';
+}
+
+function setAsInitial(initialFilename) {
+    if(!candidateList.includes(initialFilename)) return;
+    const others=candidateList.filter(f=>f!==initialFilename);
+    statusMap.set(initialFilename,'base');
+    others.forEach(f=>statusMap.set(f,'duplicate'));
+    const gid=Date.now().toString();
+    duplicateGroups.set(gid,{base:initialFilename,duplicates:others});
+    cancelCandidate();
+    saveFullState();
+    renderAll();
+}
+
+function markAsUnique(filename) {
+    if(statusMap.get(filename)!=='pending') return;
+    statusMap.set(filename,'unique');
+    saveFullState();
+    renderAll();
+}
+
+// -------------------- 初始图片分组 --------------------
+function createNewGroup() {
+    const gid=Date.now().toString();
+    baseGroups.set(gid,{name:'新分组',images:[]});
+    saveFullState();
+    renderBaseGroups();
+}
+
+function renameGroup(gid,newName) {
+    const g=baseGroups.get(gid);
+    if(g){
+        g.name=newName;
+        saveFullState();
     }
+}
 
-    // 创建候选区卡片（文件名优先）
-    function createCandidateCard(filename, isCurrentBase = false) {
-      const card = document.createElement('div');
-      card.className = 'candidate-card' + (isCurrentBase ? ' current-base' : '');
-      card.dataset.filename = filename;
-      const nameDiv = document.createElement('div');
-      nameDiv.className = 'fname-full';
-      nameDiv.textContent = filename;
-      card.appendChild(nameDiv);
-      const img = document.createElement('img');
-      img.className = 'thumb-small';
-      img.dataset.filename = filename;
-      lazyObserver.observe(img);
-      card.appendChild(img);
-      card.addEventListener('click', (e) => {
-        if (e.target === nameDiv || e.target === img) previewImage(filename);
-        else setAsInitial(filename);
-      });
-      return card;
+function addImageToGroup(gid,filename) {
+    for(let[_,g]of baseGroups) {
+        g.images=g.images.filter(f=>f!==filename);
     }
+    baseGroups.get(gid)?.images.push(filename);
+    saveFullState();
+    renderBaseGroups();
+}
 
-    // -------------------- 渲染 --------------------
-    const pendingGrid = document.getElementById('pendingGrid');
-    const candidateGrid = document.getElementById('candidateGrid');
-    const dupGroupsDiv = document.getElementById('dupGroups');
-    const baseGroupsDiv = document.getElementById('baseGroups');
+function removeImageFromGroup(gid,filename) {
+    const g=baseGroups.get(gid);
+    if(g){
+        g.images=g.images.filter(f=>f!==filename);
+        saveFullState();
+        renderBaseGroups();
+    }
+}
 
-    function renderAll() { renderPending(); renderDuplicateGroups(); renderBaseGroups(); document.getElementById('pendingCount').textContent=[...statusMap.values()].filter(s=>s==='pending').length; if(currentCandidateBase) renderCandidatePanel(); }
+// -------------------- 导出 ZIP --------------------
+async function exportGroupsAsZip() {
+    if(baseGroups.size===0){
+        alert('无分组');
+        return;
+    }
+    const zip=new JSZip();
+    for(let[gid,group]of baseGroups) {
+        const folder=zip.folder(group.name);
+        for(let fname of group.images) {
+            const entry=entries.find(e=>e.filename===fname);
+            if(entry) {
+                const blob=await entry.getData(new BlobWriter());
+                folder.file(fname,blob);
+            }
+        }
+    }
+    const content=await zip.generateAsync({type:'blob'});
+    const url=URL.createObjectURL(content);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download='grouped_images.zip';
+    a.click();
+    URL.revokeObjectURL(url);
+}
 
-    function renderPending() {
-      pendingGrid.innerHTML = '';
-      const files = [...statusMap.entries()].filter(([_,s])=>s==='pending').map(([f])=>f);
-      for (let f of files) {
+// -------------------- 懒加载 IntersectionObserver --------------------
+const lazyObserver = new IntersectionObserver((entriesObs) => {
+    entriesObs.forEach(entry => {
+        if (entry.isIntersecting) {
+            const img = entry.target;
+            const filename = img.dataset.filename;
+            if (filename && !img.src) {
+                loadThumbnail(filename).then(url => {
+                    if (url && img.dataset.filename === filename) img.src = url;
+                });
+            }
+            lazyObserver.unobserve(img);
+        }
+    });
+}, { rootMargin: '200px' });
+
+async function loadThumbnail(filename) {
+    const entry = entries.find(e => e.filename === filename);
+    if (!entry) return null;
+    const blob = await entry.getData(new BlobWriter());
+    return URL.createObjectURL(blob);
+}
+
+function previewImage(filename) {
+    document.getElementById('previewModal').style.display = 'flex';
+    const previewImg = document.getElementById('previewImg');
+    previewImg.src = '';
+    loadThumbnail(filename).then(url => {
+        previewImg.src = url;
+    });
+}
+
+// 创建待处理/分组用卡片（缩略图为主）
+function createStandardCard(filename, extraClass = '') {
+    const card = document.createElement('div');
+    card.className = 'image-card ' + extraClass;
+    card.dataset.filename = filename;
+
+    const img = document.createElement('img');
+    img.className = 'thumb';
+    img.dataset.filename = filename;
+    lazyObserver.observe(img);
+    card.appendChild(img);
+
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'fname';
+    nameDiv.textContent = filename;
+    card.appendChild(nameDiv);
+
+    card.addEventListener('click', (e) => {
+        e.stopPropagation();
+        previewImage(filename);
+    });
+    return card;
+}
+
+// 创建候选区卡片（文件名优先）
+function createCandidateCard(filename, isCurrentBase = false) {
+    const card = document.createElement('div');
+    card.className = 'candidate-card' + (isCurrentBase ? ' current-base' : '');
+    card.dataset.filename = filename;
+
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'fname-full';
+    nameDiv.textContent = filename;
+    card.appendChild(nameDiv);
+
+    const img = document.createElement('img');
+    img.className = 'thumb-small';
+    img.dataset.filename = filename;
+    lazyObserver.observe(img);
+    card.appendChild(img);
+
+    card.addEventListener('click', (e) => {
+        if (e.target === nameDiv || e.target === img) {
+            previewImage(filename);
+        } else {
+            setAsInitial(filename);
+        }
+    });
+    return card;
+}
+
+// -------------------- 渲染 --------------------
+const pendingGrid = document.getElementById('pendingGrid');
+const candidateGrid = document.getElementById('candidateGrid');
+const dupGroupsDiv = document.getElementById('dupGroups');
+const baseGroupsDiv = document.getElementById('baseGroups');
+
+function renderAll() {
+    renderPending();
+    renderDuplicateGroups();
+    renderBaseGroups();
+    document.getElementById('pendingCount').textContent = [...statusMap.values()].filter(s=>s==='pending').length;
+    if(currentCandidateBase) renderCandidatePanel();
+}
+
+function renderPending() {
+    pendingGrid.innerHTML = '';
+    const files = [...statusMap.entries()]
+        .filter(([_,s])=>s==='pending')
+        .map(([f])=>f);
+    for (let f of files) {
         const card = createStandardCard(f);
-        card.addEventListener('dblclick', (e) => { e.preventDefault(); startCandidateCheck(f); });
-        card.addEventListener('contextmenu', (e) => { e.preventDefault(); markAsUnique(f); });
+        card.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            startCandidateCheck(f);
+        });
+        card.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            markAsUnique(f);
+        });
         pendingGrid.appendChild(card);
-      }
     }
+}
 
-    function renderCandidatePanel() {
-      candidateGrid.innerHTML = '';
-      for (let f of candidateList) {
+function renderCandidatePanel() {
+    candidateGrid.innerHTML = '';
+    for (let f of candidateList) {
         const card = createCandidateCard(f, f === currentCandidateBase);
         candidateGrid.appendChild(card);
-      }
     }
+}
 
-    function renderDuplicateGroups() {
-      dupGroupsDiv.innerHTML = '';
-      if (duplicateGroups.size === 0) { dupGroupsDiv.innerHTML='<div class="empty-hint">暂无重复组</div>'; return; }
-      for (let [gid, group] of duplicateGroups) {
-        const el = document.createElement('div'); el.className='group-folder';
+function renderDuplicateGroups() {
+    dupGroupsDiv.innerHTML = '';
+    if (duplicateGroups.size === 0) {
+        dupGroupsDiv.innerHTML = '<div class="empty-hint">暂无重复组</div>';
+        return;
+    }
+    for (let [gid, group] of duplicateGroups) {
+        const el = document.createElement('div');
+        el.className='group-folder';
         el.innerHTML = `<div class="group-header">📌 基准: ${group.base}</div>`;
-        const imgsDiv = document.createElement('div'); imgsDiv.className='group-images';
-        for (let f of group.duplicates) imgsDiv.appendChild(createStandardCard(f));
+        const imgsDiv = document.createElement('div');
+        imgsDiv.className='group-images';
+        for (let f of group.duplicates) {
+            imgsDiv.appendChild(createStandardCard(f));
+        }
         el.appendChild(imgsDiv);
         dupGroupsDiv.appendChild(el);
-      }
     }
+}
 
-    function renderBaseGroups() {
-      baseGroupsDiv.innerHTML = '';
-      for (let [gid, group] of baseGroups) {
-        const el = document.createElement('div'); el.className='group-folder';
-        const header = document.createElement('div'); header.className='group-header';
-        const input = document.createElement('input'); input.className='group-name-input'; input.value=group.name;
+function renderBaseGroups() {
+    baseGroupsDiv.innerHTML = '';
+    for (let [gid, group] of baseGroups) {
+        const el = document.createElement('div');
+        el.className='group-folder';
+
+        const header = document.createElement('div');
+        header.className='group-header';
+
+        const input = document.createElement('input');
+        input.className='group-name-input';
+        input.value=group.name;
         input.addEventListener('change', e => renameGroup(gid, e.target.value));
         header.appendChild(input);
-        const delBtn = document.createElement('button'); delBtn.className='btn'; delBtn.textContent='删除'; delBtn.addEventListener('click', ()=>{baseGroups.delete(gid);saveFullState();renderBaseGroups();});
+
+        const delBtn = document.createElement('button');
+        delBtn.className='btn';
+        delBtn.textContent='删除';
+        delBtn.addEventListener('click', ()=>{
+            baseGroups.delete(gid);
+            saveFullState();
+            renderBaseGroups();
+        });
         header.appendChild(delBtn);
         el.appendChild(header);
-        const imgsDiv = document.createElement('div'); imgsDiv.className='group-images';
+
+        const imgsDiv = document.createElement('div');
+        imgsDiv.className='group-images';
         for (let f of group.images) {
-          const card = createStandardCard(f);
-          card.addEventListener('contextmenu', (e) => { e.preventDefault(); removeImageFromGroup(gid, f); });
-          imgsDiv.appendChild(card);
+            const card = createStandardCard(f);
+            card.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                removeImageFromGroup(gid, f);
+            });
+            imgsDiv.appendChild(card);
         }
         el.appendChild(imgsDiv);
         baseGroupsDiv.appendChild(el);
-      }
-      const ungrouped = [...statusMap.entries()].filter(([f,s])=>s==='base'&&![...baseGroups.values()].some(g=>g.images.includes(f))).map(([f])=>f);
-      if (ungrouped.length) {
-        const el = document.createElement('div'); el.className='group-folder';
-        el.innerHTML='<div class="group-header">📌 未分组初始图片</div>';
-        const imgsDiv = document.createElement('div'); imgsDiv.className='group-images';
-        for (let f of ungrouped) {
-          const card = createStandardCard(f);
-          card.addEventListener('click', (e) => {
-            if (baseGroups.size===0) createNewGroup();
-            const name = prompt('输入目标组名（新建则直接输入新名称）');
-            if (name) {
-              let target = [...baseGroups.entries()].find(([_,g])=>g.name===name);
-              if (!target) { createNewGroup(); target = [...baseGroups.entries()].pop(); }
-              addImageToGroup(target[0], f);
-            }
-          });
-          imgsDiv.appendChild(card);
-        }
-        el.appendChild(imgsDiv);
-        baseGroupsDiv.appendChild(el);
-      }
-      if (baseGroups.size===0&&ungrouped.length===0) baseGroupsDiv.innerHTML='<div class="empty-hint">暂无初始图片</div>';
     }
 
-    // -------------------- 事件绑定 --------------------
-    dropZone.addEventListener('dragover', e=>{e.preventDefault();dropZone.classList.add('drag-over')});
-    dropZone.addEventListener('dragleave', ()=>dropZone.classList.remove('drag-over'));
-    dropZone.addEventListener('drop', async e=>{e.preventDefault();dropZone.classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f&&f.name.toLowerCase().endsWith('.zip')) await startPreprocessing(f);});
-    fileInput.addEventListener('change', async e=>{const f=e.target.files[0];if(f)await startPreprocessing(f);});
-    document.getElementById('exportBtn').addEventListener('click', exportGroupsAsZip);
-    document.getElementById('importBtn').addEventListener('click', ()=>document.getElementById('importFile').click());
-    document.getElementById('importFile').addEventListener('change', async e=>{
-      const file=e.target.files[0];if(!file)return;
-      try{ const text=await file.text();const data=JSON.parse(text); imageHashMap=new Map(data.images.map(i=>[i.filename,i.hash])); statusMap=new Map(data.images.map(i=>[i.filename,i.status])); duplicateGroups=new Map(data.dupGroups); baseGroups=new Map(data.baseGroups); await saveFullState(); onPreprocessingDone(); alert('进度已导入，请确保压缩包与导出时一致。'); }
-      catch(err){alert('导入失败:'+err.message);}
-    });
-    document.getElementById('addGroupBtn').addEventListener('click', createNewGroup);
-    document.getElementById('cancelCandidateBtn').addEventListener('click', cancelCandidate);
-    document.getElementById('closePreview').addEventListener('click', ()=>document.getElementById('previewModal').style.display='none');
-    document.getElementById('previewModal').addEventListener('click', function(e){if(e.target===this) this.style.display='none';});
+    const ungrouped = [...statusMap.entries()]
+        .filter(([f,s])=>s==='base' && ![...baseGroups.values()].some(g=>g.images.includes(f)))
+        .map(([f])=>f);
 
-    // 初始化
-    if(imageHashMap.size>0) onPreprocessingDone();
-  </script>
+    if (ungrouped.length) {
+        const el = document.createElement('div');
+        el.className='group-folder';
+        el.innerHTML='<div class="group-header">📌 未分组初始图片</div>';
+        const imgsDiv = document.createElement('div');
+        imgsDiv.className='group-images';
+        for (let f of ungrouped) {
+            const card = createStandardCard(f);
+            card.addEventListener('click', (e) => {
+                if (baseGroups.size===0) createNewGroup();
+                const name = prompt('输入目标组名（新建则直接输入新名称）');
+                if (name) {
+                    let target = [...baseGroups.entries()].find(([_,g])=>g.name===name);
+                    if (!target) {
+                        createNewGroup();
+                        target = [...baseGroups.entries()].pop();
+                    }
+                    addImageToGroup(target[0], f);
+                }
+            });
+            imgsDiv.appendChild(card);
+        }
+        el.appendChild(imgsDiv);
+        baseGroupsDiv.appendChild(el);
+    }
+
+    if (baseGroups.size===0 && ungrouped.length===0) {
+        baseGroupsDiv.innerHTML='<div class="empty-hint">暂无初始图片</div>';
+    }
+}
+
+// -------------------- 事件绑定 --------------------
+dropZone.addEventListener('dragover', e=>{
+    e.preventDefault();
+    dropZone.classList.add('drag-over')
+});
+dropZone.addEventListener('dragleave', ()=>dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', async e=>{
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const f=e.dataTransfer.files[0];
+    if(f&&f.name.toLowerCase().endsWith('.zip')) await startPreprocessing(f);
+});
+
+fileInput.addEventListener('change', async e=>{
+    const f=e.target.files[0];
+    if(f)await startPreprocessing(f);
+});
+
+document.getElementById('exportBtn').addEventListener('click', exportGroupsAsZip);
+document.getElementById('importBtn').addEventListener('click', ()=>document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change', async e=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    try{
+        const text=await file.text();
+        const data=JSON.parse(text);
+        imageHashMap=new Map(data.images.map(i=>[i.filename,i.hash]));
+        statusMap=new Map(data.images.map(i=>[i.filename,i.status]));
+        duplicateGroups=new Map(data.dupGroups);
+        baseGroups=new Map(data.baseGroups);
+        await saveFullState();
+        onPreprocessingDone();
+        alert('进度已导入，请确保压缩包与导出时一致。');
+    } catch(err){
+        alert('导入失败:'+err.message);
+    }
+});
+
+document.getElementById('addGroupBtn').addEventListener('click', createNewGroup);
+document.getElementById('cancelCandidateBtn').addEventListener('click', cancelCandidate);
+document.getElementById('closePreview').addEventListener('click', ()=>document.getElementById('previewModal').style.display='none');
+document.getElementById('previewModal').addEventListener('click', function(e){
+    if(e.target===this) this.style.display='none';
+});
+
+// 初始化
+if(imageHashMap.size>0) onPreprocessingDone();
+</script>
 </body>
 </html>
