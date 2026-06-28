@@ -127,9 +127,9 @@ input[type="file"] {
 /* 主布局 */
 .main-layout {
     display: grid;
-    grid-template-columns: 250px 1fr 250px;
-    grid-template-rows: 1fr 1fr;
-    gap: 10px;
+    grid-template-columns: 250px 6px 1fr 6px 250px;
+    grid-template-rows: 1fr 6px 1fr;
+    gap: 0;
     padding: 10px;
     flex: 1;
     overflow: hidden;
@@ -140,6 +140,7 @@ input[type="file"] {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    margin: 4px;
 }
 .panel-header {
     padding: 8px 12px;
@@ -158,6 +159,46 @@ input[type="file"] {
     flex-wrap: wrap;
     align-content: flex-start;
     gap: 6px;
+}
+/* 拖拽分隔条 */
+.splitter {
+    background: var(--border);
+    cursor: col-resize;
+    transition: background 0.2s;
+    border-radius: 3px;
+    margin: 4px 0;
+}
+.splitter:hover {
+    background: var(--accent);
+}
+.splitter.horizontal {
+    cursor: row-resize;
+    grid-column: 3 / 6;
+    margin: 0 4px;
+}
+.splitter.vertical {
+    grid-row: 1 / 4;
+}
+/* 右键上下文菜单 */
+.context-menu {
+    position: fixed;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 0;
+    z-index: 2000;
+    display: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    min-width: 140px;
+}
+.context-menu-item {
+    padding: 6px 16px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text);
+}
+.context-menu-item:hover {
+    background: var(--border);
 }
 /* 通用图片卡片 */
 .image-card {
@@ -288,6 +329,7 @@ input[type="file"] {
     padding: 20px;
     text-align: center;
     font-size: 0.9em;
+    width: 100%;
 }
 /* 预览模态框 */
 .modal-overlay {
@@ -321,9 +363,11 @@ input[type="file"] {
 <body>
 <div class="toolbar">
     <input type="file" id="fileInput" accept=".zip">
-    <label for="fileInput" class="btn">📁 打开压缩包</label>
+    <label for="fileInput" id="openZipLabel" class="btn">📁 打开压缩包</label>
     <button id="exportBtn" class="accent" disabled>📦 导出分组为ZIP</button>
     <button id="importBtn" class="btn">📥 导入进度</button>
+    <button id="exportProgressBtn" class="btn" disabled>📤 导出进度</button>
+    <button id="resetBtn" class="btn" disabled>🔄 重置工作进度</button>
     <input type="file" id="importFile" accept=".json">
     <div class="threshold-group">
         <span>相似阈值</span>
@@ -344,15 +388,18 @@ input[type="file"] {
 
 <div class="main-layout" id="mainLayout" style="display:none">
     <!-- 待处理区 -->
-    <div class="panel" style="grid-row: 1 / 3;">
+    <div class="panel" style="grid-row: 1 / 4; grid-column: 1 / 2;">
         <div class="panel-header">
             📋 待处理 <span id="pendingCount">0</span>
         </div>
         <div class="scroll-area" id="pendingGrid"></div>
     </div>
 
+    <!-- 垂直分隔条1 -->
+    <div class="splitter vertical" id="splitterV1" style="grid-column: 2 / 3;"></div>
+
     <!-- 中间上：候选区 -->
-    <div class="panel candidate-pool" id="candidatePanel" style="display:none;">
+    <div class="panel candidate-pool" id="candidatePanel" style="display:none; grid-row: 1 / 2; grid-column: 3 / 4;">
         <div class="panel-header">🔍 相似图片候选 (点击空白处设为初始图片)</div>
         <div class="scroll-area" id="candidateGrid" style="flex-direction:column; flex-wrap:nowrap;"></div>
         <div class="candidate-actions">
@@ -361,18 +408,32 @@ input[type="file"] {
     </div>
 
     <!-- 中间下：重复图片区 -->
-    <div class="panel" id="duplicatePanel">
+    <div class="panel" id="duplicatePanel" style="grid-row: 3 / 4; grid-column: 3 / 4;">
         <div class="panel-header">🔄 重复图片组</div>
         <div class="scroll-area" id="dupGroups"></div>
     </div>
 
-    <!-- 右侧：初始图片栏（可分组） -->
-    <div class="panel" style="grid-row: 1 / 3;">
+    <!-- 水平分隔条 -->
+    <div class="splitter horizontal" id="splitterH" style="grid-row: 2 / 3; grid-column: 3 / 6;"></div>
+
+    <!-- 垂直分隔条2 -->
+    <div class="splitter vertical" id="splitterV2" style="grid-column: 4 / 5;"></div>
+
+    <!-- 右上：初始图片栏（可分组） -->
+    <div class="panel" style="grid-row: 1 / 2; grid-column: 5 / 6;">
         <div class="panel-header">
             ⭐ 初始图片组
             <button id="addGroupBtn" class="btn" style="padding:2px 8px;">+新建组</button>
         </div>
         <div class="scroll-area" id="baseGroups"></div>
+    </div>
+
+    <!-- 右下：已忽略图片组 -->
+    <div class="panel" style="grid-row: 3 / 4; grid-column: 5 / 6;">
+        <div class="panel-header">
+            🚫 已忽略图片 <span id="ignoredCount">0</span>
+        </div>
+        <div class="scroll-area" id="ignoredGrid"></div>
     </div>
 </div>
 
@@ -380,6 +441,13 @@ input[type="file"] {
 <div id="previewModal" style="display:none" class="modal-overlay">
     <span class="close" id="closePreview">&times;</span>
     <img id="previewImg" src="" alt="预览">
+</div>
+
+<!-- 右键上下文菜单 -->
+<div id="contextMenu" class="context-menu">
+    <div class="context-menu-item" data-action="check">🔍 开始查重</div>
+    <div class="context-menu-item" data-action="unique">🚫 标记为忽略</div>
+    <div class="context-menu-item" data-action="restore">↩️ 恢复为待处理</div>
 </div>
 
 <script type="importmap">
@@ -535,7 +603,6 @@ function processQueue() {
     if(free===-1) return;
     const{blob,index}=taskQueue.shift();
     workerBusy[free]=true;
-    // 修复：移除不可转移的 Blob 参数，消除 transferable type 报错
     workers[free].postMessage({blob,index});
 }
 
@@ -553,7 +620,6 @@ progressFill=document.getElementById('progressFill'),
 progressText=document.getElementById('progressText'),
 mainLayout=document.getElementById('mainLayout');
 
-// 修复：移除提前触发界面渲染的逻辑，只负责更新进度数值
 function updateProgressUI() {
     const pct=Math.round((processedCount/totalImages)*100);
     progressFill.style.width=pct+'%';
@@ -622,7 +688,6 @@ async function startPreprocessing(file) {
         entries.forEach(e=>statusMap.set(e.filename,'pending'));
         await saveFullState();
 
-        // 修复：所有状态初始化完成后，再统一显示主界面
         progressBar.classList.remove('active');
         onPreprocessingDone();
     } catch(err) {
@@ -635,6 +700,10 @@ async function startPreprocessing(file) {
 function onPreprocessingDone() {
     mainLayout.style.display='grid';
     document.getElementById('exportBtn').disabled=false;
+    document.getElementById('exportProgressBtn').disabled=false;
+    document.getElementById('resetBtn').disabled = false;
+    document.getElementById('openZipLabel').textContent = '📁 更换压缩包';
+    initSplitters();
     renderAll();
 }
 
@@ -692,6 +761,13 @@ function setAsInitial(initialFilename) {
 function markAsUnique(filename) {
     if(statusMap.get(filename)!=='pending') return;
     statusMap.set(filename,'unique');
+    saveFullState();
+    renderAll();
+}
+
+function restoreFromIgnored(filename) {
+    if(statusMap.get(filename)!=='unique') return;
+    statusMap.set(filename,'pending');
     saveFullState();
     renderAll();
 }
@@ -754,6 +830,193 @@ async function exportGroupsAsZip() {
     a.download='grouped_images.zip';
     a.click();
     URL.revokeObjectURL(url);
+}
+
+// -------------------- 导出工作进度 JSON --------------------
+async function exportProgress() {
+    const data = {
+        images: [...imageHashMap].map(([filename, hash]) => ({
+            filename,
+            hash,
+            status: statusMap.get(filename) || 'pending'
+        })),
+        dupGroups: [...duplicateGroups],
+        baseGroups: [...baseGroups]
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json;charset=utf-8'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'image_check_progress.json';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// -------------------- 重置工作进度 --------------------
+async function resetWorkProgress() {
+    if (!confirm('确定要重置当前工作进度吗？所有分组、处理状态都会被清空，且无法恢复。')) {
+        return;
+    }
+
+    // 终止所有 Worker，清空任务队列
+    workers.forEach(w => w.terminate());
+    workers = [];
+    taskQueue = [];
+
+    // 清空全部全局状态
+    zipReader = null;
+    entries = [];
+    imageHashMap.clear();
+    statusMap.clear();
+    duplicateGroups.clear();
+    baseGroups.clear();
+    currentCandidateBase = null;
+    candidateList = [];
+    zipFileName = '';
+    zipFileSize = 0;
+    totalImages = 0;
+    processedCount = 0;
+
+    // 清空本地数据库缓存
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    await promisifyRequest(tx.objectStore(STORE_NAME).clear());
+    await waitTransaction(tx);
+
+    // 重置 UI 状态
+    mainLayout.style.display = 'none';
+    dropZone.style.display = 'flex';
+    progressBar.classList.remove('active');
+    document.getElementById('exportBtn').disabled = true;
+    document.getElementById('exportProgressBtn').disabled = true;
+    document.getElementById('resetBtn').disabled = true;
+    document.getElementById('openZipLabel').textContent = '📁 打开压缩包';
+    document.getElementById('fileInput').value = ''; // 清空文件输入，允许重复选择同一文件
+}
+
+// -------------------- 右键上下文菜单 --------------------
+let currentContextTarget = null;
+let currentContextArea = null;
+
+function showContextMenu(e, filename, area) {
+    e.preventDefault();
+    e.stopPropagation();
+    currentContextTarget = filename;
+    currentContextArea = area;
+    const menu = document.getElementById('contextMenu');
+    
+    const checkItem = menu.querySelector('[data-action="check"]');
+    const uniqueItem = menu.querySelector('[data-action="unique"]');
+    const restoreItem = menu.querySelector('[data-action="restore"]');
+    
+    if (area === 'pending') {
+        checkItem.style.display = 'block';
+        uniqueItem.style.display = 'block';
+        restoreItem.style.display = 'none';
+    } else if (area === 'ignored') {
+        checkItem.style.display = 'none';
+        uniqueItem.style.display = 'none';
+        restoreItem.style.display = 'block';
+    }
+    
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+    menu.style.display = 'block';
+}
+
+function hideContextMenu() {
+    document.getElementById('contextMenu').style.display = 'none';
+    currentContextTarget = null;
+    currentContextArea = null;
+}
+
+function handleContextAction(action) {
+    if (!currentContextTarget) return;
+    if (action === 'check' && currentContextArea === 'pending') {
+        startCandidateCheck(currentContextTarget);
+    } else if (action === 'unique' && currentContextArea === 'pending') {
+        markAsUnique(currentContextTarget);
+    } else if (action === 'restore' && currentContextArea === 'ignored') {
+        restoreFromIgnored(currentContextTarget);
+    }
+    hideContextMenu();
+}
+
+// -------------------- 面板拖拽调整大小 --------------------
+function initSplitters() {
+    const mainLayout = document.getElementById('mainLayout');
+    
+    // 垂直分隔条1：调整左列宽度
+    const splitterV1 = document.getElementById('splitterV1');
+    let isDraggingV1 = false;
+    splitterV1.addEventListener('mousedown', (e) => {
+        isDraggingV1 = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', (e) => {
+        if (!isDraggingV1) return;
+        const rect = mainLayout.getBoundingClientRect();
+        let newWidth = e.clientX - rect.left - 10;
+        newWidth = Math.max(150, Math.min(500, newWidth));
+        mainLayout.style.gridTemplateColumns = `${newWidth}px 6px 1fr 6px 250px`;
+    });
+    document.addEventListener('mouseup', () => {
+        if (isDraggingV1) {
+            isDraggingV1 = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        }
+    });
+
+    // 垂直分隔条2：调整右列宽度
+    const splitterV2 = document.getElementById('splitterV2');
+    let isDraggingV2 = false;
+    splitterV2.addEventListener('mousedown', (e) => {
+        isDraggingV2 = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', (e) => {
+        if (!isDraggingV2) return;
+        const rect = mainLayout.getBoundingClientRect();
+        let newWidth = rect.right - e.clientX - 10;
+        newWidth = Math.max(150, Math.min(500, newWidth));
+        mainLayout.style.gridTemplateColumns = `250px 6px 1fr 6px ${newWidth}px`;
+    });
+    document.addEventListener('mouseup', () => {
+        if (isDraggingV2) {
+            isDraggingV2 = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        }
+    });
+
+    // 水平分隔条：调整上下行高度
+    const splitterH = document.getElementById('splitterH');
+    let isDraggingH = false;
+    splitterH.addEventListener('mousedown', (e) => {
+        isDraggingH = true;
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', (e) => {
+        if (!isDraggingH) return;
+        const rect = mainLayout.getBoundingClientRect();
+        let newHeight = e.clientY - rect.top - 10;
+        newHeight = Math.max(100, Math.min(rect.height - 100, newHeight));
+        mainLayout.style.gridTemplateRows = `${newHeight}px 6px 1fr`;
+    });
+    document.addEventListener('mouseup', () => {
+        if (isDraggingH) {
+            isDraggingH = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        }
+    });
 }
 
 // -------------------- 懒加载 IntersectionObserver --------------------
@@ -844,11 +1107,13 @@ const pendingGrid = document.getElementById('pendingGrid');
 const candidateGrid = document.getElementById('candidateGrid');
 const dupGroupsDiv = document.getElementById('dupGroups');
 const baseGroupsDiv = document.getElementById('baseGroups');
+const ignoredGrid = document.getElementById('ignoredGrid');
 
 function renderAll() {
     renderPending();
     renderDuplicateGroups();
     renderBaseGroups();
+    renderIgnored();
     document.getElementById('pendingCount').textContent = [...statusMap.values()].filter(s=>s==='pending').length;
     if(currentCandidateBase) renderCandidatePanel();
 }
@@ -866,7 +1131,7 @@ function renderPending() {
         });
         card.addEventListener('contextmenu', (e) => {
             e.preventDefault();
-            markAsUnique(f);
+            showContextMenu(e, f, 'pending');
         });
         pendingGrid.appendChild(card);
     }
@@ -975,6 +1240,29 @@ function renderBaseGroups() {
     }
 }
 
+function renderIgnored() {
+    ignoredGrid.innerHTML = '';
+    const files = [...statusMap.entries()]
+        .filter(([_, s]) => s === 'unique')
+        .map(([f]) => f);
+    
+    document.getElementById('ignoredCount').textContent = files.length;
+    
+    if (files.length === 0) {
+        ignoredGrid.innerHTML = '<div class="empty-hint">暂无忽略图片</div>';
+        return;
+    }
+    
+    for (let f of files) {
+        const card = createStandardCard(f);
+        card.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            showContextMenu(e, f, 'ignored');
+        });
+        ignoredGrid.appendChild(card);
+    }
+}
+
 // -------------------- 事件绑定 --------------------
 dropZone.addEventListener('dragover', e=>{
     e.preventDefault();
@@ -985,15 +1273,31 @@ dropZone.addEventListener('drop', async e=>{
     e.preventDefault();
     dropZone.classList.remove('drag-over');
     const f=e.dataTransfer.files[0];
-    if(f&&f.name.toLowerCase().endsWith('.zip')) await startPreprocessing(f);
+    if(!f || !f.name.toLowerCase().endsWith('.zip')) return;
+    // 新增：已有工作进度时先确认
+    if(zipReader && imageHashMap.size > 0) {
+        if(!confirm('更换压缩包将清空当前工作进度，确定继续吗？')) {
+            return;
+        }
+    }
+    await startPreprocessing(f);
 });
 
 fileInput.addEventListener('change', async e=>{
     const f=e.target.files[0];
-    if(f)await startPreprocessing(f);
+    if(!f) return;
+    // 新增：已有工作进度时先确认
+    if(zipReader && imageHashMap.size > 0) {
+        if(!confirm('更换压缩包将清空当前工作进度，确定继续吗？')) {
+            e.target.value = '';
+            return;
+        }
+    }
+    await startPreprocessing(f);
 });
 
 document.getElementById('exportBtn').addEventListener('click', exportGroupsAsZip);
+document.getElementById('exportProgressBtn').addEventListener('click', exportProgress);
 document.getElementById('importBtn').addEventListener('click', ()=>document.getElementById('importFile').click());
 document.getElementById('importFile').addEventListener('change', async e=>{
     const file=e.target.files[0];
@@ -1019,6 +1323,21 @@ document.getElementById('closePreview').addEventListener('click', ()=>document.g
 document.getElementById('previewModal').addEventListener('click', function(e){
     if(e.target===this) this.style.display='none';
 });
+
+// 右键菜单事件
+document.querySelectorAll('#contextMenu .context-menu-item').forEach(item => {
+    item.addEventListener('click', () => {
+        handleContextAction(item.dataset.action);
+    });
+});
+document.addEventListener('click', hideContextMenu);
+document.addEventListener('contextmenu', (e) => {
+    if (!e.target.closest('.image-card')) {
+        hideContextMenu();
+    }
+});
+
+document.getElementById('resetBtn').addEventListener('click', resetWorkProgress);
 
 // 初始化
 if(imageHashMap.size>0) onPreprocessingDone();
