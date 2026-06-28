@@ -539,7 +539,7 @@ function processQueue() {
     if(free===-1) return;
     const{blob,index}=taskQueue.shift();
     workerBusy[free]=true;
-    workers[free].postMessage({blob,index},[blob]);
+    workers[free].postMessage({blob,index});
 }
 
 function dispatchHashTask(blob,index) {
