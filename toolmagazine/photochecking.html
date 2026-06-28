@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>图片查重管理工具 Pro</title>
-<!-- 全局加载 JSZip 用于导出 -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root {
     --bg: #0f0f1a;
@@ -31,7 +29,6 @@ body {
     display: flex;
     flex-direction: column;
 }
-/* 工具栏 */
 .toolbar {
     background: var(--surface);
     padding: 8px 16px;
@@ -124,7 +121,6 @@ input[type="file"] {
     width: 0%;
     transition: width 0.3s;
 }
-/* 主布局 */
 .main-layout {
     display: grid;
     grid-template-columns: 250px 6px 1fr 6px 250px;
@@ -160,7 +156,6 @@ input[type="file"] {
     align-content: flex-start;
     gap: 6px;
 }
-/* 拖拽分隔条 */
 .splitter {
     background: var(--border);
     cursor: col-resize;
@@ -179,7 +174,6 @@ input[type="file"] {
 .splitter.vertical {
     grid-row: 1 / 4;
 }
-/* 右键上下文菜单 */
 .context-menu {
     position: fixed;
     background: var(--surface);
@@ -200,7 +194,6 @@ input[type="file"] {
 .context-menu-item:hover {
     background: var(--border);
 }
-/* 通用图片卡片 */
 .image-card {
     width: 70px;
     background: #2a2a40;
@@ -211,6 +204,7 @@ input[type="file"] {
     position: relative;
     display: flex;
     flex-direction: column;
+    draggable: true;
 }
 .image-card:hover {
     background: #3a3a55;
@@ -251,7 +245,6 @@ input[type="file"] {
     padding: 1px 4px;
     border-radius: 3px;
 }
-/* 候选区特殊卡片：文件名优先 */
 .candidate-pool {
     background: #1e1e36;
     border: 1px solid var(--accent);
@@ -292,11 +285,29 @@ input[type="file"] {
     display: flex;
     gap: 8px;
 }
-/* 分组文件夹 */
+.candidate-checkbox {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+}
 .group-folder {
     border: 1px solid var(--border);
     border-radius: 6px;
     margin-bottom: 8px;
+    position: relative;
+}
+.group-del-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 20px;
+    height: 20px;
+    background: var(--danger);
+    border: none;
+    color: white;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
 }
 .group-folder .group-header {
     padding: 6px 8px;
@@ -323,6 +334,10 @@ input[type="file"] {
     flex-wrap: wrap;
     gap: 4px;
     padding: 6px;
+    min-height: 60px;
+}
+.group-images.drag-hover {
+    background: rgba(74,158,255,0.15);
 }
 .empty-hint {
     color: #555;
@@ -331,7 +346,6 @@ input[type="file"] {
     font-size: 0.9em;
     width: 100%;
 }
-/* 预览模态框 */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -378,7 +392,6 @@ input[type="file"] {
 
 <div id="dropZone" class="drop-zone">拖放 ZIP 压缩包至此（图片格式：jpg/png/webp等）</div>
 
-<!-- 预处理进度条 -->
 <div id="progressBar" class="progress">
     <span id="progressLabel">⏳ 预处理中...</span>
     <div class="progress-bar">
@@ -387,7 +400,6 @@ input[type="file"] {
     <span id="progressText">0%</span>
 </div>
 
-<!-- 独立导入进度条 -->
 <div id="importProgressBar" class="progress">
     <span>📥 导入进度中...</span>
     <div class="progress-bar">
@@ -397,7 +409,6 @@ input[type="file"] {
 </div>
 
 <div class="main-layout" id="mainLayout" style="display:none">
-    <!-- 待处理区 -->
     <div class="panel" style="grid-row: 1 / 4; grid-column: 1 / 2;">
         <div class="panel-header">
             📋 待处理 <span id="pendingCount">0</span>
@@ -405,31 +416,26 @@ input[type="file"] {
         <div class="scroll-area" id="pendingGrid"></div>
     </div>
 
-    <!-- 垂直分隔条1 -->
     <div class="splitter vertical" id="splitterV1" style="grid-column: 2 / 3;"></div>
 
-    <!-- 中间上：候选区 -->
     <div class="panel candidate-pool" id="candidatePanel" style="display:none; grid-row: 1 / 2; grid-column: 3 / 4;">
-        <div class="panel-header">🔍 相似图片候选 (点击空白处设为初始图片)</div>
+        <div class="panel-header">🔍 相似图片候选 (勾选后批量归类)</div>
         <div class="scroll-area" id="candidateGrid" style="flex-direction:column; flex-wrap:nowrap;"></div>
         <div class="candidate-actions">
+            <button id="batchClassifyBtn">确认批量归类</button>
             <button id="cancelCandidateBtn">取消</button>
         </div>
     </div>
 
-    <!-- 中间下：重复图片区 -->
     <div class="panel" id="duplicatePanel" style="grid-row: 3 / 4; grid-column: 3 / 4;">
         <div class="panel-header">🔄 重复图片组</div>
         <div class="scroll-area" id="dupGroups"></div>
     </div>
 
-    <!-- 水平分隔条 -->
     <div class="splitter horizontal" id="splitterH" style="grid-row: 2 / 3; grid-column: 3 / 6;"></div>
 
-    <!-- 垂直分隔条2 -->
     <div class="splitter vertical" id="splitterV2" style="grid-column: 4 / 5;"></div>
 
-    <!-- 右上：初始图片栏（可分组） -->
     <div class="panel" style="grid-row: 1 / 2; grid-column: 5 / 6;">
         <div class="panel-header">
             ⭐ 初始图片组
@@ -438,7 +444,6 @@ input[type="file"] {
         <div class="scroll-area" id="baseGroups"></div>
     </div>
 
-    <!-- 右下：已忽略图片组 -->
     <div class="panel" style="grid-row: 3 / 4; grid-column: 5 / 6;">
         <div class="panel-header">
             🚫 已忽略图片 <span id="ignoredCount">0</span>
@@ -447,17 +452,16 @@ input[type="file"] {
     </div>
 </div>
 
-<!-- 图片预览模态框 -->
 <div id="previewModal" style="display:none" class="modal-overlay">
     <span class="close" id="closePreview">&times;</span>
     <img id="previewImg" src="" alt="预览">
 </div>
 
-<!-- 右键上下文菜单 -->
 <div id="contextMenu" class="context-menu">
-    <div class="context-menu-item" data-action="check">🔍 开始查重</div>
+    <div class="context-menu-item" data-action="check">🔍 开始查重（支持初始图重查）</div>
     <div class="context-menu-item" data-action="unique">🚫 标记为忽略</div>
     <div class="context-menu-item" data-action="restore">↩️ 恢复为待处理</div>
+    <div class="context-menu-item" data-action="delBase">❌ 删除此基准图（同步删除全部关联重复组）</div>
 </div>
 
 <script type="importmap">
@@ -474,6 +478,7 @@ import { ZipReader, BlobReader, BlobWriter } from '@zip.js/zip.js';
 // -------------------- 全局状态 --------------------
 let zipReader = null;
 let entries = [];
+let entryMap = new Map();
 let imageHashMap = new Map();
 let statusMap = new Map();
 let duplicateGroups = new Map();
@@ -483,21 +488,24 @@ let candidateList = [];
 let zipFileName = '', zipFileSize = 0;
 let splittersInitialized = false;
 let isProcessing = false;
-
+const thumbCache = new Map();
+const THUMB_WIDTH = 140;
+let selectedCandidate = new Set();
+let dragSourceFilename = null;
+let dragSourceType = null;
+const TOOL_VERSION = "1.1.0";
 const THRESHOLD = document.getElementById('threshold');
 const thresholdVal = document.getElementById('thresholdVal');
 THRESHOLD.addEventListener('input', ()=> thresholdVal.textContent = THRESHOLD.value);
 
 // -------------------- IndexedDB --------------------
 const DB_NAME = 'DupFinderProDB', STORE_NAME = 'images';
-
 function promisifyRequest(request) {
     return new Promise((resolve, reject) => {
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
 }
-
 function waitTransaction(tx) {
     return new Promise((resolve, reject) => {
         tx.oncomplete = () => resolve();
@@ -505,7 +513,6 @@ function waitTransaction(tx) {
         tx.onabort = () => reject(tx.error);
     });
 }
-
 function openDB() {
     return new Promise((resolve, reject) => {
         const req = indexedDB.open(DB_NAME, 1);
@@ -519,70 +526,38 @@ function openDB() {
         req.onerror = (e) => reject(e.target.error);
     });
 }
-
 async function saveFullState() {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
-
     await promisifyRequest(store.clear());
-
     for (let [fname, hash] of imageHashMap) {
-        await promisifyRequest(store.put({
-            filename: fname,
-            hash,
-            status: statusMap.get(fname) || 'pending'
-        }));
+        await promisifyRequest(store.put({filename: fname, hash, status: statusMap.get(fname) || 'pending'}));
     }
-
-    await promisifyRequest(store.put({
-        filename: '__dupGroups__',
-        value: JSON.stringify([...duplicateGroups])
-    }));
-    await promisifyRequest(store.put({
-        filename: '__baseGroups__',
-        value: JSON.stringify([...baseGroups])
-    }));
-    await promisifyRequest(store.put({
-        filename: '__meta__',
-        fileName: zipFileName,
-        fileSize: zipFileSize
-    }));
-
+    await promisifyRequest(store.put({filename: '__dupGroups__', value: JSON.stringify([...duplicateGroups])}));
+    await promisifyRequest(store.put({filename: '__baseGroups__', value: JSON.stringify([...baseGroups])}));
+    await promisifyRequest(store.put({filename: '__meta__', fileName: zipFileName, fileSize: zipFileSize}));
     await waitTransaction(tx);
     db.close();
 }
-
 async function loadStateFromDB() {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
-
     const all = await promisifyRequest(store.getAll());
     await waitTransaction(tx);
     db.close();
-
     imageHashMap.clear();
     statusMap.clear();
     duplicateGroups.clear();
     baseGroups.clear();
-
     for (let item of all) {
-        if (item.filename === '__dupGroups__') {
-            duplicateGroups = new Map(JSON.parse(item.value));
-        } else if (item.filename === '__baseGroups__') {
-            baseGroups = new Map(JSON.parse(item.value));
-        } else if (item.filename === '__meta__') {
-            zipFileName = item.fileName || '';
-            zipFileSize = item.fileSize || 0;
-        } else {
-            imageHashMap.set(item.filename, item.hash);
-            statusMap.set(item.filename, item.status || 'pending');
-        }
+        if (item.filename === '__dupGroups__') duplicateGroups = new Map(JSON.parse(item.value));
+        else if (item.filename === '__baseGroups__') baseGroups = new Map(JSON.parse(item.value));
+        else if (item.filename === '__meta__') {zipFileName = item.fileName || ''; zipFileSize = item.fileSize || 0;}
+        else {imageHashMap.set(item.filename, item.hash); statusMap.set(item.filename, item.status || 'pending');}
     }
 }
-
-// 单独读取元信息，不加载全部数据，避免嵌套事务
 async function getDBMeta() {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
@@ -592,14 +567,13 @@ async function getDBMeta() {
     return meta;
 }
 
-// -------------------- Worker 哈希池 --------------------
+// -------------------- Worker 哈希 --------------------
 const workerBlob = new Blob([`self.onmessage=async function(e){const{blob,index}=e.data;try{const img=await createImageBitmap(blob,{resizeWidth:9,resizeHeight:8,resizeQuality:'pixelated'});const c=new OffscreenCanvas(9,8),ctx=c.getContext('2d');ctx.drawImage(img,0,0);const d=ctx.getImageData(0,0,9,8).data;let h=0n;for(let y=0;y<8;y++)for(let x=0;x<8;x++){const i=(y*9+x)*4,j=(y*9+x+1)*4,g=d[i]*.299+d[i+1]*.587+d[i+2]*.114,g2=d[j]*.299+d[j+1]*.587+d[j+2]*.114;h<<=1n;if(g>g2)h|=1n}img.close();self.postMessage({index,hash:h.toString(16).padStart(16,'0')})}catch(err){self.postMessage({index,error:err.message})}}`],{type:'application/javascript'});
 const workerUrl = URL.createObjectURL(workerBlob);
 const MAX_WORKERS = Math.min(navigator.hardwareConcurrency || 4, 4);
 let workers = [], workerBusy = [], taskQueue = [];
-
 function initWorkers() {
-    workers.forEach(w=>w.terminate());
+    destroyAllWorkers();
     workers=[];
     workerBusy=new Array(MAX_WORKERS).fill(false);
     for(let i=0;i<MAX_WORKERS;i++){
@@ -607,20 +581,18 @@ function initWorkers() {
         w.onmessage=(e)=>{
             workerBusy[i]=false;
             const{index,hash,error}=e.data;
-            if(!error){
-                imageHashMap.set(entries[index].filename,hash);
-                processedCount++;
-                updateProgressUI();
-            }else{
-                processedCount++;
-                updateProgressUI();
-            }
+            if(!error){imageHashMap.set(entries[index].filename,hash); processedCount++; updateProgressUI();}
+            else {processedCount++; updateProgressUI();}
             processQueue();
         };
         workers.push(w);
     }
 }
-
+function destroyAllWorkers() {
+    workers.forEach(w => w.terminate());
+    workers = [];
+    taskQueue = [];
+}
 function processQueue() {
     if(taskQueue.length===0) return;
     const free=workerBusy.findIndex(b=>!b);
@@ -629,7 +601,6 @@ function processQueue() {
     workerBusy[free]=true;
     workers[free].postMessage({blob,index});
 }
-
 function dispatchHashTask(blob,index) {
     taskQueue.push({blob,index});
     processQueue();
@@ -647,85 +618,50 @@ importProgressBar=document.getElementById('importProgressBar'),
 importProgressFill=document.getElementById('importProgressFill'),
 importProgressText=document.getElementById('importProgressText'),
 mainLayout=document.getElementById('mainLayout');
-
 function updateProgressUI() {
     const pct=Math.round((processedCount/totalImages)*100);
     progressFill.style.width=pct+'%';
     progressText.textContent=`${pct}% (${processedCount}/${totalImages})`;
 }
-
 function updateImportProgress(pct) {
     importProgressFill.style.width = pct + '%';
     importProgressText.textContent = pct + '%';
 }
-
 async function startPreprocessing(file) {
     if (isProcessing) return;
     isProcessing = true;
-
     try {
-        // ========== 第一步：先判断内存缓存是否命中，命中则直接用，绝不提前关闭 ==========
         if (zipReader && file.name === zipFileName && file.size === zipFileSize && entries.length > 0) {
             await loadStateFromDB();
-            if (imageHashMap.size > 0) {
-                onPreprocessingDone();
-                return;
-            }
+            if (imageHashMap.size > 0) {onPreprocessingDone();return;}
         }
-
-        // 不命中：才关闭旧资源，清空状态
-        if (zipReader) {
-            try { await zipReader.close(); } catch(e) {}
-            zipReader = null;
-        }
-
-        imageHashMap.clear();
-        statusMap.clear();
-        duplicateGroups.clear();
-        baseGroups.clear();
-        currentCandidateBase = null;
-        candidateList = [];
-        entries = [];
-        cancelCandidate();
-        hideContextMenu();
-        zipFileName = file.name;
-        zipFileSize = file.size;
-
+        if (zipReader) {try { await zipReader.close(); } catch(e) {} zipReader = null;}
+        destroyAllWorkers();
+        thumbCache.clear();
+        imageHashMap.clear(); statusMap.clear(); duplicateGroups.clear(); baseGroups.clear();
+        entryMap.clear();
+        currentCandidateBase = null; candidateList = []; selectedCandidate.clear(); entries = [];
+        cancelCandidate(); hideContextMenu();
+        zipFileName = file.name; zipFileSize = file.size;
         dropZone.style.display = 'none';
-        progressBar.classList.add('active');
-        progressFill.style.width = '0%';
-        progressLabel.textContent = '⏳ 读取压缩包目录...';
-        progressText.textContent = '请稍候';
-
-        // ========== 第二步：读取压缩包目录 ==========
+        progressBar.classList.add('active'); progressFill.style.width = '0%';
+        progressLabel.textContent = '⏳ 读取压缩包目录...'; progressText.textContent = '请稍候';
         zipReader = new ZipReader(new BlobReader(file));
         const allEntries = await zipReader.getEntries();
         entries = allEntries.filter(e => !e.directory && /\.(jpg|jpeg|png|webp|bmp|gif|tiff?)$/i.test(e.filename));
-        totalImages = entries.length;
-        processedCount = 0;
-
+        entryMap.clear();
+        entries.forEach(en=>entryMap.set(en.filename, en));
+        totalImages = entries.length; processedCount = 0;
         if (totalImages === 0) throw new Error('压缩包内未找到图片文件');
-
-        progressLabel.textContent = '⏳ 预处理中...';
-        progressFill.style.width = '1%';
+        progressLabel.textContent = '⏳ 预处理中...'; progressFill.style.width = '1%';
         progressText.textContent = `共 ${totalImages} 张图片`;
-
-        // ========== 第三步：判断IndexedDB缓存是否命中 ==========
         const meta = await getDBMeta();
         if (meta && meta.fileName === file.name && meta.fileSize === file.size) {
             await loadStateFromDB();
-            // 校验数据完整性
-            if (imageHashMap.size === totalImages) {
-                progressBar.classList.remove('active');
-                onPreprocessingDone();
-                return;
-            }
+            if (imageHashMap.size === totalImages) {progressBar.classList.remove('active'); onPreprocessingDone(); return;}
         }
-
-        // ========== 第四步：无缓存，计算感知哈希 ==========
         initWorkers();
-        const CONCURRENT = 4;
-        let readIdx = 0;
+        const CONCURRENT = 4; let readIdx = 0;
         const readNext = async () => {
             if (readIdx >= totalImages) return;
             const idx = readIdx++;
@@ -734,37 +670,25 @@ async function startPreprocessing(file) {
             await readNext();
         };
         await Promise.all(Array(CONCURRENT).fill(0).map(() => readNext()));
-
         while (processedCount < totalImages) await new Promise(r => setTimeout(r, 200));
         entries.forEach(e => statusMap.set(e.filename, 'pending'));
         await saveFullState();
-
         progressBar.classList.remove('active');
         onPreprocessingDone();
     } catch(err) {
-        console.error(err);
-        alert('预处理失败: ' + err.message);
-        // 失败后清理
-        if (zipReader) {
-            try { await zipReader.close(); } catch(e) {}
-            zipReader = null;
-        }
-        entries = [];
-        dropZone.style.display = 'flex';
+        console.error(err); alert('预处理失败: ' + err.message);
+        if (zipReader) {try { await zipReader.close(); } catch(e) {} zipReader = null;}
+        entries = []; entryMap.clear(); thumbCache.clear(); dropZone.style.display = 'flex';
         progressBar.classList.remove('active');
-    } finally {
-        isProcessing = false;
-    }
+    } finally {isProcessing = false;}
 }
-
 function onPreprocessingDone() {
     mainLayout.style.display = 'grid';
     document.getElementById('exportBtn').disabled = false;
     document.getElementById('exportProgressBtn').disabled = false;
     document.getElementById('resetBtn').disabled = false;
     document.getElementById('openZipLabel').textContent = '📁 更换压缩包';
-    initSplitters();
-    renderAll();
+    initSplitters(); renderAll(); initDropTarget();
 }
 
 // -------------------- 查重逻辑 --------------------
@@ -772,111 +696,170 @@ function hammingDistance(h1,h2) {
     let d=0;
     for(let i=0;i<h1.length;i++){
         let xor=parseInt(h1[i],16)^parseInt(h2[i],16);
-        while(xor){
-            d+=xor&1;
-            xor>>=1;
-        }
+        while(xor){d+=xor&1; xor>>=1;}
     }
     return d;
 }
-
 function findSimilar(baseFilename) {
     const hash=imageHashMap.get(baseFilename);
     if(!hash)return[];
     const t=parseInt(THRESHOLD.value);
     const s=[];
     for(let[f,h]of imageHashMap) {
-        if(hammingDistance(hash,h)<=t) s.push(f);
+        if(f === baseFilename) continue;
+        const dist = hammingDistance(hash,h);
+        if(dist <= t && dist >= Math.floor(t * 0.15)) s.push(f);
     }
+    s.unshift(baseFilename);
     return s;
 }
-
 function startCandidateCheck(filename) {
-    if(statusMap.get(filename)!=='pending') return;
     currentCandidateBase=filename;
     candidateList=findSimilar(filename);
-    if(!candidateList.includes(filename)) candidateList.unshift(filename);
+    selectedCandidate.clear();
     renderCandidatePanel();
     document.getElementById('candidatePanel').style.display='flex';
 }
-
 function cancelCandidate() {
-    currentCandidateBase=null;
-    candidateList=[];
-    document.getElementById('candidatePanel').style.display='none';
+    currentCandidateBase = null; candidateList = []; selectedCandidate.clear();
+    document.getElementById('candidatePanel').style.display = 'none';
+}
+function batchClassifyCandidate() {
+    if(selectedCandidate.size === 0) {alert("请至少勾选一张图片");return;}
+    const selectedArr = [...selectedCandidate];
+    const baseCandidates = selectedArr.filter(f => f === currentCandidateBase);
+    const dupCandidates = selectedArr.filter(f => f !== currentCandidateBase);
+    if(baseCandidates.length > 1) {alert("仅可勾选一张基准图片");return;}
+    const baseFile = baseCandidates[0] || currentCandidateBase;
+    statusMap.set(baseFile, "base");
+    dupCandidates.forEach(f => statusMap.set(f, "duplicate"));
+    const gid = Date.now().toString();
+    duplicateGroups.set(gid, {base: baseFile, duplicates: dupCandidates});
+    saveFullState(); cancelCandidate(); renderAll();
 }
 
-function setAsInitial(initialFilename) {
-    if(!candidateList.includes(initialFilename)) return;
-    const others=candidateList.filter(f=>f!==initialFilename);
-    statusMap.set(initialFilename,'base');
-    others.forEach(f=>statusMap.set(f,'duplicate'));
-    const gid=Date.now().toString();
-    duplicateGroups.set(gid,{base:initialFilename,duplicates:others});
-    cancelCandidate();
-    saveFullState();
-    renderAll();
-}
-
+// -------------------- 图片状态操作 --------------------
 function markAsUnique(filename) {
     if(statusMap.get(filename)!=='pending') return;
-    statusMap.set(filename,'unique');
-    saveFullState();
-    renderAll();
+    statusMap.set(filename,'unique'); saveFullState(); renderAll();
 }
-
 function restoreFromIgnored(filename) {
     if(statusMap.get(filename)!=='unique') return;
-    statusMap.set(filename,'pending');
-    saveFullState();
-    renderAll();
+    statusMap.set(filename,'pending'); saveFullState(); renderAll();
+}
+function deleteBaseImage(baseFilename) {
+    if(!confirm(`删除基准图【${baseFilename}】会同步删除所有以此图为基准的重复分组，确定继续？`)) return;
+    for(let [gid, group] of duplicateGroups) {
+        if(group.base === baseFilename) duplicateGroups.delete(gid);
+    }
+    statusMap.set(baseFilename, "pending");
+    for(let [_, g] of baseGroups) g.images = g.images.filter(f => f !== baseFilename);
+    saveFullState(); renderAll();
+}
+function deleteDupGroup(gid) {
+    const group = duplicateGroups.get(gid);
+    if(!group) return;
+    if(!confirm(`确认清空基准【${group.base}】下全部重复图片？图片将恢复为待处理`)) return;
+    group.duplicates.forEach(f => statusMap.set(f, "pending"));
+    duplicateGroups.delete(gid);
+    saveFullState(); renderAll();
 }
 
-// -------------------- 初始图片分组 --------------------
+// -------------------- 分组操作 --------------------
 function createNewGroup() {
+    let groupName = prompt("请输入新分组名称");
+    if(!groupName || groupName.trim() === "") {alert("分组名称不能为空");return;}
     const gid=Date.now().toString();
-    baseGroups.set(gid,{name:'新分组',images:[]});
-    saveFullState();
-    renderBaseGroups();
+    baseGroups.set(gid,{name:groupName.trim(),images:[]});
+    saveFullState(); renderBaseGroups();
 }
-
 function renameGroup(gid,newName) {
     const g=baseGroups.get(gid);
-    if(g){
-        g.name=newName;
-        saveFullState();
-    }
+    if(g && newName.trim() !== ""){g.name=newName.trim();saveFullState();}
 }
-
-function addImageToGroup(gid,filename) {
-    for(let[_,g]of baseGroups) {
-        g.images=g.images.filter(f=>f!==filename);
-    }
-    baseGroups.get(gid)?.images.push(filename);
-    saveFullState();
-    renderBaseGroups();
+function addImageToGroup(targetGid,filename) {
+    for(let[_,g]of baseGroups) g.images=g.images.filter(f=>f!==filename);
+    baseGroups.get(targetGid)?.images.push(filename);
+    saveFullState(); renderBaseGroups();
 }
-
 function removeImageFromGroup(gid,filename) {
     const g=baseGroups.get(gid);
-    if(g){
-        g.images=g.images.filter(f=>f!==filename);
-        saveFullState();
-        renderBaseGroups();
-    }
+    if(g){g.images=g.images.filter(f=>f!==filename); saveFullState(); renderBaseGroups();}
 }
 
-// -------------------- 导出 ZIP --------------------
+// -------------------- 拖拽系统（修复全部崩溃点） --------------------
+function initDropTarget() {
+    document.addEventListener('dragstart', e => {
+        const card = e.target.closest(".image-card");
+        if(!card) return;
+        dragSourceFilename = card.dataset.filename;
+        if(card.closest("#pendingGrid")) dragSourceType = "pending";
+        else if(card.closest("#baseGroups")) dragSourceType = "base";
+        else if(card.closest("#dupGroups")) dragSourceType = "dup";
+        else if(card.closest("#ignoredGrid")) dragSourceType = "ignored";
+        e.dataTransfer.setData("text/plain", dragSourceFilename);
+    })
+    document.addEventListener('dragend', () => {
+        dragSourceFilename = null; dragSourceType = null;
+        document.querySelectorAll(".group-images").forEach(el => el.classList.remove("drag-hover"));
+    })
+    document.querySelectorAll(".group-images").forEach(box => {
+        box.addEventListener("dragover", e => {
+            e.preventDefault();
+            const isTargetBaseGroup = box.closest("#baseGroups");
+            if(dragSourceType === "dup" && isTargetBaseGroup) {
+                box.style.background = "rgba(255,107,107,0.2)";
+            } else {
+                box.classList.add("drag-hover");
+            }
+        })
+        box.addEventListener("dragleave", () => {
+            box.classList.remove("drag-hover");
+            box.style.background = "";
+        })
+        box.addEventListener("drop", e => {
+            e.preventDefault();
+            box.classList.remove("drag-hover");
+            box.style.background = "";
+            if(!dragSourceFilename || !dragSourceType) return;
+            const isTargetBaseGroup = box.closest("#baseGroups");
+            if(dragSourceType === "dup" && isTargetBaseGroup) {
+                alert("不允许将重复组图片拖动至初始分组");
+                return;
+            }
+            if(isTargetBaseGroup) {
+                const groupWrap = box.closest(".group-folder");
+                const nameInput = groupWrap.querySelector(".group-name-input");
+                const match = [...baseGroups.entries()].find(([_,g]) => g.name === nameInput.value);
+                if(!match) return;
+                const targetGid = match[0];
+                addImageToGroup(targetGid, dragSourceFilename);
+                return;
+            }
+            const dupWrap = box.closest("#dupGroups .group-folder");
+            if(dupWrap) {
+                const targetGid = dupWrap.dataset.gid;
+                const targetGroup = duplicateGroups.get(targetGid);
+                if(!targetGroup) return;
+                statusMap.set(dragSourceFilename, "duplicate");
+                for(let [_,g] of baseGroups) g.images = g.images.filter(f=>f!==dragSourceFilename);
+                for(let [_,g] of duplicateGroups) g.duplicates = g.duplicates.filter(f=>f!==dragSourceFilename);
+                if(!targetGroup.duplicates.includes(dragSourceFilename)) targetGroup.duplicates.push(dragSourceFilename);
+                saveFullState();
+                renderDuplicateGroups();
+            }
+        })
+    })
+}
+
+// -------------------- 导出ZIP --------------------
 async function exportGroupsAsZip() {
-    if(baseGroups.size===0){
-        alert('无分组可导出');
-        return;
-    }
-    const zip=new JSZip();
+    if(baseGroups.size===0){alert('无分组可导出');return;}
+    const zip=new ZipReader();
     for(let[gid,group]of baseGroups) {
         const folder=zip.folder(group.name);
         for(let fname of group.images) {
-            const entry=entries.find(e=>e.filename===fname);
+            const entry=entryMap.get(fname);
             if(entry) {
                 const blob=await entry.getData(new BlobWriter());
                 folder.file(fname,blob);
@@ -886,222 +869,155 @@ async function exportGroupsAsZip() {
     const content=await zip.generateAsync({type:'blob'});
     const url=URL.createObjectURL(content);
     const a=document.createElement('a');
-    a.href=url;
-    a.download='grouped_images.zip';
-    a.click();
-    URL.revokeObjectURL(url);
+    a.href=url; a.download='grouped_images.zip'; a.click(); URL.revokeObjectURL(url);
 }
 
-// -------------------- 导出工作进度 JSON --------------------
+// -------------------- 导出进度JSON --------------------
 async function exportProgress() {
     const data = {
+        version: TOOL_VERSION,
         zipFileName: zipFileName,
         zipFileSize: zipFileSize,
-        images: [...imageHashMap].map(([filename, hash]) => ({
-            filename,
-            hash,
-            status: statusMap.get(filename) || 'pending'
-        })),
+        images: [...imageHashMap].map(([filename, hash]) => ({filename, hash, status: statusMap.get(filename) || 'pending'})),
         dupGroups: [...duplicateGroups],
         baseGroups: [...baseGroups]
     };
-
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-        type: 'application/json;charset=utf-8'
-    });
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json;charset=utf-8'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = 'image_check_progress.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    a.href = url; a.download = 'image_check_progress.json'; a.click(); URL.revokeObjectURL(url);
 }
 
-// -------------------- 重置工作进度 --------------------
+// -------------------- 导入进度 --------------------
+document.getElementById('importFile').addEventListener('change', async e=>{
+    const file=e.target.files[0];
+    if(!file) return;
+    if (!confirm('导入进度将覆盖当前所有状态，确定继续吗？')) {e.target.value = '';return;}
+    if (isProcessing) return;
+    isProcessing = true;
+    importProgressBar.classList.add('active'); updateImportProgress(0);
+    try{
+        const text = await file.text(); updateImportProgress(25);
+        const data = JSON.parse(text); updateImportProgress(50);
+        if(!data.version) alert("警告：该进度文件为旧版本，部分功能可能异常");
+        imageHashMap = new Map(data.images.map(i=>[i.filename, i.hash]));
+        statusMap = new Map(data.images.map(i=>[i.filename, i.status]));
+        duplicateGroups = new Map(data.dupGroups);
+        baseGroups = new Map(data.baseGroups);
+        if (data.zipFileName) zipFileName = data.zipFileName;
+        if (data.zipFileSize) zipFileSize = data.zipFileSize;
+        thumbCache.clear(); selectedCandidate.clear();
+        updateImportProgress(75); await saveFullState(); updateImportProgress(100);
+        setTimeout(()=>{
+            importProgressBar.classList.remove('active');
+            if (entries.length > 0) {
+                if(file.name !== zipFileName || file.size !== zipFileSize){
+                    alert('警告：当前压缩包与进度文件记录的压缩包不一致，部分图片可能无法加载');
+                }else{
+                    alert('进度导入成功');
+                }
+                onPreprocessingDone();
+            }
+            else {alert('进度已导入，请先加载对应的压缩包以使用完整功能。');}
+        }, 300);
+    } catch(err){
+        importProgressBar.classList.remove('active'); alert('导入失败: ' + err.message);
+    } finally {isProcessing = false;}
+    e.target.value = '';
+});
+
+// -------------------- 重置进度 --------------------
 async function resetWorkProgress() {
     if (isProcessing) return;
-    if (!confirm('确定要重置当前工作进度吗？所有分组、处理状态都会被清空，且无法恢复。')) {
-        return;
-    }
+    if (!confirm('确定要重置当前工作进度吗？所有分组、处理状态都会被清空，且无法恢复。')) return;
     isProcessing = true;
-
     try {
-        // 终止所有 Worker
-        workers.forEach(w => w.terminate());
-        workers = [];
-        taskQueue = [];
-
-        // 关闭面板和菜单
-        cancelCandidate();
-        hideContextMenu();
-
-        // 释放 ZipReader
-        if (zipReader) {
-            try { await zipReader.close(); } catch(e) {}
-            zipReader = null;
-        }
-
-        // 清空全部全局状态
-        entries = [];
-        imageHashMap.clear();
-        statusMap.clear();
-        duplicateGroups.clear();
-        baseGroups.clear();
-        currentCandidateBase = null;
-        candidateList = [];
-        zipFileName = '';
-        zipFileSize = 0;
-        totalImages = 0;
-        processedCount = 0;
-
-        // 清空本地数据库
+        destroyAllWorkers();
+        cancelCandidate(); hideContextMenu();
+        if (zipReader) {try { await zipReader.close(); } catch(e) {} zipReader = null;}
+        entries = []; entryMap.clear(); imageHashMap.clear(); statusMap.clear(); duplicateGroups.clear(); baseGroups.clear();
+        currentCandidateBase = null; candidateList = []; selectedCandidate.clear();
+        zipFileName = ''; zipFileSize = 0; totalImages = 0; processedCount = 0; thumbCache.clear();
         const db = await openDB();
         const tx = db.transaction(STORE_NAME, 'readwrite');
-        await promisifyRequest(tx.objectStore(STORE_NAME).clear());
-        await waitTransaction(tx);
-        db.close();
-
-        // 重置 UI
-        mainLayout.style.display = 'none';
-        dropZone.style.display = 'flex';
-        progressBar.classList.remove('active');
-        importProgressBar.classList.remove('active');
+        await promisifyRequest(tx.objectStore(STORE_NAME).clear()); await waitTransaction(tx); db.close();
+        mainLayout.style.display = 'none'; dropZone.style.display = 'flex';
+        progressBar.classList.remove('active'); importProgressBar.classList.remove('active');
         document.getElementById('exportBtn').disabled = true;
         document.getElementById('exportProgressBtn').disabled = true;
         document.getElementById('resetBtn').disabled = true;
         document.getElementById('openZipLabel').textContent = '📁 打开压缩包';
         document.getElementById('fileInput').value = '';
-    } finally {
-        isProcessing = false;
-    }
+    } finally {isProcessing = false;}
 }
 
-// -------------------- 右键上下文菜单 --------------------
-let currentContextTarget = null;
-let currentContextArea = null;
-
+// -------------------- 右键菜单 --------------------
+let currentContextTarget = null; let currentContextArea = null;
 function showContextMenu(e, filename, area) {
-    e.preventDefault();
-    e.stopPropagation();
-    currentContextTarget = filename;
-    currentContextArea = area;
-    const menu = document.getElementById('contextMenu');
-    
+    e.preventDefault(); e.stopPropagation();
+    currentContextTarget = filename; currentContextArea = area;
+    const menu = document.getElementById('context-menu');
     const checkItem = menu.querySelector('[data-action="check"]');
     const uniqueItem = menu.querySelector('[data-action="unique"]');
     const restoreItem = menu.querySelector('[data-action="restore"]');
-    
-    if (area === 'pending') {
-        checkItem.style.display = 'block';
-        uniqueItem.style.display = 'block';
-        restoreItem.style.display = 'none';
-    } else if (area === 'ignored') {
-        checkItem.style.display = 'none';
-        uniqueItem.style.display = 'none';
-        restoreItem.style.display = 'block';
-    }
-    
-    menu.style.left = e.clientX + 'px';
-    menu.style.top = e.clientY + 'px';
-    menu.style.display = 'block';
+    const delBaseItem = menu.querySelector('[data-action="delBase"]');
+    checkItem.style.display = 'block';
+    if (area === 'pending') {uniqueItem.style.display = 'block'; restoreItem.style.display = 'none'; delBaseItem.style.display = 'none';}
+    else if (area === 'ignored') {uniqueItem.style.display = 'none'; restoreItem.style.display = 'block'; delBaseItem.style.display = 'none';}
+    else if(area === "base") {uniqueItem.style.display = 'none'; restoreItem.style.display = 'none'; delBaseItem.style.display = 'block';}
+    else {uniqueItem.style.display = 'none'; restoreItem.style.display = 'none'; delBaseItem.style.display = 'none';}
+    menu.style.left = e.clientX + 'px'; menu.style.top = e.clientY + 'px'; menu.style.display = 'block';
 }
-
 function hideContextMenu() {
     document.getElementById('contextMenu').style.display = 'none';
-    currentContextTarget = null;
-    currentContextArea = null;
+    currentContextTarget = null; currentContextArea = null;
 }
-
 function handleContextAction(action) {
     if (!currentContextTarget) return;
-    if (action === 'check' && currentContextArea === 'pending') {
-        startCandidateCheck(currentContextTarget);
-    } else if (action === 'unique' && currentContextArea === 'pending') {
-        markAsUnique(currentContextTarget);
-    } else if (action === 'restore' && currentContextArea === 'ignored') {
-        restoreFromIgnored(currentContextTarget);
-    }
+    if (action === 'check') startCandidateCheck(currentContextTarget);
+    else if (action === 'unique' && currentContextArea === 'pending') markAsUnique(currentContextTarget);
+    else if (action === 'restore' && currentContextArea === 'ignored') restoreFromIgnored(currentContextTarget);
+    else if(action === "delBase") deleteBaseImage(currentContextTarget);
     hideContextMenu();
 }
 
-// -------------------- 面板拖拽调整大小 --------------------
+// -------------------- 拖拽面板大小 --------------------
 function initSplitters() {
-    if (splittersInitialized) return;
-    splittersInitialized = true;
-
+    if (splittersInitialized) return; splittersInitialized = true;
     const mainLayout = document.getElementById('mainLayout');
-    
-    // 垂直分隔条1
     const splitterV1 = document.getElementById('splitterV1');
     let isDraggingV1 = false;
-    splitterV1.addEventListener('mousedown', (e) => {
-        isDraggingV1 = true;
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-    });
+    splitterV1.addEventListener('mousedown', (e) => {isDraggingV1 = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';});
     document.addEventListener('mousemove', (e) => {
         if (!isDraggingV1) return;
         const rect = mainLayout.getBoundingClientRect();
-        let newWidth = e.clientX - rect.left - 10;
-        newWidth = Math.max(150, Math.min(500, newWidth));
+        let newWidth = e.clientX - rect.left - 10; newWidth = Math.max(150, Math.min(500, newWidth));
         mainLayout.style.gridTemplateColumns = `${newWidth}px 6px 1fr 6px 250px`;
     });
-    document.addEventListener('mouseup', () => {
-        if (isDraggingV1) {
-            isDraggingV1 = false;
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-        }
-    });
-
-    // 垂直分隔条2
+    document.addEventListener('mouseup', () => {if (isDraggingV1) {isDraggingV1 = false; document.body.style.cursor = ''; document.body.style.userSelect = '';}});
     const splitterV2 = document.getElementById('splitterV2');
     let isDraggingV2 = false;
-    splitterV2.addEventListener('mousedown', (e) => {
-        isDraggingV2 = true;
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-    });
+    splitterV2.addEventListener('mousedown', (e) => {isDraggingV2 = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';});
     document.addEventListener('mousemove', (e) => {
         if (!isDraggingV2) return;
         const rect = mainLayout.getBoundingClientRect();
-        let newWidth = rect.right - e.clientX - 10;
-        newWidth = Math.max(150, Math.min(500, newWidth));
+        let newWidth = rect.right - e.clientX - 10; newWidth = Math.max(150, Math.min(500, newWidth));
         mainLayout.style.gridTemplateColumns = `250px 6px 1fr 6px ${newWidth}px`;
     });
-    document.addEventListener('mouseup', () => {
-        if (isDraggingV2) {
-            isDraggingV2 = false;
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-        }
-    });
-
-    // 水平分隔条
+    document.addEventListener('mouseup', () => {if (isDraggingV2) {isDraggingV2 = false; document.body.style.cursor = ''; document.body.style.userSelect = '';}});
     const splitterH = document.getElementById('splitterH');
     let isDraggingH = false;
-    splitterH.addEventListener('mousedown', (e) => {
-        isDraggingH = true;
-        document.body.style.cursor = 'row-resize';
-        document.body.style.userSelect = 'none';
-    });
+    splitterH.addEventListener('mousedown', (e) => {isDraggingH = true; document.body.style.cursor = 'row-resize'; document.body.style.userSelect = 'none';});
     document.addEventListener('mousemove', (e) => {
         if (!isDraggingH) return;
         const rect = mainLayout.getBoundingClientRect();
-        let newHeight = e.clientY - rect.top - 10;
-        newHeight = Math.max(100, Math.min(rect.height - 100, newHeight));
+        let newHeight = e.clientY - rect.top - 10; newHeight = Math.max(100, Math.min(rect.height - 100, newHeight));
         mainLayout.style.gridTemplateRows = `${newHeight}px 6px 1fr`;
     });
-    document.addEventListener('mouseup', () => {
-        if (isDraggingH) {
-            isDraggingH = false;
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-        }
-    });
+    document.addEventListener('mouseup', () => {if (isDraggingH) {isDraggingH = false; document.body.style.cursor = ''; document.body.style.userSelect = '';}});
 }
 
-// -------------------- 懒加载缩略图 --------------------
+// -------------------- 缩略图加载 --------------------
 const lazyObserver = new IntersectionObserver((entriesObs) => {
     entriesObs.forEach(entry => {
         if (entry.isIntersecting) {
@@ -1115,345 +1031,248 @@ const lazyObserver = new IntersectionObserver((entriesObs) => {
             lazyObserver.unobserve(img);
         }
     });
-}, { rootMargin: '200px' });
-
+}, { rootMargin: '300px' });
 async function loadThumbnail(filename) {
-    const entry = entries.find(e => e.filename === filename);
+    if (thumbCache.has(filename)) return thumbCache.get(filename);
+    const entry = entryMap.get(filename);
+    if (!entry) return null;
+    try {
+        const blob = await entry.getData(new BlobWriter());
+        const img = await createImageBitmap(blob);
+        const ratio = img.height / img.width;
+        const thumbHeight = Math.round(THUMB_WIDTH * ratio);
+        const canvas = new OffscreenCanvas(THUMB_WIDTH, thumbHeight);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, THUMB_WIDTH, thumbHeight);
+        img.close();
+        const thumbBlob = await canvas.convertToBlob({ type: 'image/webp', quality: 0.7 });
+        const url = URL.createObjectURL(thumbBlob);
+        thumbCache.set(filename, url);
+        return url;
+    } catch (e) {
+        const blob = await entry.getData(new BlobWriter());
+        const url = URL.createObjectURL(blob);
+        thumbCache.set(filename, url);
+        return url;
+    }
+}
+async function loadOriginalImage(filename) {
+    const entry = entryMap.get(filename);
     if (!entry) return null;
     const blob = await entry.getData(new BlobWriter());
     return URL.createObjectURL(blob);
 }
-
 function previewImage(filename) {
     document.getElementById('previewModal').style.display = 'flex';
     const previewImg = document.getElementById('previewImg');
     previewImg.src = '';
-    loadThumbnail(filename).then(url => {
-        previewImg.src = url;
-    });
+    loadOriginalImage(filename).then(url => {previewImg.src = url;});
 }
 
-// 创建标准图片卡片
-function createStandardCard(filename, extraClass = '') {
-    const card = document.createElement('div');
-    card.className = 'image-card ' + extraClass;
-    card.dataset.filename = filename;
-
-    const img = document.createElement('img');
-    img.className = 'thumb';
-    img.dataset.filename = filename;
-    lazyObserver.observe(img);
-    card.appendChild(img);
-
-    const nameDiv = document.createElement('div');
-    nameDiv.className = 'fname';
-    nameDiv.textContent = filename;
-    card.appendChild(nameDiv);
-
-    card.addEventListener('click', (e) => {
-        e.stopPropagation();
-        previewImage(filename);
-    });
-    return card;
-}
-
-// 创建候选区卡片
-function createCandidateCard(filename, isCurrentBase = false) {
-    const card = document.createElement('div');
-    card.className = 'candidate-card' + (isCurrentBase ? ' current-base' : '');
-    card.dataset.filename = filename;
-
-    const nameDiv = document.createElement('div');
-    nameDiv.className = 'fname-full';
-    nameDiv.textContent = filename;
-    card.appendChild(nameDiv);
-
-    const img = document.createElement('img');
-    img.className = 'thumb-small';
-    img.dataset.filename = filename;
-    lazyObserver.observe(img);
-    card.appendChild(img);
-
-    card.addEventListener('click', (e) => {
-        if (e.target === nameDiv || e.target === img) {
-            previewImage(filename);
-        } else {
-            setAsInitial(filename);
-        }
-    });
-    return card;
-}
-
-// -------------------- 渲染 --------------------
+// -------------------- 渲染函数 --------------------
 const pendingGrid = document.getElementById('pendingGrid');
 const candidateGrid = document.getElementById('candidateGrid');
 const dupGroupsDiv = document.getElementById('dupGroups');
-const baseGroupsDiv = document.getElementById('baseGroups');
+const baseGroupsDiv= document.getElementById('baseGroups');
 const ignoredGrid = document.getElementById('ignoredGrid');
 
 function renderAll() {
     renderPending();
+    renderIgnored();
     renderDuplicateGroups();
     renderBaseGroups();
-    renderIgnored();
-    document.getElementById('pendingCount').textContent = [...statusMap.values()].filter(s=>s==='pending').length;
-    if(currentCandidateBase) renderCandidatePanel();
+    if (currentCandidateBase) renderCandidatePanel();
 }
 
 function renderPending() {
     pendingGrid.innerHTML = '';
-    const files = [...statusMap.entries()]
-        .filter(([_,s])=>s==='pending')
-        .map(([f])=>f);
-    for (let f of files) {
+    const files = [];
+    for (let [fname, status] of statusMap) {
+        if (status === 'pending') files.push(fname);
+    }
+    document.getElementById('pendingCount').textContent = files.length;
+    files.forEach(f => {
         const card = createStandardCard(f);
-        card.addEventListener('dblclick', (e) => {
+        card.addEventListener('click', () => previewImage(f));
+        card.addEventListener('dblclick', e => {
             e.preventDefault();
             startCandidateCheck(f);
         });
-        card.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            showContextMenu(e, f, 'pending');
-        });
+        card.addEventListener('contextmenu', e => showContextMenu(e, f, 'pending'));
         pendingGrid.appendChild(card);
+    });
+}
+
+function renderIgnored() {
+    ignoredGrid.innerHTML = '';
+    const files = [];
+    for (let [fname, status] of statusMap) {
+        if (status === 'unique') files.push(fname);
+    }
+    document.getElementById('ignoredCount').textContent = files.length;
+    files.forEach(f => {
+        const card = createStandardCard(f);
+        card.addEventListener('click', () => previewImage(f));
+        card.addEventListener('contextmenu', e => showContextMenu(e, f, 'ignored'));
+        ignoredGrid.appendChild(card);
+    });
+}
+
+function renderDuplicateGroups() {
+    dupGroupsDiv.innerHTML = '';
+    if (duplicateGroups.size === 0) {
+        dupGroupsDiv.innerHTML = '<div class="empty-hint">暂无重复分组</div>';
+        return;
+    }
+    for (let [gid, group] of duplicateGroups) {
+        const wrap = document.createElement('div');
+        wrap.className = 'group-folder';
+        wrap.dataset.gid = gid;
+        wrap.innerHTML = `
+            <button class="group-del-btn" data-gid="${gid}">×</button>
+            <div class="group-header">📌 基准图：${group.base}</div>
+            <div class="group-images" data-gid="${gid}"></div>
+        `;
+        const imgBox = wrap.querySelector('.group-images');
+        group.duplicates.forEach(f => {
+            const card = createStandardCard(f);
+            card.addEventListener('click', () => previewImage(f));
+            card.addEventListener('contextmenu', e => showContextMenu(e, f, 'dup'));
+            imgBox.appendChild(card);
+        });
+        wrap.querySelector('.group-del-btn').addEventListener('click', () => deleteDupGroup(gid));
+        dupGroupsDiv.appendChild(wrap);
+    }
+}
+
+function renderBaseGroups() {
+    baseGroupsDiv.innerHTML = '';
+    if (baseGroups.size === 0) return;
+    for (let [gid, group] of baseGroups) {
+        const wrap = document.createElement('div');
+        wrap.className = 'group-folder';
+        wrap.innerHTML = `
+            <div class="group-header">
+                <input class="group-name-input" value="${group.name}" data-gid="${gid}">
+                <button class="btn" style="padding:2px 6px;font-size:12px;">删除分组</button>
+            </div>
+            <div class="group-images" data-gid="${gid}"></div>
+        `;
+        const nameInput = wrap.querySelector('.group-name-input');
+        nameInput.addEventListener('change', e => renameGroup(gid, e.target.value));
+        const delBtn = wrap.querySelector('.btn');
+        delBtn.addEventListener('click', () => {
+            if (confirm(`确定删除分组【${group.name}】？内部图片将恢复至待处理`)) {
+                group.images.forEach(f => statusMap.set(f, 'pending'));
+                baseGroups.delete(gid);
+                saveFullState();
+                renderBaseGroups();
+            }
+        });
+        const imgBox = wrap.querySelector('.group-images');
+        group.images.forEach(f => {
+            const card = createStandardCard(f);
+            card.classList.add('base-badge');
+            card.addEventListener('click', () => previewImage(f));
+            card.addEventListener('contextmenu', e => showContextMenu(e, f, 'base'));
+            imgBox.appendChild(card);
+        });
+        baseGroupsDiv.appendChild(wrap);
     }
 }
 
 function renderCandidatePanel() {
     candidateGrid.innerHTML = '';
     for (let f of candidateList) {
-        const card = createCandidateCard(f, f === currentCandidateBase);
-        candidateGrid.appendChild(card);
-    }
-}
-
-function renderDuplicateGroups() {
-    dupGroupsDiv.innerHTML = '';
-    if (duplicateGroups.size === 0) {
-        dupGroupsDiv.innerHTML = '<div class="empty-hint">暂无重复组</div>';
-        return;
-    }
-    for (let [gid, group] of duplicateGroups) {
-        const el = document.createElement('div');
-        el.className='group-folder';
-        el.innerHTML = `<div class="group-header">📌 基准: ${group.base}</div>`;
-        const imgsDiv = document.createElement('div');
-        imgsDiv.className='group-images';
-        for (let f of group.duplicates) {
-            imgsDiv.appendChild(createStandardCard(f));
-        }
-        el.appendChild(imgsDiv);
-        dupGroupsDiv.appendChild(el);
-    }
-}
-
-function renderBaseGroups() {
-    baseGroupsDiv.innerHTML = '';
-    for (let [gid, group] of baseGroups) {
-        const el = document.createElement('div');
-        el.className='group-folder';
-
-        const header = document.createElement('div');
-        header.className='group-header';
-
-        const input = document.createElement('input');
-        input.className='group-name-input';
-        input.value=group.name;
-        input.addEventListener('change', e => renameGroup(gid, e.target.value));
-        header.appendChild(input);
-
-        const delBtn = document.createElement('button');
-        delBtn.className='btn';
-        delBtn.textContent='删除';
-        delBtn.addEventListener('click', ()=>{
-            baseGroups.delete(gid);
-            saveFullState();
-            renderBaseGroups();
+        const wrap = document.createElement('div');
+        wrap.className = 'candidate-card';
+        wrap.dataset.filename = f;
+        const cached = thumbCache.get(f);
+        wrap.innerHTML = `
+            <input type="checkbox" class="candidate-checkbox" data-fn="${f}" ${selectedCandidate.has(f) ? "checked" : ""}>
+            <img class="thumb-small" data-filename="${f}" ${cached ? `src="${cached}"` : ""}>
+            <div class="fname-full">${f}</div>
+        `;
+        if (f === currentCandidateBase) wrap.classList.add('current-base');
+        const checkbox = wrap.querySelector('.candidate-checkbox');
+        checkbox.addEventListener('change', () => {
+            if (checkbox.checked) selectedCandidate.add(f);
+            else selectedCandidate.delete(f);
+            renderCandidatePanel();
         });
-        header.appendChild(delBtn);
-        el.appendChild(header);
-
-        const imgsDiv = document.createElement('div');
-        imgsDiv.className='group-images';
-        for (let f of group.images) {
-            const card = createStandardCard(f);
-            card.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                removeImageFromGroup(gid, f);
-            });
-            imgsDiv.appendChild(card);
-        }
-        el.appendChild(imgsDiv);
-        baseGroupsDiv.appendChild(el);
-    }
-
-    const ungrouped = [...statusMap.entries()]
-        .filter(([f,s])=>s==='base' && ![...baseGroups.values()].some(g=>g.images.includes(f)))
-        .map(([f])=>f);
-
-    if (ungrouped.length) {
-        const el = document.createElement('div');
-        el.className='group-folder';
-        el.innerHTML='<div class="group-header">📌 未分组初始图片</div>';
-        const imgsDiv = document.createElement('div');
-        imgsDiv.className='group-images';
-        for (let f of ungrouped) {
-            const card = createStandardCard(f);
-            card.addEventListener('click', (e) => {
-                if (baseGroups.size===0) createNewGroup();
-                const name = prompt('输入目标组名（新建则直接输入新名称）');
-                if (name) {
-                    let target = [...baseGroups.entries()].find(([_,g])=>g.name===name);
-                    if (!target) {
-                        createNewGroup();
-                        target = [...baseGroups.entries()].pop();
-                    }
-                    addImageToGroup(target[0], f);
-                }
-            });
-            imgsDiv.appendChild(card);
-        }
-        el.appendChild(imgsDiv);
-        baseGroupsDiv.appendChild(el);
-    }
-
-    if (baseGroups.size===0 && ungrouped.length===0) {
-        baseGroupsDiv.innerHTML='<div class="empty-hint">暂无初始图片</div>';
+        const img = wrap.querySelector('.thumb-small');
+        if (!cached) lazyObserver.observe(img);
+        candidateGrid.appendChild(wrap);
     }
 }
 
-function renderIgnored() {
-    ignoredGrid.innerHTML = '';
-    const files = [...statusMap.entries()]
-        .filter(([_, s]) => s === 'unique')
-        .map(([f]) => f);
-    
-    document.getElementById('ignoredCount').textContent = files.length;
-    
-    if (files.length === 0) {
-        ignoredGrid.innerHTML = '<div class="empty-hint">暂无忽略图片</div>';
-        return;
-    }
-    
-    for (let f of files) {
-        const card = createStandardCard(f);
-        card.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            showContextMenu(e, f, 'ignored');
-        });
-        ignoredGrid.appendChild(card);
-    }
+// 通用图片卡片生成
+function createStandardCard(filename) {
+    const card = document.createElement('div');
+    card.className = 'image-card';
+    card.dataset.filename = filename;
+    const cached = thumbCache.get(filename);
+    card.innerHTML = `
+        <img class="thumb" data-filename="${filename}" ${cached ? `src="${cached}"` : ""}>
+        <div class="fname">${filename}</div>
+    `;
+    const img = card.querySelector('.thumb');
+    if (!cached) lazyObserver.observe(img);
+    return card;
 }
 
-// -------------------- 事件绑定 --------------------
-dropZone.addEventListener('dragover', e=>{
-    e.preventDefault();
-    dropZone.classList.add('drag-over')
-});
-dropZone.addEventListener('dragleave', ()=>dropZone.classList.remove('drag-over'));
-dropZone.addEventListener('drop', async e=>{
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
-    const f=e.dataTransfer.files[0];
-    if(!f || !f.name.toLowerCase().endsWith('.zip')) return;
-    if(zipReader && imageHashMap.size > 0) {
-        if(!confirm('更换压缩包将清空当前工作进度，确定继续吗？')) {
-            return;
-        }
-    }
-    await startPreprocessing(f);
-});
-
-fileInput.addEventListener('change', async e=>{
-    const f=e.target.files[0];
-    if(!f) return;
-    if(zipReader && imageHashMap.size > 0) {
-        if(!confirm('更换压缩包将清空当前工作进度，确定继续吗？')) {
-            e.target.value = '';
-            return;
-        }
-    }
-    await startPreprocessing(f);
-});
-
+// -------------------- 全局按钮绑定 --------------------
+document.getElementById('addGroupBtn').addEventListener('click', createNewGroup);
+document.getElementById('batchClassifyBtn').addEventListener('click', batchClassifyCandidate);
+document.getElementById('cancelCandidateBtn').addEventListener('click', cancelCandidate);
 document.getElementById('exportBtn').addEventListener('click', exportGroupsAsZip);
 document.getElementById('exportProgressBtn').addEventListener('click', exportProgress);
-document.getElementById('importBtn').addEventListener('click', ()=>document.getElementById('importFile').click());
+document.getElementById('resetBtn').addEventListener('click', resetWorkProgress);
 
-// 导入进度逻辑
-document.getElementById('importFile').addEventListener('change', async e=>{
-    const file=e.target.files[0];
-    if(!file) return;
-    if (!confirm('导入进度将覆盖当前所有状态，确定继续吗？')) {
-        e.target.value = '';
-        return;
+// 预览弹窗关闭
+document.getElementById('closePreview').addEventListener('click', () => {
+    document.getElementById('previewModal').style.display = 'none';
+});
+document.getElementById('previewModal').addEventListener('click', e => {
+    if (e.target.id === 'previewModal') {
+        document.getElementById('previewModal').style.display = 'none';
     }
-    if (isProcessing) return;
-    isProcessing = true;
+});
 
-    importProgressBar.classList.add('active');
-    updateImportProgress(0);
+// 右键菜单点击事件
+document.getElementById('contextMenu').addEventListener('click', e => {
+    const item = e.target.closest('.context-menu-item');
+    if (item) handleContextAction(item.dataset.action);
+});
+document.addEventListener('click', e => {
+    if (!e.target.closest('#contextMenu')) hideContextMenu();
+});
 
-    try{
-        const text = await file.text();
-        updateImportProgress(25);
-
-        const data = JSON.parse(text);
-        updateImportProgress(50);
-
-        // 还原状态
-        imageHashMap = new Map(data.images.map(i=>[i.filename, i.hash]));
-        statusMap = new Map(data.images.map(i=>[i.filename, i.status]));
-        duplicateGroups = new Map(data.dupGroups);
-        baseGroups = new Map(data.baseGroups);
-        if (data.zipFileName) zipFileName = data.zipFileName;
-        if (data.zipFileSize) zipFileSize = data.zipFileSize;
-        updateImportProgress(75);
-
-        await saveFullState();
-        updateImportProgress(100);
-
-        setTimeout(()=>{
-            importProgressBar.classList.remove('active');
-            if (entries.length > 0) {
-                onPreprocessingDone();
-                alert('进度导入成功');
-            } else {
-                alert('进度已导入，请先加载对应的压缩包以使用完整功能。');
-            }
-        }, 300);
-    } catch(err){
-        importProgressBar.classList.remove('active');
-        alert('导入失败: ' + err.message);
-    } finally {
-        isProcessing = false;
+// 拖入zip文件
+dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+});
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('drag-over');
+});
+dropZone.addEventListener('drop', async e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.endsWith('.zip')) {
+        await startPreprocessing(file);
+    } else {
+        alert('请拖入 .zip 压缩包文件');
     }
+});
+
+// 选择zip文件
+fileInput.addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (file) await startPreprocessing(file);
     e.target.value = '';
 });
-
-document.getElementById('addGroupBtn').addEventListener('click', createNewGroup);
-document.getElementById('cancelCandidateBtn').addEventListener('click', cancelCandidate);
-document.getElementById('closePreview').addEventListener('click', ()=>document.getElementById('previewModal').style.display='none');
-document.getElementById('previewModal').addEventListener('click', function(e){
-    if(e.target===this) this.style.display='none';
-});
-
-// 右键菜单事件
-document.querySelectorAll('#contextMenu .context-menu-item').forEach(item => {
-    item.addEventListener('click', () => {
-        handleContextAction(item.dataset.action);
-    });
-});
-document.addEventListener('click', hideContextMenu);
-document.addEventListener('contextmenu', (e) => {
-    if (!e.target.closest('.image-card')) {
-        hideContextMenu();
-    }
-});
-window.addEventListener('scroll', hideContextMenu, true);
-window.addEventListener('blur', hideContextMenu);
-
-document.getElementById('resetBtn').addEventListener('click', resetWorkProgress);
 </script>
 </body>
 </html>
