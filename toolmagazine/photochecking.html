@@ -156,6 +156,10 @@ input[type="file"] {
     align-content: flex-start;
     gap: 6px;
 }
+/* 滚动区域放置拖拽高亮 */
+.scroll-area.drag-hover {
+    background: rgba(74,158,255,0.12);
+}
 .splitter {
     background: var(--border);
     cursor: col-resize;
@@ -458,10 +462,10 @@ input[type="file"] {
 </div>
 
 <div id="contextMenu" class="context-menu">
-    <div class="context-menu-item" data-action="check">🔍 开始查重（支持初始图重查）</div>
+    <div class="context-menu-item" data-action="check">🔍 开始查重</div>
     <div class="context-menu-item" data-action="unique">🚫 标记为忽略</div>
     <div class="context-menu-item" data-action="restore">↩️ 恢复为待处理</div>
-    <div class="context-menu-item" data-action="delBase">❌ 删除此基准图（同步删除全部关联重复组）</div>
+    <div class="context-menu-item" data-action="delBase">❌ 删除基准图</div>
 </div>
 
 <script type="importmap">
@@ -473,7 +477,7 @@ input[type="file"] {
 </script>
 
 <script type="module">
-import { ZipReader, BlobReader, BlobWriter } from '@zip.js/zip.js';
+import { ZipReader, ZipWriter, BlobReader, BlobWriter } from '@zip.js/zip.js';
 
 // -------------------- 全局状态 --------------------
 let zipReader = null;
@@ -639,6 +643,7 @@ async function startPreprocessing(file) {
         destroyAllWorkers();
         thumbCache.clear();
         imageHashMap.clear(); statusMap.clear(); duplicateGroups.clear(); baseGroups.clear();
+        entryMap.clear();
         currentCandidateBase = null; candidateList = []; selectedCandidate.clear(); entries = [];
         cancelCandidate(); hideContextMenu();
         zipFileName = file.name; zipFileSize = file.size;
@@ -677,7 +682,7 @@ async function startPreprocessing(file) {
     } catch(err) {
         console.error(err); alert('预处理失败: ' + err.message);
         if (zipReader) {try { await zipReader.close(); } catch(e) {} zipReader = null;}
-        entries = []; thumbCache.clear(); dropZone.style.display = 'flex';
+        entries = []; entryMap.clear(); thumbCache.clear(); dropZone.style.display = 'flex';
         progressBar.classList.remove('active');
     } finally {isProcessing = false;}
 }
@@ -776,38 +781,44 @@ function renameGroup(gid,newName) {
     const g=baseGroups.get(gid);
     if(g && newName.trim() !== ""){g.name=newName.trim();saveFullState();}
 }
-// 拖拽移动图片核心：自动移除原分组，加入目标分组
+// 拖拽移动至基础分组
 function addImageToGroup(targetGid,filename) {
-    // 从所有基础组移除
     for(let[_,g]of baseGroups) g.images=g.images.filter(f=>f!==filename);
-    // 从所有重复组移除
     for(let[_,g]of duplicateGroups) g.duplicates=g.duplicates.filter(f=>f!==filename);
-    // 加入目标基础组
+    statusMap.set(filename,"base");
     const targetGroup = baseGroups.get(targetGid);
     if(targetGroup && !targetGroup.images.includes(filename)){
         targetGroup.images.push(filename);
     }
     saveFullState(); renderAll();
 }
-// 移动至重复分组
+// 拖拽移动至重复分组
 function addImageToDupGroup(targetGid,filename){
-    // 从基础组全部移除
     for(let[_,g]of baseGroups) g.images=g.images.filter(f=>f!==filename);
-    // 其他重复组移除
     for(let[_,g]of duplicateGroups) g.duplicates=g.duplicates.filter(f=>f!==filename);
+    statusMap.set(filename,"duplicate");
     const targetGroup = duplicateGroups.get(targetGid);
     if(targetGroup && !targetGroup.duplicates.includes(filename)){
         targetGroup.duplicates.push(filename);
     }
-    statusMap.set(filename,"duplicate");
     saveFullState(); renderAll();
 }
-function removeImageFromGroup(gid,filename) {
-    const g=baseGroups.get(gid);
-    if(g){g.images=g.images.filter(f=>f!==filename); saveFullState(); renderAll();}
+// 拖拽移回待处理
+function moveToPending(filename){
+    for(let[_,g]of baseGroups) g.images=g.images.filter(f=>f!==filename);
+    for(let[_,g]of duplicateGroups) g.duplicates=g.duplicates.filter(f=>f!==filename);
+    statusMap.set(filename,"pending");
+    saveFullState(); renderAll();
+}
+// 拖拽移至忽略
+function moveToIgnored(filename){
+    for(let[_,g]of baseGroups) g.images=g.images.filter(f=>f!==filename);
+    for(let[_,g]of duplicateGroups) g.duplicates=g.duplicates.filter(f=>f!==filename);
+    statusMap.set(filename,"unique");
+    saveFullState(); renderAll();
 }
 
-// -------------------- 拖拽系统（完整跨分组移动） --------------------
+// -------------------- 拖拽系统（完整修复：支持待处理/忽略/分组互拖） --------------------
 function initDropTarget() {
     document.addEventListener('dragstart', e => {
         const card = e.target.closest(".image-card");
@@ -821,49 +832,59 @@ function initDropTarget() {
     })
     document.addEventListener('dragend', () => {
         dragSourceFilename = null; dragSourceType = null;
-        document.querySelectorAll(".group-images").forEach(el => el.classList.remove("drag-hover"));
+        document.querySelectorAll(".group-images,.scroll-area").forEach(el => el.classList.remove("drag-hover"));
     })
+
+    // 通用放置绑定函数
+    function bindDropZone(el, dropCallback){
+        el.addEventListener("dragover", e => {
+            e.preventDefault();
+            // 禁止重复图拖基础分组
+            if(dragSourceType === "dup" && el.closest("#baseGroups")){
+                el.style.background = "rgba(255,100,100,0.2)";
+            }else{
+                el.classList.add("drag-hover");
+            }
+        })
+        el.addEventListener("dragleave", () => {
+            el.classList.remove("drag-hover");
+            el.style.background = "";
+        })
+        el.addEventListener("drop", e => {
+            e.preventDefault();
+            el.classList.remove("drag-hover");
+            el.style.background = "";
+            if(!dragSourceFilename) return;
+            // 禁止重复图拖基础分组
+            if(dragSourceType === "dup" && el.closest("#baseGroups")){
+                alert("不允许重复组图片拖入初始分组");
+                return;
+            }
+            dropCallback();
+        })
+    }
+
+    // 1. 待处理区域放置
+    bindDropZone(document.getElementById('pendingGrid'), ()=>{
+        moveToPending(dragSourceFilename);
+    })
+    // 2. 忽略区域放置
+    bindDropZone(document.getElementById('ignoredGrid'), ()=>{
+        moveToIgnored(dragSourceFilename);
+    })
+    // 3. 所有分组容器放置
     document.querySelectorAll(".group-images").forEach(box => {
-        box.addEventListener("dragover", e => {
-            e.preventDefault();
-            const isTargetBaseGroup = box.closest("#baseGroups");
-            // 禁止重复组拖到基础组
-            if(dragSourceType === "dup" && isTargetBaseGroup) {
-                box.style.background = "rgba(255,107,107,0.2)";
-            } else {
-                box.classList.add("drag-hover");
-            }
-        })
-        box.addEventListener("dragleave", () => {
-            box.classList.remove("drag-hover");
-            box.style.background = "";
-        })
-        box.addEventListener("drop", e => {
-            e.preventDefault();
-            box.classList.remove("drag-hover");
-            box.style.background = "";
-            if(!dragSourceFilename || !dragSourceType) return;
-            const isTargetBaseGroup = box.closest("#baseGroups");
-            // 禁止重复组拖到基础组
-            if(dragSourceType === "dup" && isTargetBaseGroup) {
-                alert("不允许将重复组图片拖动至初始分组");
-                return;
-            }
-            // 拖入基础分组
-            if(isTargetBaseGroup) {
-                const groupWrap = box.closest(".group-folder");
-                const nameInput = groupWrap.querySelector(".group-name-input");
-                const match = [...baseGroups.entries()].find(([_,g]) => g.name === nameInput.value);
-                if(!match) return;
-                const targetGid = match[0];
-                addImageToGroup(targetGid, dragSourceFilename);
-                return;
-            }
-            // 拖入重复分组
+        bindDropZone(box, ()=>{
+            const baseWrap = box.closest("#baseGroups .group-folder");
             const dupWrap = box.closest("#dupGroups .group-folder");
-            if(dupWrap) {
-                const targetGid = dupWrap.dataset.gid;
-                addImageToDupGroup(targetGid, dragSourceFilename);
+            if(baseWrap){
+                const nameInput = baseWrap.querySelector(".group-name-input");
+                const match = [...baseGroups.entries()].find(([_,g])=>g.name === nameInput.value);
+                if(!match) return;
+                addImageToGroup(match[0], dragSourceFilename);
+            }else if(dupWrap){
+                const gid = dupWrap.dataset.gid;
+                addImageToDupGroup(gid, dragSourceFilename);
             }
         })
     })
@@ -883,7 +904,7 @@ async function exportGroupsAsZip() {
             }
         }
     }
-    const content=await zip.generateAsync({type:'blob'});
+    const content=await zip.close();
     const url=URL.createObjectURL(content);
     const a=document.createElement('a');
     a.href=url; a.download='grouped_images.zip'; a.click(); URL.revokeObjectURL(url);
@@ -952,7 +973,7 @@ async function resetWorkProgress() {
         destroyAllWorkers();
         cancelCandidate(); hideContextMenu();
         if (zipReader) {try { await zipReader.close(); } catch(e) {} zipReader = null;}
-        entries = []; imageHashMap.clear(); statusMap.clear(); duplicateGroups.clear(); baseGroups.clear();
+        entries = []; entryMap.clear(); imageHashMap.clear(); statusMap.clear(); duplicateGroups.clear(); baseGroups.clear();
         currentCandidateBase = null; candidateList = []; selectedCandidate.clear();
         zipFileName = ''; zipFileSize = 0; totalImages = 0; processedCount = 0; thumbCache.clear();
         const db = await openDB();
@@ -968,10 +989,11 @@ async function resetWorkProgress() {
     } finally {isProcessing = false;}
 }
 
-// -------------------- 右键菜单逻辑（仅右键触发，左键只预览） --------------------
+// -------------------- 右键菜单修复（阻止冒泡、正常弹出） --------------------
 let currentContextTarget = null; let currentContextArea = null;
 function showContextMenu(e, filename, area) {
-    e.preventDefault(); e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
     currentContextTarget = filename; currentContextArea = area;
     const menu = document.getElementById('context-menu');
     const checkItem = menu.querySelector('[data-action="check"]');
@@ -993,7 +1015,7 @@ function handleContextAction(action) {
     if (!currentContextTarget) return;
     if (action === 'check') startCandidateCheck(currentContextTarget);
     else if (action === 'unique' && currentContextArea === 'pending') markAsUnique(currentContextTarget);
-    else if (action === 'restore' && currentContextArea === 'ignored') restoreFromIgnored(currentContextTarget);
+    else if (action === 'restore' && currentContextArea === 'ignored') moveToPending(currentContextTarget);
     else if(action === "delBase") deleteBaseImage(currentContextTarget);
     hideContextMenu();
 }
@@ -1034,7 +1056,7 @@ function initSplitters() {
     document.addEventListener('mouseup', () => {if (isDraggingH) {isDraggingH = false; document.body.style.cursor = ''; document.body.style.userSelect = '';}});
 }
 
-// -------------------- 缩略图加载 --------------------
+// -------------------- 缩略图懒加载 --------------------
 const lazyObserver = new IntersectionObserver((entriesObs) => {
     entriesObs.forEach(entry => {
         if (entry.isIntersecting) {
@@ -1094,9 +1116,12 @@ const baseGroupsDiv = document.getElementById('baseGroups');
 const ignoredGrid = document.getElementById('ignoredGrid');
 
 function renderAll() {
-    renderPending(); renderDuplicateGroups(); renderBaseGroups(); renderIgnored();
+    renderPending();
+    renderIgnored();
+    renderDuplicateGroups();
+    renderBaseGroups();
     document.getElementById('pendingCount').textContent = [...statusMap.values()].filter(s=>s==='pending').length;
-    document.getElementById('ignoredCount').textContent = [...statusMap.values()].filter(s=>s==='unique').length;
+       document.getElementById('ignoredCount').textContent = [...statusMap.values()].filter(s=>s==='unique').length;
     if(currentCandidateBase) renderCandidatePanel();
 }
 
@@ -1105,9 +1130,9 @@ function renderPending() {
     const files = [...statusMap.entries()].filter(([_,s])=>s==='pending').map(([f])=>f);
     files.forEach(f => {
         const card = createStandardCard(f);
-        // 左键单击仅预览，移除双击查重
+        // 左键仅预览
         card.addEventListener('click', ()=>previewImage(f));
-        // 右键弹出菜单
+        // 右键菜单
         card.addEventListener('contextmenu', e=>showContextMenu(e,f,'pending'));
         pendingGrid.appendChild(card);
     });
@@ -1126,7 +1151,10 @@ function renderIgnored() {
 
 function renderDuplicateGroups() {
     dupGroupsDiv.innerHTML = '';
-    if(duplicateGroups.size === 0) {dupGroupsDiv.innerHTML = '<div class="empty-hint">暂无重复分组</div>';return;}
+    if(duplicateGroups.size === 0) {
+        dupGroupsDiv.innerHTML = '<div class="empty-hint">暂无重复分组</div>';
+        return;
+    }
     for(let [gid, group] of duplicateGroups) {
         const wrap = document.createElement('div');
         wrap.className = 'group-folder';
