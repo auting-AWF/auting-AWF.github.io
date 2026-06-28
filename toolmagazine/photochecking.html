@@ -639,7 +639,6 @@ async function startPreprocessing(file) {
         destroyAllWorkers();
         thumbCache.clear();
         imageHashMap.clear(); statusMap.clear(); duplicateGroups.clear(); baseGroups.clear();
-        entryMap.clear();
         currentCandidateBase = null; candidateList = []; selectedCandidate.clear(); entries = [];
         cancelCandidate(); hideContextMenu();
         zipFileName = file.name; zipFileSize = file.size;
@@ -678,7 +677,7 @@ async function startPreprocessing(file) {
     } catch(err) {
         console.error(err); alert('预处理失败: ' + err.message);
         if (zipReader) {try { await zipReader.close(); } catch(e) {} zipReader = null;}
-        entries = []; entryMap.clear(); thumbCache.clear(); dropZone.style.display = 'flex';
+        entries = []; thumbCache.clear(); dropZone.style.display = 'flex';
         progressBar.classList.remove('active');
     } finally {isProcessing = false;}
 }
@@ -777,17 +776,38 @@ function renameGroup(gid,newName) {
     const g=baseGroups.get(gid);
     if(g && newName.trim() !== ""){g.name=newName.trim();saveFullState();}
 }
+// 拖拽移动图片核心：自动移除原分组，加入目标分组
 function addImageToGroup(targetGid,filename) {
+    // 从所有基础组移除
     for(let[_,g]of baseGroups) g.images=g.images.filter(f=>f!==filename);
-    baseGroups.get(targetGid)?.images.push(filename);
-    saveFullState(); renderBaseGroups();
+    // 从所有重复组移除
+    for(let[_,g]of duplicateGroups) g.duplicates=g.duplicates.filter(f=>f!==filename);
+    // 加入目标基础组
+    const targetGroup = baseGroups.get(targetGid);
+    if(targetGroup && !targetGroup.images.includes(filename)){
+        targetGroup.images.push(filename);
+    }
+    saveFullState(); renderAll();
+}
+// 移动至重复分组
+function addImageToDupGroup(targetGid,filename){
+    // 从基础组全部移除
+    for(let[_,g]of baseGroups) g.images=g.images.filter(f=>f!==filename);
+    // 其他重复组移除
+    for(let[_,g]of duplicateGroups) g.duplicates=g.duplicates.filter(f=>f!==filename);
+    const targetGroup = duplicateGroups.get(targetGid);
+    if(targetGroup && !targetGroup.duplicates.includes(filename)){
+        targetGroup.duplicates.push(filename);
+    }
+    statusMap.set(filename,"duplicate");
+    saveFullState(); renderAll();
 }
 function removeImageFromGroup(gid,filename) {
     const g=baseGroups.get(gid);
-    if(g){g.images=g.images.filter(f=>f!==filename); saveFullState(); renderBaseGroups();}
+    if(g){g.images=g.images.filter(f=>f!==filename); saveFullState(); renderAll();}
 }
 
-// -------------------- 拖拽系统（修复全部崩溃点） --------------------
+// -------------------- 拖拽系统（完整跨分组移动） --------------------
 function initDropTarget() {
     document.addEventListener('dragstart', e => {
         const card = e.target.closest(".image-card");
@@ -807,6 +827,7 @@ function initDropTarget() {
         box.addEventListener("dragover", e => {
             e.preventDefault();
             const isTargetBaseGroup = box.closest("#baseGroups");
+            // 禁止重复组拖到基础组
             if(dragSourceType === "dup" && isTargetBaseGroup) {
                 box.style.background = "rgba(255,107,107,0.2)";
             } else {
@@ -823,10 +844,12 @@ function initDropTarget() {
             box.style.background = "";
             if(!dragSourceFilename || !dragSourceType) return;
             const isTargetBaseGroup = box.closest("#baseGroups");
+            // 禁止重复组拖到基础组
             if(dragSourceType === "dup" && isTargetBaseGroup) {
                 alert("不允许将重复组图片拖动至初始分组");
                 return;
             }
+            // 拖入基础分组
             if(isTargetBaseGroup) {
                 const groupWrap = box.closest(".group-folder");
                 const nameInput = groupWrap.querySelector(".group-name-input");
@@ -836,17 +859,11 @@ function initDropTarget() {
                 addImageToGroup(targetGid, dragSourceFilename);
                 return;
             }
+            // 拖入重复分组
             const dupWrap = box.closest("#dupGroups .group-folder");
             if(dupWrap) {
                 const targetGid = dupWrap.dataset.gid;
-                const targetGroup = duplicateGroups.get(targetGid);
-                if(!targetGroup) return;
-                statusMap.set(dragSourceFilename, "duplicate");
-                for(let [_,g] of baseGroups) g.images = g.images.filter(f=>f!==dragSourceFilename);
-                for(let [_,g] of duplicateGroups) g.duplicates = g.duplicates.filter(f=>f!==dragSourceFilename);
-                if(!targetGroup.duplicates.includes(dragSourceFilename)) targetGroup.duplicates.push(dragSourceFilename);
-                saveFullState();
-                renderDuplicateGroups();
+                addImageToDupGroup(targetGid, dragSourceFilename);
             }
         })
     })
@@ -855,7 +872,7 @@ function initDropTarget() {
 // -------------------- 导出ZIP --------------------
 async function exportGroupsAsZip() {
     if(baseGroups.size===0){alert('无分组可导出');return;}
-    const zip=new ZipReader();
+    const zip=new ZipWriter();
     for(let[gid,group]of baseGroups) {
         const folder=zip.folder(group.name);
         for(let fname of group.images) {
@@ -935,7 +952,7 @@ async function resetWorkProgress() {
         destroyAllWorkers();
         cancelCandidate(); hideContextMenu();
         if (zipReader) {try { await zipReader.close(); } catch(e) {} zipReader = null;}
-        entries = []; entryMap.clear(); imageHashMap.clear(); statusMap.clear(); duplicateGroups.clear(); baseGroups.clear();
+        entries = []; imageHashMap.clear(); statusMap.clear(); duplicateGroups.clear(); baseGroups.clear();
         currentCandidateBase = null; candidateList = []; selectedCandidate.clear();
         zipFileName = ''; zipFileSize = 0; totalImages = 0; processedCount = 0; thumbCache.clear();
         const db = await openDB();
@@ -951,7 +968,7 @@ async function resetWorkProgress() {
     } finally {isProcessing = false;}
 }
 
-// -------------------- 右键菜单 --------------------
+// -------------------- 右键菜单逻辑（仅右键触发，左键只预览） --------------------
 let currentContextTarget = null; let currentContextArea = null;
 function showContextMenu(e, filename, area) {
     e.preventDefault(); e.stopPropagation();
@@ -1073,58 +1090,44 @@ function previewImage(filename) {
 const pendingGrid = document.getElementById('pendingGrid');
 const candidateGrid = document.getElementById('candidateGrid');
 const dupGroupsDiv = document.getElementById('dupGroups');
-const baseGroupsDiv= document.getElementById('baseGroups');
+const baseGroupsDiv = document.getElementById('baseGroups');
 const ignoredGrid = document.getElementById('ignoredGrid');
 
 function renderAll() {
-    renderPending();
-    renderIgnored();
-    renderDuplicateGroups();
-    renderBaseGroups();
-    if (currentCandidateBase) renderCandidatePanel();
+    renderPending(); renderDuplicateGroups(); renderBaseGroups(); renderIgnored();
+    document.getElementById('pendingCount').textContent = [...statusMap.values()].filter(s=>s==='pending').length;
+    document.getElementById('ignoredCount').textContent = [...statusMap.values()].filter(s=>s==='unique').length;
+    if(currentCandidateBase) renderCandidatePanel();
 }
 
 function renderPending() {
     pendingGrid.innerHTML = '';
-    const files = [];
-    for (let [fname, status] of statusMap) {
-        if (status === 'pending') files.push(fname);
-    }
-    document.getElementById('pendingCount').textContent = files.length;
+    const files = [...statusMap.entries()].filter(([_,s])=>s==='pending').map(([f])=>f);
     files.forEach(f => {
         const card = createStandardCard(f);
-        card.addEventListener('click', () => previewImage(f));
-        card.addEventListener('dblclick', e => {
-            e.preventDefault();
-            startCandidateCheck(f);
-        });
-        card.addEventListener('contextmenu', e => showContextMenu(e, f, 'pending'));
+        // 左键单击仅预览，移除双击查重
+        card.addEventListener('click', ()=>previewImage(f));
+        // 右键弹出菜单
+        card.addEventListener('contextmenu', e=>showContextMenu(e,f,'pending'));
         pendingGrid.appendChild(card);
     });
 }
 
 function renderIgnored() {
     ignoredGrid.innerHTML = '';
-    const files = [];
-    for (let [fname, status] of statusMap) {
-        if (status === 'unique') files.push(fname);
-    }
-    document.getElementById('ignoredCount').textContent = files.length;
+    const files = [...statusMap.entries()].filter(([_,s])=>s==='unique').map(([f])=>f);
     files.forEach(f => {
         const card = createStandardCard(f);
-        card.addEventListener('click', () => previewImage(f));
-        card.addEventListener('contextmenu', e => showContextMenu(e, f, 'ignored'));
+        card.addEventListener('click', ()=>previewImage(f));
+        card.addEventListener('contextmenu', e=>showContextMenu(e,f,'ignored'));
         ignoredGrid.appendChild(card);
     });
 }
 
 function renderDuplicateGroups() {
     dupGroupsDiv.innerHTML = '';
-    if (duplicateGroups.size === 0) {
-        dupGroupsDiv.innerHTML = '<div class="empty-hint">暂无重复分组</div>';
-        return;
-    }
-    for (let [gid, group] of duplicateGroups) {
+    if(duplicateGroups.size === 0) {dupGroupsDiv.innerHTML = '<div class="empty-hint">暂无重复分组</div>';return;}
+    for(let [gid, group] of duplicateGroups) {
         const wrap = document.createElement('div');
         wrap.className = 'group-folder';
         wrap.dataset.gid = gid;
