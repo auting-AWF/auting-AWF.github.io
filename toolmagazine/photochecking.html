@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>图片查重管理工具 Pro</title>
-<!-- 全局加载 JSZip -->
+<!-- 全局加载 JSZip 用于导出 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root {
@@ -380,7 +380,7 @@ input[type="file"] {
 
 <!-- 预处理进度条 -->
 <div id="progressBar" class="progress">
-    <span>⏳ 预处理中...</span>
+    <span id="progressLabel">⏳ 预处理中...</span>
     <div class="progress-bar">
         <div class="progress-fill" id="progressFill"></div>
     </div>
@@ -550,6 +550,7 @@ async function saveFullState() {
     }));
 
     await waitTransaction(tx);
+    db.close();
 }
 
 async function loadStateFromDB() {
@@ -559,6 +560,7 @@ async function loadStateFromDB() {
 
     const all = await promisifyRequest(store.getAll());
     await waitTransaction(tx);
+    db.close();
 
     imageHashMap.clear();
     statusMap.clear();
@@ -578,6 +580,16 @@ async function loadStateFromDB() {
             statusMap.set(item.filename, item.status || 'pending');
         }
     }
+}
+
+// 单独读取元信息，不加载全部数据，避免嵌套事务
+async function getDBMeta() {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const meta = await promisifyRequest(tx.objectStore(STORE_NAME).get('__meta__'));
+    await waitTransaction(tx);
+    db.close();
+    return meta;
 }
 
 // -------------------- Worker 哈希池 --------------------
@@ -630,6 +642,7 @@ fileInput=document.getElementById('fileInput'),
 progressBar=document.getElementById('progressBar'),
 progressFill=document.getElementById('progressFill'),
 progressText=document.getElementById('progressText'),
+progressLabel=document.getElementById('progressLabel'),
 importProgressBar=document.getElementById('importProgressBar'),
 importProgressFill=document.getElementById('importProgressFill'),
 importProgressText=document.getElementById('importProgressText'),
@@ -651,17 +664,19 @@ async function startPreprocessing(file) {
     isProcessing = true;
 
     try {
-        // 释放旧 ZipReader 资源
-        if (zipReader) {
-            try { await zipReader.close(); } catch(e) {}
-        }
-
-        if (zipReader && file.name === zipFileName && file.size === zipFileSize) {
+        // ========== 第一步：先判断内存缓存是否命中，命中则直接用，绝不提前关闭 ==========
+        if (zipReader && file.name === zipFileName && file.size === zipFileSize && entries.length > 0) {
             await loadStateFromDB();
             if (imageHashMap.size > 0) {
                 onPreprocessingDone();
                 return;
             }
+        }
+
+        // 不命中：才关闭旧资源，清空状态
+        if (zipReader) {
+            try { await zipReader.close(); } catch(e) {}
+            zipReader = null;
         }
 
         imageHashMap.clear();
@@ -670,6 +685,7 @@ async function startPreprocessing(file) {
         baseGroups.clear();
         currentCandidateBase = null;
         candidateList = [];
+        entries = [];
         cancelCandidate();
         hideContextMenu();
         zipFileName = file.name;
@@ -678,28 +694,35 @@ async function startPreprocessing(file) {
         dropZone.style.display = 'none';
         progressBar.classList.add('active');
         progressFill.style.width = '0%';
-        progressText.textContent = '读取压缩包...';
+        progressLabel.textContent = '⏳ 读取压缩包目录...';
+        progressText.textContent = '请稍候';
 
+        // ========== 第二步：读取压缩包目录 ==========
         zipReader = new ZipReader(new BlobReader(file));
         const allEntries = await zipReader.getEntries();
         entries = allEntries.filter(e => !e.directory && /\.(jpg|jpeg|png|webp|bmp|gif|tiff?)$/i.test(e.filename));
         totalImages = entries.length;
         processedCount = 0;
+
         if (totalImages === 0) throw new Error('压缩包内未找到图片文件');
 
-        const db = await openDB();
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const meta = await promisifyRequest(tx.objectStore(STORE_NAME).get('__meta__'));
+        progressLabel.textContent = '⏳ 预处理中...';
+        progressFill.style.width = '1%';
+        progressText.textContent = `共 ${totalImages} 张图片`;
 
+        // ========== 第三步：判断IndexedDB缓存是否命中 ==========
+        const meta = await getDBMeta();
         if (meta && meta.fileName === file.name && meta.fileSize === file.size) {
             await loadStateFromDB();
-            await waitTransaction(tx);
-            progressBar.classList.remove('active');
-            onPreprocessingDone();
-            return;
+            // 校验数据完整性
+            if (imageHashMap.size === totalImages) {
+                progressBar.classList.remove('active');
+                onPreprocessingDone();
+                return;
+            }
         }
-        await waitTransaction(tx);
 
+        // ========== 第四步：无缓存，计算感知哈希 ==========
         initWorkers();
         const CONCURRENT = 4;
         let readIdx = 0;
@@ -719,7 +742,14 @@ async function startPreprocessing(file) {
         progressBar.classList.remove('active');
         onPreprocessingDone();
     } catch(err) {
+        console.error(err);
         alert('预处理失败: ' + err.message);
+        // 失败后清理
+        if (zipReader) {
+            try { await zipReader.close(); } catch(e) {}
+            zipReader = null;
+        }
+        entries = [];
         dropZone.style.display = 'flex';
         progressBar.classList.remove('active');
     } finally {
@@ -896,7 +926,7 @@ async function resetWorkProgress() {
     isProcessing = true;
 
     try {
-        // 终止所有 Worker，清空任务队列
+        // 终止所有 Worker
         workers.forEach(w => w.terminate());
         workers = [];
         taskQueue = [];
@@ -908,10 +938,10 @@ async function resetWorkProgress() {
         // 释放 ZipReader
         if (zipReader) {
             try { await zipReader.close(); } catch(e) {}
+            zipReader = null;
         }
 
         // 清空全部全局状态
-        zipReader = null;
         entries = [];
         imageHashMap.clear();
         statusMap.clear();
@@ -929,6 +959,7 @@ async function resetWorkProgress() {
         const tx = db.transaction(STORE_NAME, 'readwrite');
         await promisifyRequest(tx.objectStore(STORE_NAME).clear());
         await waitTransaction(tx);
+        db.close();
 
         // 重置 UI
         mainLayout.style.display = 'none';
@@ -1000,7 +1031,7 @@ function initSplitters() {
 
     const mainLayout = document.getElementById('mainLayout');
     
-    // 垂直分隔条1：调整左列宽度
+    // 垂直分隔条1
     const splitterV1 = document.getElementById('splitterV1');
     let isDraggingV1 = false;
     splitterV1.addEventListener('mousedown', (e) => {
@@ -1023,7 +1054,7 @@ function initSplitters() {
         }
     });
 
-    // 垂直分隔条2：调整右列宽度
+    // 垂直分隔条2
     const splitterV2 = document.getElementById('splitterV2');
     let isDraggingV2 = false;
     splitterV2.addEventListener('mousedown', (e) => {
@@ -1046,7 +1077,7 @@ function initSplitters() {
         }
     });
 
-    // 水平分隔条：调整上下行高度
+    // 水平分隔条
     const splitterH = document.getElementById('splitterH');
     let isDraggingH = false;
     splitterH.addEventListener('mousedown', (e) => {
@@ -1375,7 +1406,6 @@ document.getElementById('importFile').addEventListener('change', async e=>{
         statusMap = new Map(data.images.map(i=>[i.filename, i.status]));
         duplicateGroups = new Map(data.dupGroups);
         baseGroups = new Map(data.baseGroups);
-        // 还原压缩包元数据，保证缓存匹配
         if (data.zipFileName) zipFileName = data.zipFileName;
         if (data.zipFileSize) zipFileSize = data.zipFileSize;
         updateImportProgress(75);
@@ -1385,7 +1415,6 @@ document.getElementById('importFile').addEventListener('change', async e=>{
 
         setTimeout(()=>{
             importProgressBar.classList.remove('active');
-            // 已加载压缩包则直接渲染，否则给出提示
             if (entries.length > 0) {
                 onPreprocessingDone();
                 alert('进度导入成功');
@@ -1421,7 +1450,6 @@ document.addEventListener('contextmenu', (e) => {
         hideContextMenu();
     }
 });
-// 滚动、窗口失焦时自动隐藏右键菜单
 window.addEventListener('scroll', hideContextMenu, true);
 window.addEventListener('blur', hideContextMenu);
 
