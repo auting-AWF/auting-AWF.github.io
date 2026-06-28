@@ -378,12 +378,22 @@ input[type="file"] {
 
 <div id="dropZone" class="drop-zone">拖放 ZIP 压缩包至此（图片格式：jpg/png/webp等）</div>
 
+<!-- 预处理进度条 -->
 <div id="progressBar" class="progress">
     <span>⏳ 预处理中...</span>
     <div class="progress-bar">
         <div class="progress-fill" id="progressFill"></div>
     </div>
     <span id="progressText">0%</span>
+</div>
+
+<!-- 独立导入进度条 -->
+<div id="importProgressBar" class="progress">
+    <span>📥 导入进度中...</span>
+    <div class="progress-bar">
+        <div class="progress-fill" id="importProgressFill"></div>
+    </div>
+    <span id="importProgressText">0%</span>
 </div>
 
 <div class="main-layout" id="mainLayout" style="display:none">
@@ -471,6 +481,8 @@ let baseGroups = new Map();
 let currentCandidateBase = null;
 let candidateList = [];
 let zipFileName = '', zipFileSize = 0;
+let splittersInitialized = false;
+let isProcessing = false;
 
 const THRESHOLD = document.getElementById('threshold');
 const thresholdVal = document.getElementById('thresholdVal');
@@ -479,7 +491,6 @@ THRESHOLD.addEventListener('input', ()=> thresholdVal.textContent = THRESHOLD.va
 // -------------------- IndexedDB --------------------
 const DB_NAME = 'DupFinderProDB', STORE_NAME = 'images';
 
-// IndexedDB Promise 化工具函数
 function promisifyRequest(request) {
     return new Promise((resolve, reject) => {
         request.onsuccess = () => resolve(request.result);
@@ -560,7 +571,8 @@ async function loadStateFromDB() {
         } else if (item.filename === '__baseGroups__') {
             baseGroups = new Map(JSON.parse(item.value));
         } else if (item.filename === '__meta__') {
-            continue;
+            zipFileName = item.fileName || '';
+            zipFileSize = item.fileSize || 0;
         } else {
             imageHashMap.set(item.filename, item.hash);
             statusMap.set(item.filename, item.status || 'pending');
@@ -618,6 +630,9 @@ fileInput=document.getElementById('fileInput'),
 progressBar=document.getElementById('progressBar'),
 progressFill=document.getElementById('progressFill'),
 progressText=document.getElementById('progressText'),
+importProgressBar=document.getElementById('importProgressBar'),
+importProgressFill=document.getElementById('importProgressFill'),
+importProgressText=document.getElementById('importProgressText'),
 mainLayout=document.getElementById('mainLayout');
 
 function updateProgressUI() {
@@ -626,44 +641,57 @@ function updateProgressUI() {
     progressText.textContent=`${pct}% (${processedCount}/${totalImages})`;
 }
 
+function updateImportProgress(pct) {
+    importProgressFill.style.width = pct + '%';
+    importProgressText.textContent = pct + '%';
+}
+
 async function startPreprocessing(file) {
-    if (zipReader) {
-        if(file.name===zipFileName&&file.size===zipFileSize) {
+    if (isProcessing) return;
+    isProcessing = true;
+
+    try {
+        // 释放旧 ZipReader 资源
+        if (zipReader) {
+            try { await zipReader.close(); } catch(e) {}
+        }
+
+        if (zipReader && file.name === zipFileName && file.size === zipFileSize) {
             await loadStateFromDB();
-            if(imageHashMap.size>0) {
+            if (imageHashMap.size > 0) {
                 onPreprocessingDone();
                 return;
             }
         }
-    }
 
-    imageHashMap.clear();
-    statusMap.clear();
-    duplicateGroups.clear();
-    baseGroups.clear();
-    currentCandidateBase=null;
-    candidateList=[];
-    zipFileName=file.name;
-    zipFileSize=file.size;
+        imageHashMap.clear();
+        statusMap.clear();
+        duplicateGroups.clear();
+        baseGroups.clear();
+        currentCandidateBase = null;
+        candidateList = [];
+        cancelCandidate();
+        hideContextMenu();
+        zipFileName = file.name;
+        zipFileSize = file.size;
 
-    dropZone.style.display='none';
-    progressBar.classList.add('active');
-    progressFill.style.width='0%';
-    progressText.textContent='读取压缩包...';
+        dropZone.style.display = 'none';
+        progressBar.classList.add('active');
+        progressFill.style.width = '0%';
+        progressText.textContent = '读取压缩包...';
 
-    try {
         zipReader = new ZipReader(new BlobReader(file));
         const allEntries = await zipReader.getEntries();
-        entries = allEntries.filter(e=>!e.directory&&/\.(jpg|jpeg|png|webp|bmp|gif|tiff?)$/i.test(e.filename));
-        totalImages=entries.length;
-        processedCount=0;
-        if(totalImages===0) throw new Error('无图片');
+        entries = allEntries.filter(e => !e.directory && /\.(jpg|jpeg|png|webp|bmp|gif|tiff?)$/i.test(e.filename));
+        totalImages = entries.length;
+        processedCount = 0;
+        if (totalImages === 0) throw new Error('压缩包内未找到图片文件');
 
-        const db=await openDB();
-        const tx=db.transaction(STORE_NAME,'readonly');
-        const meta=await promisifyRequest(tx.objectStore(STORE_NAME).get('__meta__'));
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const meta = await promisifyRequest(tx.objectStore(STORE_NAME).get('__meta__'));
 
-        if(meta&&meta.fileName===file.name&&meta.fileSize===file.size) {
+        if (meta && meta.fileName === file.name && meta.fileSize === file.size) {
             await loadStateFromDB();
             await waitTransaction(tx);
             progressBar.classList.remove('active');
@@ -673,34 +701,36 @@ async function startPreprocessing(file) {
         await waitTransaction(tx);
 
         initWorkers();
-        const CONCURRENT=4;
-        let readIdx=0;
-        const readNext=async()=>{
-            if(readIdx>=totalImages)return;
-            const idx=readIdx++;
-            const blob=await entries[idx].getData(new BlobWriter());
-            dispatchHashTask(blob,idx);
+        const CONCURRENT = 4;
+        let readIdx = 0;
+        const readNext = async () => {
+            if (readIdx >= totalImages) return;
+            const idx = readIdx++;
+            const blob = await entries[idx].getData(new BlobWriter());
+            dispatchHashTask(blob, idx);
             await readNext();
         };
-        await Promise.all(Array(CONCURRENT).fill(0).map(()=>readNext()));
+        await Promise.all(Array(CONCURRENT).fill(0).map(() => readNext()));
 
-        while(processedCount<totalImages) await new Promise(r=>setTimeout(r,200));
-        entries.forEach(e=>statusMap.set(e.filename,'pending'));
+        while (processedCount < totalImages) await new Promise(r => setTimeout(r, 200));
+        entries.forEach(e => statusMap.set(e.filename, 'pending'));
         await saveFullState();
 
         progressBar.classList.remove('active');
         onPreprocessingDone();
     } catch(err) {
-        alert('预处理失败: '+err.message);
-        dropZone.style.display='flex';
+        alert('预处理失败: ' + err.message);
+        dropZone.style.display = 'flex';
         progressBar.classList.remove('active');
+    } finally {
+        isProcessing = false;
     }
 }
 
 function onPreprocessingDone() {
-    mainLayout.style.display='grid';
-    document.getElementById('exportBtn').disabled=false;
-    document.getElementById('exportProgressBtn').disabled=false;
+    mainLayout.style.display = 'grid';
+    document.getElementById('exportBtn').disabled = false;
+    document.getElementById('exportProgressBtn').disabled = false;
     document.getElementById('resetBtn').disabled = false;
     document.getElementById('openZipLabel').textContent = '📁 更换压缩包';
     initSplitters();
@@ -809,7 +839,7 @@ function removeImageFromGroup(gid,filename) {
 // -------------------- 导出 ZIP --------------------
 async function exportGroupsAsZip() {
     if(baseGroups.size===0){
-        alert('无分组');
+        alert('无分组可导出');
         return;
     }
     const zip=new JSZip();
@@ -835,6 +865,8 @@ async function exportGroupsAsZip() {
 // -------------------- 导出工作进度 JSON --------------------
 async function exportProgress() {
     const data = {
+        zipFileName: zipFileName,
+        zipFileSize: zipFileSize,
         images: [...imageHashMap].map(([filename, hash]) => ({
             filename,
             hash,
@@ -857,44 +889,60 @@ async function exportProgress() {
 
 // -------------------- 重置工作进度 --------------------
 async function resetWorkProgress() {
+    if (isProcessing) return;
     if (!confirm('确定要重置当前工作进度吗？所有分组、处理状态都会被清空，且无法恢复。')) {
         return;
     }
+    isProcessing = true;
 
-    // 终止所有 Worker，清空任务队列
-    workers.forEach(w => w.terminate());
-    workers = [];
-    taskQueue = [];
+    try {
+        // 终止所有 Worker，清空任务队列
+        workers.forEach(w => w.terminate());
+        workers = [];
+        taskQueue = [];
 
-    // 清空全部全局状态
-    zipReader = null;
-    entries = [];
-    imageHashMap.clear();
-    statusMap.clear();
-    duplicateGroups.clear();
-    baseGroups.clear();
-    currentCandidateBase = null;
-    candidateList = [];
-    zipFileName = '';
-    zipFileSize = 0;
-    totalImages = 0;
-    processedCount = 0;
+        // 关闭面板和菜单
+        cancelCandidate();
+        hideContextMenu();
 
-    // 清空本地数据库缓存
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    await promisifyRequest(tx.objectStore(STORE_NAME).clear());
-    await waitTransaction(tx);
+        // 释放 ZipReader
+        if (zipReader) {
+            try { await zipReader.close(); } catch(e) {}
+        }
 
-    // 重置 UI 状态
-    mainLayout.style.display = 'none';
-    dropZone.style.display = 'flex';
-    progressBar.classList.remove('active');
-    document.getElementById('exportBtn').disabled = true;
-    document.getElementById('exportProgressBtn').disabled = true;
-    document.getElementById('resetBtn').disabled = true;
-    document.getElementById('openZipLabel').textContent = '📁 打开压缩包';
-    document.getElementById('fileInput').value = ''; // 清空文件输入，允许重复选择同一文件
+        // 清空全部全局状态
+        zipReader = null;
+        entries = [];
+        imageHashMap.clear();
+        statusMap.clear();
+        duplicateGroups.clear();
+        baseGroups.clear();
+        currentCandidateBase = null;
+        candidateList = [];
+        zipFileName = '';
+        zipFileSize = 0;
+        totalImages = 0;
+        processedCount = 0;
+
+        // 清空本地数据库
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        await promisifyRequest(tx.objectStore(STORE_NAME).clear());
+        await waitTransaction(tx);
+
+        // 重置 UI
+        mainLayout.style.display = 'none';
+        dropZone.style.display = 'flex';
+        progressBar.classList.remove('active');
+        importProgressBar.classList.remove('active');
+        document.getElementById('exportBtn').disabled = true;
+        document.getElementById('exportProgressBtn').disabled = true;
+        document.getElementById('resetBtn').disabled = true;
+        document.getElementById('openZipLabel').textContent = '📁 打开压缩包';
+        document.getElementById('fileInput').value = '';
+    } finally {
+        isProcessing = false;
+    }
 }
 
 // -------------------- 右键上下文菜单 --------------------
@@ -947,6 +995,9 @@ function handleContextAction(action) {
 
 // -------------------- 面板拖拽调整大小 --------------------
 function initSplitters() {
+    if (splittersInitialized) return;
+    splittersInitialized = true;
+
     const mainLayout = document.getElementById('mainLayout');
     
     // 垂直分隔条1：调整左列宽度
@@ -1019,7 +1070,7 @@ function initSplitters() {
     });
 }
 
-// -------------------- 懒加载 IntersectionObserver --------------------
+// -------------------- 懒加载缩略图 --------------------
 const lazyObserver = new IntersectionObserver((entriesObs) => {
     entriesObs.forEach(entry => {
         if (entry.isIntersecting) {
@@ -1051,7 +1102,7 @@ function previewImage(filename) {
     });
 }
 
-// 创建待处理/分组用卡片（缩略图为主）
+// 创建标准图片卡片
 function createStandardCard(filename, extraClass = '') {
     const card = document.createElement('div');
     card.className = 'image-card ' + extraClass;
@@ -1075,7 +1126,7 @@ function createStandardCard(filename, extraClass = '') {
     return card;
 }
 
-// 创建候选区卡片（文件名优先）
+// 创建候选区卡片
 function createCandidateCard(filename, isCurrentBase = false) {
     const card = document.createElement('div');
     card.className = 'candidate-card' + (isCurrentBase ? ' current-base' : '');
@@ -1274,7 +1325,6 @@ dropZone.addEventListener('drop', async e=>{
     dropZone.classList.remove('drag-over');
     const f=e.dataTransfer.files[0];
     if(!f || !f.name.toLowerCase().endsWith('.zip')) return;
-    // 新增：已有工作进度时先确认
     if(zipReader && imageHashMap.size > 0) {
         if(!confirm('更换压缩包将清空当前工作进度，确定继续吗？')) {
             return;
@@ -1286,7 +1336,6 @@ dropZone.addEventListener('drop', async e=>{
 fileInput.addEventListener('change', async e=>{
     const f=e.target.files[0];
     if(!f) return;
-    // 新增：已有工作进度时先确认
     if(zipReader && imageHashMap.size > 0) {
         if(!confirm('更换压缩包将清空当前工作进度，确定继续吗？')) {
             e.target.value = '';
@@ -1299,22 +1348,58 @@ fileInput.addEventListener('change', async e=>{
 document.getElementById('exportBtn').addEventListener('click', exportGroupsAsZip);
 document.getElementById('exportProgressBtn').addEventListener('click', exportProgress);
 document.getElementById('importBtn').addEventListener('click', ()=>document.getElementById('importFile').click());
+
+// 导入进度逻辑
 document.getElementById('importFile').addEventListener('change', async e=>{
     const file=e.target.files[0];
-    if(!file)return;
-    try{
-        const text=await file.text();
-        const data=JSON.parse(text);
-        imageHashMap=new Map(data.images.map(i=>[i.filename,i.hash]));
-        statusMap=new Map(data.images.map(i=>[i.filename,i.status]));
-        duplicateGroups=new Map(data.dupGroups);
-        baseGroups=new Map(data.baseGroups);
-        await saveFullState();
-        onPreprocessingDone();
-        alert('进度已导入，请确保压缩包与导出时一致。');
-    } catch(err){
-        alert('导入失败:'+err.message);
+    if(!file) return;
+    if (!confirm('导入进度将覆盖当前所有状态，确定继续吗？')) {
+        e.target.value = '';
+        return;
     }
+    if (isProcessing) return;
+    isProcessing = true;
+
+    importProgressBar.classList.add('active');
+    updateImportProgress(0);
+
+    try{
+        const text = await file.text();
+        updateImportProgress(25);
+
+        const data = JSON.parse(text);
+        updateImportProgress(50);
+
+        // 还原状态
+        imageHashMap = new Map(data.images.map(i=>[i.filename, i.hash]));
+        statusMap = new Map(data.images.map(i=>[i.filename, i.status]));
+        duplicateGroups = new Map(data.dupGroups);
+        baseGroups = new Map(data.baseGroups);
+        // 还原压缩包元数据，保证缓存匹配
+        if (data.zipFileName) zipFileName = data.zipFileName;
+        if (data.zipFileSize) zipFileSize = data.zipFileSize;
+        updateImportProgress(75);
+
+        await saveFullState();
+        updateImportProgress(100);
+
+        setTimeout(()=>{
+            importProgressBar.classList.remove('active');
+            // 已加载压缩包则直接渲染，否则给出提示
+            if (entries.length > 0) {
+                onPreprocessingDone();
+                alert('进度导入成功');
+            } else {
+                alert('进度已导入，请先加载对应的压缩包以使用完整功能。');
+            }
+        }, 300);
+    } catch(err){
+        importProgressBar.classList.remove('active');
+        alert('导入失败: ' + err.message);
+    } finally {
+        isProcessing = false;
+    }
+    e.target.value = '';
 });
 
 document.getElementById('addGroupBtn').addEventListener('click', createNewGroup);
@@ -1336,11 +1421,11 @@ document.addEventListener('contextmenu', (e) => {
         hideContextMenu();
     }
 });
+// 滚动、窗口失焦时自动隐藏右键菜单
+window.addEventListener('scroll', hideContextMenu, true);
+window.addEventListener('blur', hideContextMenu);
 
 document.getElementById('resetBtn').addEventListener('click', resetWorkProgress);
-
-// 初始化
-if(imageHashMap.size>0) onPreprocessingDone();
 </script>
 </body>
 </html>
