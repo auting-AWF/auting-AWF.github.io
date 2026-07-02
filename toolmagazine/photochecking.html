@@ -726,48 +726,117 @@ function dispatchHashTask(blob,index) {
 }
 
 // -------------------- OCR搜索 --------------------
+const MAX_OCR_CONCURRENT = 6;
+let ocrWorker = null;
+
+async function initOcrWorker() {
+    if (!ocrWorker) {
+        try {
+            ocrWorker = await Tesseract.createWorker('chi_sim', 1, {
+                logger: () => {},
+                gzip: true
+            });
+            await ocrWorker.setParameters({
+                tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK
+            });
+        } catch (e) {
+            try {
+                ocrWorker = await Tesseract.createWorker('eng', 1, {
+                    logger: () => {},
+                    gzip: true
+                });
+                await ocrWorker.setParameters({
+                    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK
+                });
+            } catch (e2) {
+                console.error('OCR初始化失败:', e2);
+            }
+        }
+    }
+    return ocrWorker;
+}
+
 async function ocrSearch() {
     const query = ocrSearchInput.value.trim();
     if (!query || isOcrSearching) return;
     isOcrSearching = true;
     ocrSearchBtn.innerHTML = '🔄';
-    searchResultCount.textContent = '搜索中...';
+    searchResultCount.textContent = '初始化OCR...';
+    
+    await initOcrWorker();
+    if (!ocrWorker) {
+        searchResultCount.textContent = 'OCR初始化失败';
+        isOcrSearching = false;
+        ocrSearchBtn.innerHTML = '搜索';
+        return;
+    }
     
     const pendingFiles = [...statusMap.entries()]
         .filter(([_, s]) => s === 'pending')
         .map(([f]) => f);
     
-    const results = [];
-    let processed = 0;
+    if (pendingFiles.length === 0) {
+        searchResultCount.textContent = '待处理组为空';
+        isOcrSearching = false;
+        ocrSearchBtn.innerHTML = '搜索';
+        return;
+    }
+    
+    const cachedFiles = [];
+    const uncachedFiles = [];
     
     for (const filename of pendingFiles) {
-        let text = ocrCache.get(filename);
-        if (!text) {
+        if (ocrCache.has(filename)) {
+            cachedFiles.push(filename);
+        } else {
+            uncachedFiles.push(filename);
+        }
+    }
+    
+    searchResultCount.textContent = `搜索中 (缓存${cachedFiles.length}张, OCR${uncachedFiles.length}张)...`;
+    
+    let processedCount = 0;
+    const results = [];
+    
+    for (let i = 0; i < cachedFiles.length; i += MAX_OCR_CONCURRENT) {
+        const batch = cachedFiles.slice(i, i + MAX_OCR_CONCURRENT);
+        batch.forEach(filename => {
+            const text = ocrCache.get(filename);
+            if (text.toLowerCase().includes(query.toLowerCase())) {
+                results.push(filename);
+            }
+            processedCount++;
+        });
+    }
+    
+    for (let i = 0; i < uncachedFiles.length; i += MAX_OCR_CONCURRENT) {
+        const batch = uncachedFiles.slice(i, i + MAX_OCR_CONCURRENT);
+        const promises = batch.map(async (filename) => {
             try {
                 const entry = entryMap.get(filename);
                 if (entry) {
                     const blob = await entry.getData(new BlobWriter());
-                    const { data: { text: ocrText } } = await Tesseract.recognize(
-                        blob, 'eng', {
-                            logger: () => {},
-                            psm: 6
-                        }
-                    );
-                    text = ocrText || '';
+                    const { data: { text: ocrText } } = await ocrWorker.recognize(blob);
+                    const text = ocrText || '';
                     ocrCache.set(filename, text);
+                    if (text.toLowerCase().includes(query.toLowerCase())) {
+                        return filename;
+                    }
                 }
             } catch (e) {
                 ocrCache.set(filename, '');
-                text = '';
             }
-        }
+            return null;
+        });
         
-        if (text.toLowerCase().includes(query.toLowerCase())) {
-            results.push(filename);
-        }
-        
-        processed++;
-        searchResultCount.textContent = `搜索中 ${Math.round((processed / pendingFiles.length) * 100)}%`;
+        const batchResults = await Promise.allSettled(promises);
+        batchResults.forEach((result) => {
+            if (result.status === 'fulfilled' && result.value) {
+                results.push(result.value);
+            }
+            processedCount++;
+            searchResultCount.textContent = `搜索中 ${Math.round((processedCount / pendingFiles.length) * 100)}%`;
+        });
     }
     
     highlightSearchResults(results);
