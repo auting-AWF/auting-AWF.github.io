@@ -799,7 +799,6 @@ async function preprocessImageForOcr(blob) {
             }
             ctx.putImageData(imageData, 0, 0);
             canvas.toBlob(resolve, 'image/jpeg', 0.8);
-            img = null;
         };
         img.onerror = () => {
             resolve(null);
