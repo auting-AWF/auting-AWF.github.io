@@ -12,6 +12,7 @@ jobs:
       contents: read
       pages: write
       id-token: write
+    timeout-minutes: 10
 
     environment:
       name: github-pages
@@ -20,6 +21,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -32,3 +35,5 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          timeout: 600
