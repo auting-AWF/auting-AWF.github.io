@@ -736,12 +736,15 @@ function dispatchHashTask(blob,index) {
 // -------------------- OCR搜索 --------------------
 const MAX_OCR_CONCURRENT = 6;
 let ocrWorker = null;
+let abortOcrSearch = false;
 
 async function initOcrWorker() {
     if (!ocrWorker) {
         try {
             ocrWorker = await Tesseract.createWorker('chi_sim+eng', 1, {
-                logger: () => {},
+                logger: m => {
+                    if (m.status === 'recognizing text') return;
+                },
                 gzip: true,
                 langPath: 'https://tessdata.projectnaptha.com/4.0.0'
             });
@@ -754,7 +757,9 @@ async function initOcrWorker() {
         } catch (e) {
             try {
                 ocrWorker = await Tesseract.createWorker('eng', 1, {
-                    logger: () => {},
+                    logger: m => {
+                        if (m.status === 'recognizing text') return;
+                    },
                     gzip: true
                 });
                 await ocrWorker.setParameters({
@@ -809,9 +814,19 @@ async function preprocessImageForOcr(blob) {
 
 async function ocrSearch() {
     const query = ocrSearchInput.value.trim();
-    if (!query || isOcrSearching) return;
+    if (!query) return;
+    
+    if (isOcrSearching) {
+        abortOcrSearch = true;
+        isOcrSearching = false;
+        ocrSearchBtn.innerHTML = '搜索';
+        searchResultCount.textContent = '搜索已取消';
+        return;
+    }
+    
+    abortOcrSearch = false;
     isOcrSearching = true;
-    ocrSearchBtn.innerHTML = '🔄';
+    ocrSearchBtn.innerHTML = '✖';
     searchResultCount.textContent = '初始化OCR...';
     
     await initOcrWorker();
@@ -844,25 +859,35 @@ async function ocrSearch() {
         }
     }
     
-    searchResultCount.textContent = `搜索中 (缓存${cachedFiles.length}张, OCR${uncachedFiles.length}张)...`;
-    
-    let processedCount = 0;
     const results = [];
+    const searchResultGrid = document.getElementById('searchResultGrid');
+    const searchResultPanel = document.getElementById('searchResultPanel');
+    const searchResultCountPanel = document.getElementById('searchResultCountPanel');
     
-    for (let i = 0; i < cachedFiles.length; i += MAX_OCR_CONCURRENT) {
-        const batch = cachedFiles.slice(i, i + MAX_OCR_CONCURRENT);
-        batch.forEach(filename => {
-            const text = ocrCache.get(filename);
-            if (text && text.toLowerCase().includes(query.toLowerCase())) {
-                results.push(filename);
-            }
-            processedCount++;
-        });
+    searchResultGrid.innerHTML = '';
+    searchResultPanel.style.display = 'flex';
+    searchResultPanel.style.flexDirection = 'column';
+    
+    for (const filename of cachedFiles) {
+        if (abortOcrSearch) break;
+        const text = ocrCache.get(filename);
+        if (text && text.toLowerCase().includes(query.toLowerCase())) {
+            results.push(filename);
+            const card = createStandardCard(filename);
+            card.addEventListener('click', () => previewImage(filename));
+            card.addEventListener('contextmenu', e => showContextMenu(e, filename, 'pending'));
+            searchResultGrid.appendChild(card);
+        }
     }
+    searchResultCountPanel.textContent = results.length;
     
-    for (let i = 0; i < uncachedFiles.length; i += MAX_OCR_CONCURRENT) {
+    let processedCount = cachedFiles.length;
+    searchResultCount.textContent = `搜索中 ${Math.round((processedCount / pendingFiles.length) * 100)}%`;
+    
+    for (let i = 0; i < uncachedFiles.length && !abortOcrSearch; i += MAX_OCR_CONCURRENT) {
         const batch = uncachedFiles.slice(i, i + MAX_OCR_CONCURRENT);
         const promises = batch.map(async (filename) => {
+            if (abortOcrSearch) return null;
             try {
                 const entry = entryMap.get(filename);
                 if (!entry) {
@@ -885,17 +910,25 @@ async function ocrSearch() {
         
         const batchResults = await Promise.allSettled(promises);
         batchResults.forEach((result) => {
+            if (abortOcrSearch) return;
             if (result.status === 'fulfilled' && result.value) {
                 results.push(result.value);
+                const card = createStandardCard(result.value);
+                card.addEventListener('click', () => previewImage(result.value));
+                card.addEventListener('contextmenu', e => showContextMenu(e, result.value, 'pending'));
+                searchResultGrid.appendChild(card);
+                searchResultCountPanel.textContent = results.length;
             }
             processedCount++;
             searchResultCount.textContent = `搜索中 ${Math.round((processedCount / pendingFiles.length) * 100)}%`;
         });
     }
     
-    highlightSearchResults(results);
-    searchResultCount.textContent = `找到 ${results.length} 张图片`;
+    if (!abortOcrSearch) {
+        searchResultCount.textContent = `找到 ${results.length} 张图片`;
+    }
     isOcrSearching = false;
+    abortOcrSearch = false;
     ocrSearchBtn.innerHTML = '搜索';
 }
 
