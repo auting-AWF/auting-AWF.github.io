@@ -486,6 +486,7 @@ input[type="file"] {
     <div class="search-group">
         <input type="text" id="ocrSearchInput" placeholder="🔍 OCR搜索图片...">
         <button id="ocrSearchBtn">搜索</button>
+        <button id="toggleResultBtn" class="btn" style="padding:2px 8px;font-size:12px;display:none;">📋</button>
         <span id="searchResultCount" class="search-result-count"></span>
     </div>
     <div class="threshold-group">
@@ -742,9 +743,7 @@ async function initOcrWorker() {
     if (!ocrWorker) {
         try {
             ocrWorker = await Tesseract.createWorker('chi_sim+eng', 1, {
-                logger: m => {
-                    if (m.status === 'recognizing text') return;
-                },
+                logger: () => {},
                 gzip: true,
                 langPath: 'https://tessdata.projectnaptha.com/4.0.0'
             });
@@ -752,14 +751,17 @@ async function initOcrWorker() {
                 tessedit_pageseg_mode: Tesseract.PSM.AUTO,
                 preserve_interword_spaces: '1',
                 load_system_dawg: '0',
-                load_freq_dawg: '0'
+                load_freq_dawg: '0',
+                load_punc_dawg: '0',
+                load_number_dawg: '0',
+                load_unambig_dawg: '0',
+                load_word_list: '0',
+                load_bigram_dawg: '0'
             });
         } catch (e) {
             try {
                 ocrWorker = await Tesseract.createWorker('eng', 1, {
-                    logger: m => {
-                        if (m.status === 'recognizing text') return;
-                    },
+                    logger: () => {},
                     gzip: true
                 });
                 await ocrWorker.setParameters({
@@ -859,65 +861,68 @@ async function ocrSearch() {
         }
     }
     
-    const results = [];
     const searchResultGrid = document.getElementById('searchResultGrid');
     const searchResultPanel = document.getElementById('searchResultPanel');
     const searchResultCountPanel = document.getElementById('searchResultCountPanel');
+    const toggleResultBtn = document.getElementById('toggleResultBtn');
     
     searchResultGrid.innerHTML = '';
     searchResultPanel.style.display = 'flex';
     searchResultPanel.style.flexDirection = 'column';
+    toggleResultBtn.style.display = 'flex';
     
     for (const filename of cachedFiles) {
         if (abortOcrSearch) break;
         const text = ocrCache.get(filename);
         if (text && text.toLowerCase().includes(query.toLowerCase())) {
-            results.push(filename);
             const card = createStandardCard(filename);
             card.addEventListener('click', () => previewImage(filename));
             card.addEventListener('contextmenu', e => showContextMenu(e, filename, 'pending'));
             searchResultGrid.appendChild(card);
         }
     }
-    searchResultCountPanel.textContent = results.length;
+    searchResultCountPanel.textContent = searchResultGrid.children.length;
     
     let processedCount = cachedFiles.length;
     searchResultCount.textContent = `搜索中 ${Math.round((processedCount / pendingFiles.length) * 100)}%`;
     
-    for (let i = 0; i < uncachedFiles.length && !abortOcrSearch; i += MAX_OCR_CONCURRENT) {
-        const batch = uncachedFiles.slice(i, i + MAX_OCR_CONCURRENT);
-        const promises = batch.map(async (filename) => {
-            if (abortOcrSearch) return null;
-            try {
-                const entry = entryMap.get(filename);
-                if (!entry) {
-                    ocrCache.set(filename, '');
-                    return null;
-                }
-                const blob = await entry.getData(new BlobWriter());
-                const processedBlob = await preprocessImageForOcr(blob);
-                const { data: { text: ocrText } } = await ocrWorker.recognize(processedBlob || blob);
-                const text = (ocrText || '').trim();
-                ocrCache.set(filename, text);
-                if (text && text.toLowerCase().includes(query.toLowerCase())) {
-                    return filename;
-                }
-            } catch (e) {
+    const ocrPromises = uncachedFiles.map(async (filename, index) => {
+        if (abortOcrSearch) return { filename, text: null };
+        try {
+            const entry = entryMap.get(filename);
+            if (!entry) {
                 ocrCache.set(filename, '');
+                return { filename, text: '' };
             }
-            return null;
-        });
+            const blob = await entry.getData(new BlobWriter());
+            if (abortOcrSearch) return { filename, text: null };
+            const processedBlob = await preprocessImageForOcr(blob);
+            if (abortOcrSearch) return { filename, text: null };
+            const { data: { text: ocrText } } = await ocrWorker.recognize(processedBlob || blob);
+            const text = (ocrText || '').trim();
+            ocrCache.set(filename, text);
+            return { filename, text };
+        } catch (e) {
+            ocrCache.set(filename, '');
+            return { filename, text: '' };
+        }
+    });
+    
+    for (let i = 0; i < ocrPromises.length && !abortOcrSearch; i += MAX_OCR_CONCURRENT) {
+        const batchPromises = ocrPromises.slice(i, Math.min(i + MAX_OCR_CONCURRENT, ocrPromises.length));
+        const batchResults = await Promise.allSettled(batchPromises);
         
-        const batchResults = await Promise.allSettled(promises);
         batchResults.forEach((result) => {
             if (abortOcrSearch) return;
             if (result.status === 'fulfilled' && result.value) {
-                results.push(result.value);
-                const card = createStandardCard(result.value);
-                card.addEventListener('click', () => previewImage(result.value));
-                card.addEventListener('contextmenu', e => showContextMenu(e, result.value, 'pending'));
-                searchResultGrid.appendChild(card);
-                searchResultCountPanel.textContent = results.length;
+                const { filename, text } = result.value;
+                if (text && text.toLowerCase().includes(query.toLowerCase())) {
+                    const card = createStandardCard(filename);
+                    card.addEventListener('click', () => previewImage(filename));
+                    card.addEventListener('contextmenu', e => showContextMenu(e, filename, 'pending'));
+                    searchResultGrid.appendChild(card);
+                    searchResultCountPanel.textContent = searchResultGrid.children.length;
+                }
             }
             processedCount++;
             searchResultCount.textContent = `搜索中 ${Math.round((processedCount / pendingFiles.length) * 100)}%`;
@@ -925,7 +930,7 @@ async function ocrSearch() {
     }
     
     if (!abortOcrSearch) {
-        searchResultCount.textContent = `找到 ${results.length} 张图片`;
+        searchResultCount.textContent = `找到 ${searchResultGrid.children.length} 张图片`;
     }
     isOcrSearching = false;
     abortOcrSearch = false;
@@ -965,11 +970,6 @@ function highlightSearchResults(filenames) {
 }
 
 function clearOcrSearch() {
-    ocrSearchInput.value = '';
-    searchResultCount.textContent = '';
-    document.querySelectorAll('.image-card').forEach(card => {
-        card.classList.remove('highlight-card');
-    });
     document.getElementById('searchResultPanel').style.display = 'none';
 }
 
@@ -1766,9 +1766,12 @@ document.getElementById('resetBtn').addEventListener('click', resetWorkProgress)
 ocrSearchBtn.addEventListener('click', ocrSearch);
 ocrSearchInput.addEventListener('keyup', e => {
     if (e.key === 'Enter') ocrSearch();
-    if (!e.target.value.trim()) clearOcrSearch();
 });
 document.getElementById('closeSearchBtn').addEventListener('click', clearOcrSearch);
+document.getElementById('toggleResultBtn').addEventListener('click', () => {
+    const panel = document.getElementById('searchResultPanel');
+    panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
+});
 batchSelectBtn.addEventListener('click', toggleMultiSelectMode);
 batchIgnoreBtn.addEventListener('click', batchIgnoreSelected);
 
