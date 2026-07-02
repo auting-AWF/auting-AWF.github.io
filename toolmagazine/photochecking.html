@@ -525,6 +525,14 @@ input[type="file"] {
         <div class="scroll-area" id="pendingGrid"></div>
     </div>
 
+    <div class="panel" id="searchResultPanel" style="display:none; grid-row: 1 / 4; grid-column: 1 / 2; position:absolute; top:0; left:0; width:100%; height:100%; z-index:10;">
+        <div class="panel-header">
+            🔍 OCR搜索结果 <span id="searchResultCountPanel">0</span>
+            <button id="closeSearchBtn" class="btn" style="padding:2px 8px;font-size:12px;">关闭</button>
+        </div>
+        <div class="scroll-area" id="searchResultGrid"></div>
+    </div>
+
     <div class="splitter vertical" id="splitterV1" style="grid-column: 2 / 3;"></div>
 
     <div class="panel candidate-pool" id="candidatePanel" style="display:none; grid-row: 1 / 2; grid-column: 3 / 4;">
@@ -854,6 +862,27 @@ function highlightSearchResults(filenames) {
         const card = document.querySelector(`.image-card[data-filename="${filename}"]`);
         if (card) card.classList.add('highlight-card');
     });
+    
+    const searchResultPanel = document.getElementById('searchResultPanel');
+    const searchResultGrid = document.getElementById('searchResultGrid');
+    const searchResultCountPanel = document.getElementById('searchResultCountPanel');
+    
+    if (filenames.length > 0) {
+        searchResultCountPanel.textContent = filenames.length;
+        searchResultGrid.innerHTML = '';
+        
+        filenames.forEach(filename => {
+            const card = createStandardCard(filename);
+            card.addEventListener('click', () => previewImage(filename));
+            card.addEventListener('contextmenu', e => showContextMenu(e, filename, 'pending'));
+            searchResultGrid.appendChild(card);
+        });
+        
+        searchResultPanel.style.display = 'flex';
+        searchResultPanel.style.flexDirection = 'column';
+    } else {
+        searchResultPanel.style.display = 'none';
+    }
 }
 
 function clearOcrSearch() {
@@ -862,6 +891,7 @@ function clearOcrSearch() {
     document.querySelectorAll('.image-card').forEach(card => {
         card.classList.remove('highlight-card');
     });
+    document.getElementById('searchResultPanel').style.display = 'none';
 }
 
 // -------------------- 预处理 --------------------
@@ -1659,6 +1689,7 @@ ocrSearchInput.addEventListener('keyup', e => {
     if (e.key === 'Enter') ocrSearch();
     if (!e.target.value.trim()) clearOcrSearch();
 });
+document.getElementById('closeSearchBtn').addEventListener('click', clearOcrSearch);
 batchSelectBtn.addEventListener('click', toggleMultiSelectMode);
 batchIgnoreBtn.addEventListener('click', batchIgnoreSelected);
 
