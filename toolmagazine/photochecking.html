@@ -518,7 +518,7 @@ input[type="file"] {
         <div class="panel-header">
             📋 待处理 <span id="pendingCount">0</span>
             <div style="display:flex;gap:6px;">
-                <button id="batchSelectBtn" class="btn" style="padding:2px 8px;font-size:12px;">全选</button>
+                <button id="batchSelectBtn" class="btn" style="padding:2px 8px;font-size:12px;">多选模式</button>
                 <button id="batchIgnoreBtn" class="btn" style="padding:2px 8px;font-size:12px;display:none;" disabled>批量忽略</button>
             </div>
         </div>
@@ -748,7 +748,7 @@ async function ocrSearch() {
                 if (entry) {
                     const blob = await entry.getData(new BlobWriter());
                     const { data: { text: ocrText } } = await Tesseract.recognize(
-                        blob, 'chi_sim', {
+                        blob, 'eng', {
                             logger: () => {},
                             psm: 6
                         }
@@ -1420,7 +1420,7 @@ function toggleMultiSelectMode() {
         batchIgnoreBtn.style.display = 'flex';
         pendingMultiSelected.clear();
     } else {
-        batchSelectBtn.textContent = '全选';
+        batchSelectBtn.textContent = '多选模式';
         batchIgnoreBtn.style.display = 'none';
         pendingMultiSelected.clear();
     }
@@ -1590,14 +1590,7 @@ ocrSearchInput.addEventListener('keyup', e => {
     if (e.key === 'Enter') ocrSearch();
     if (!e.target.value.trim()) clearOcrSearch();
 });
-batchSelectBtn.addEventListener('click', () => {
-    if (multiSelectMode) {
-        toggleMultiSelectMode();
-    } else {
-        toggleMultiSelectMode();
-        batchSelectAll();
-    }
-});
+batchSelectBtn.addEventListener('click', toggleMultiSelectMode);
 batchIgnoreBtn.addEventListener('click', batchIgnoreSelected);
 
 // 预览弹窗关闭
