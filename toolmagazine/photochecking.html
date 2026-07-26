@@ -947,6 +947,8 @@ const CONFIG = {
 };
 
 const thumbCache = new Map();
+const MAX_THUMB_CACHE = 500;
+const thumbLRU = [];
 let ocrWorker = null;
 let ocrWorkerReady = false;
 
@@ -1135,6 +1137,9 @@ function destroyAllWorkers() {
     workers = [];
     workerBusy = [];
     activeTasks = 0;
+    if (workerUrl) {
+        URL.revokeObjectURL(workerUrl);
+    }
 }
 
 async function processImageInWorker(blob, index, filename) {
@@ -1219,6 +1224,7 @@ async function initOcrWorker() {
 async function preprocessForOcr(blob) {
     return new Promise((resolve) => {
         const img = new Image();
+        const tempUrl = URL.createObjectURL(blob);
         img.onload = () => {
             const maxSize = 1600;
             let w = img.width, h = img.height;
@@ -1237,10 +1243,16 @@ async function preprocessForOcr(blob) {
                 d[i] = d[i+1] = d[i+2] = gray;
             }
             ctx.putImageData(imageData, 0, 0);
-            canvas.toBlob(resolve, 'image/jpeg', 0.92);
+            canvas.toBlob((result) => {
+                URL.revokeObjectURL(tempUrl);
+                resolve(result);
+            }, 'image/jpeg', 0.92);
         };
-        img.onerror = () => resolve(blob);
-        img.src = URL.createObjectURL(blob);
+        img.onerror = () => {
+            URL.revokeObjectURL(tempUrl);
+            resolve(blob);
+        };
+        img.src = tempUrl;
     });
 }
 
@@ -1266,8 +1278,50 @@ const lazyObserver = new IntersectionObserver((entries) => {
     });
 }, { rootMargin: '400px', threshold: 0.01 });
 
+function revokeThumbURL(filename) {
+    const url = thumbCache.get(filename);
+    if (url) {
+        URL.revokeObjectURL(url);
+        thumbCache.delete(filename);
+        const idx = thumbLRU.indexOf(filename);
+        if (idx !== -1) thumbLRU.splice(idx, 1);
+    }
+}
+
+function clearThumbCache() {
+    for (const [filename, url] of thumbCache) {
+        URL.revokeObjectURL(url);
+    }
+    thumbCache.clear();
+    thumbLRU.length = 0;
+    revokeAllOriginalUrls();
+}
+
+function addToThumbCache(filename, url) {
+    if (thumbCache.has(filename)) {
+        const idx = thumbLRU.indexOf(filename);
+        if (idx !== -1) thumbLRU.splice(idx, 1);
+    } else {
+        thumbLRU.push(filename);
+    }
+    thumbCache.set(filename, url);
+    
+    while (thumbLRU.length > MAX_THUMB_CACHE) {
+        const oldest = thumbLRU.shift();
+        if (oldest) revokeThumbURL(oldest);
+    }
+}
+
 async function loadThumbnail(filename) {
-    if (thumbCache.has(filename)) return thumbCache.get(filename);
+    if (thumbCache.has(filename)) {
+        const url = thumbCache.get(filename);
+        const idx = thumbLRU.indexOf(filename);
+        if (idx !== -1) {
+            thumbLRU.splice(idx, 1);
+            thumbLRU.push(filename);
+        }
+        return url;
+    }
     const entry = state.entryMap.get(filename);
     if (!entry) return null;
     try {
@@ -1281,13 +1335,13 @@ async function loadThumbnail(filename) {
         bitmap.close();
         const thumbBlob = await canvas.convertToBlob({ type: 'image/webp', quality: 0.75 });
         const url = URL.createObjectURL(thumbBlob);
-        thumbCache.set(filename, url);
+        addToThumbCache(filename, url);
         return url;
     } catch (e) {
         try {
             const blob = await entry.getData(new BlobWriter());
             const url = URL.createObjectURL(blob);
-            thumbCache.set(filename, url);
+            addToThumbCache(filename, url);
             return url;
         } catch (e2) {
             return null;
@@ -1295,11 +1349,25 @@ async function loadThumbnail(filename) {
     }
 }
 
+const originalUrls = new Map();
+
 async function loadOriginal(filename) {
+    if (originalUrls.has(filename)) {
+        URL.revokeObjectURL(originalUrls.get(filename));
+    }
     const entry = state.entryMap.get(filename);
     if (!entry) return null;
     const blob = await entry.getData(new BlobWriter());
-    return URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    originalUrls.set(filename, url);
+    return url;
+}
+
+function revokeAllOriginalUrls() {
+    for (const [, url] of originalUrls) {
+        URL.revokeObjectURL(url);
+    }
+    originalUrls.clear();
 }
 
 /* ================================================
@@ -1520,7 +1588,7 @@ function computeVisualSimilarity(features1, features2) {
         
         const colorSim = cosineSimilarity(f1.color, f2.color);
         const lbpSim = cosineSimilarity(f1.lbp, f2.lbp);
-        const hashSim = 1 - (hashDistances[level] / 32);
+        const hashSim = 1 - (hashDistances[level] / 64);
         const levelSim = colorSim * 0.4 + lbpSim * 0.3 + hashSim * 0.3;
         
         totalSim += CONFIG.PYRAMID_WEIGHTS[level] * levelSim;
@@ -2273,12 +2341,13 @@ function markAsUnique(filename) {
 
 function moveToPending(filename) {
     for (const [_, group] of state.baseGroups) group.images = group.images.filter(f => f !== filename);
-    for (const [_, group] of state.duplicateGroups) {
+    for (const [gid, group] of [...state.duplicateGroups]) {
         if (group.base === filename) {
-            state.statusMap.set(filename, 'pending');
-            continue;
+            group.duplicates.forEach(f => state.statusMap.set(f, 'pending'));
+            state.duplicateGroups.delete(gid);
+        } else {
+            group.duplicates = group.duplicates.filter(f => f !== filename);
         }
-        group.duplicates = group.duplicates.filter(f => f !== filename);
     }
     state.statusMap.set(filename, 'pending');
     state.selectedFiles.delete(filename);
@@ -2289,7 +2358,10 @@ function moveToPending(filename) {
 function deleteBaseImage(baseFilename) {
     if (!confirm(`删除基准图「${baseFilename}」会同步删除所有以此图为基准的重复分组，确定继续？`)) return;
     for (const [gid, group] of [...state.duplicateGroups]) {
-        if (group.base === baseFilename) state.duplicateGroups.delete(gid);
+        if (group.base === baseFilename) {
+            group.duplicates.forEach(f => state.statusMap.set(f, 'pending'));
+            state.duplicateGroups.delete(gid);
+        }
     }
     state.statusMap.set(baseFilename, 'pending');
     for (const [_, g] of state.baseGroups) g.images = g.images.filter(f => f !== baseFilename);
@@ -2559,7 +2631,10 @@ async function performOcrSearch(query) {
     const worker = await initOcrWorker();
     if (!worker) {
         alert('OCR 引擎初始化失败，请检查网络连接');
-        state.searchResults = results;
+        buildInvertedIndex();
+        const indexedResults = searchOcrIndex(query);
+        const finalResults = [...new Set([...results, ...indexedResults.filter(f => pendingFiles.includes(f))])];
+        state.searchResults = finalResults;
         return;
     }
     
@@ -2762,9 +2837,25 @@ function handleDropOnImage(sourceFilename, targetFilename) {
         alert('源图片哈希尚未计算');
         return;
     }
+    
+    const targetStatus = state.statusMap.get(targetFilename);
+    const sourceStatus = state.statusMap.get(sourceFilename);
+    if (targetStatus === 'ignored' || sourceStatus === 'ignored') {
+        alert('已忽略的图片不能参与查重');
+        return;
+    }
+    
     const dist = hammingDistance(sourceHash, targetHash);
     if (dist <= threshold) {
-        const action = confirm(`相似度: ${dist} (阈值: ${threshold})\n\n是否将「${sourceFilename}」标记为「${targetFilename}」的重复图片？\n\n确定后可在重复组查看。`);
+        let actionMsg = `相似度: ${dist} (阈值: ${threshold})\n\n`;
+        if (targetStatus === 'base') {
+            actionMsg += `「${targetFilename}」已是基准图，`;
+        } else if (targetStatus === 'duplicate') {
+            actionMsg += `「${targetFilename}」已是重复图，`;
+        }
+        actionMsg += `是否将「${sourceFilename}」标记为「${targetFilename}」的重复图片？\n\n确定后可在重复组查看。`;
+        
+        const action = confirm(actionMsg);
         if (action) {
             state.statusMap.set(targetFilename, 'base');
             state.statusMap.set(sourceFilename, 'duplicate');
@@ -2887,7 +2978,7 @@ async function startPreprocessing(file) {
         
         if (state.zipReader) { try { await state.zipReader.close(); } catch(e) {} state.zipReader = null; }
         destroyAllWorkers();
-        thumbCache.clear();
+        clearThumbCache();
         state.imageHashMap.clear();
         state.ocrTextMap.clear();
         state.statusMap.clear();
@@ -2960,7 +3051,12 @@ async function startPreprocessing(file) {
             if (state.zipReader) { try { await state.zipReader.close(); } catch(e) {} state.zipReader = null; }
             state.entries = [];
             state.entryMap.clear();
-            thumbCache.clear();
+            state.imageHashMap.clear();
+            state.statusMap.clear();
+            state.ocrTextMap.clear();
+            state.imageFeatureMap.clear();
+            state.invertedIndex.clear();
+            clearThumbCache();
             els.dropzone.style.display = 'flex';
             alert('已取消预处理');
             return;
@@ -2975,7 +3071,7 @@ async function startPreprocessing(file) {
         if (state.zipReader) { try { await state.zipReader.close(); } catch(e) {} state.zipReader = null; }
         state.entries = [];
         state.entryMap.clear();
-        thumbCache.clear();
+        clearThumbCache();
         els.dropzone.style.display = 'flex';
         hideProgress();
     } finally {
@@ -3080,7 +3176,7 @@ async function importProgress() {
         state.baseGroups = new Map(data.baseGroups);
         if (data.zipFileName) state.zipFileName = data.zipFileName;
         if (data.zipFileSize) state.zipFileSize = data.zipFileSize;
-        thumbCache.clear();
+        clearThumbCache();
         
         await saveState();
         alert('进度导入成功');
@@ -3122,7 +3218,7 @@ async function resetWorkProgress() {
         state.zipFileSize = 0;
         totalImagesCount = 0;
         processedCount = 0;
-        thumbCache.clear();
+        clearThumbCache();
         
         const db = await openDB();
         const tx = db.transaction(STORE_NAME, 'readwrite');
