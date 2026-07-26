@@ -1064,6 +1064,28 @@ async function loadState() {
 const workerBlob = new Blob([`
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tiff', 'svg', 'avif'];
 
+function computeHash(img) {
+    const c = new OffscreenCanvas(9, 8);
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'low';
+    ctx.drawImage(img, 0, 0, 9, 8);
+    
+    const d = ctx.getImageData(0, 0, 9, 8).data;
+    let h = 0n;
+    for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+            const i = (y * 9 + x) * 4;
+            const j = i + 4;
+            const g = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
+            const g2 = d[j] * 0.299 + d[j+1] * 0.587 + d[j+2] * 0.114;
+            h <<= 1n;
+            if (g > g2) h |= 1n;
+        }
+    }
+    return h.toString(16).padStart(16, '0');
+}
+
 self.onmessage = async function(e) {
     const { blob, index, filename } = e.data;
     
@@ -1080,29 +1102,26 @@ self.onmessage = async function(e) {
             setTimeout(() => reject(new Error('timeout')), 15000)
         );
         
-        const imgPromise = createImageBitmap(blob);
-        const img = await Promise.race([imgPromise, timeoutPromise]);
-        
-        const c = new OffscreenCanvas(9, 8);
-        const ctx = c.getContext('2d');
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'low';
-        ctx.drawImage(img, 0, 0, 9, 8);
-        
-        const d = ctx.getImageData(0, 0, 9, 8).data;
-        let h = 0n;
-        for (let y = 0; y < 8; y++) {
-            for (let x = 0; x < 8; x++) {
-                const i = (y * 9 + x) * 4;
-                const j = i + 4;
-                const g = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
-                const g2 = d[j] * 0.299 + d[j+1] * 0.587 + d[j+2] * 0.114;
-                h <<= 1n;
-                if (g > g2) h |= 1n;
-            }
+        let img;
+        try {
+            img = await Promise.race([
+                createImageBitmap(blob, { resizeWidth: 9, resizeHeight: 8, resizeQuality: 'pixelated' }),
+                timeoutPromise
+            ]);
+        } catch (resizeErr) {
+            img = await Promise.race([
+                createImageBitmap(blob),
+                timeoutPromise
+            ]);
+            const hash = computeHash(img);
+            img.close();
+            self.postMessage({ index, hash });
+            return;
         }
+        
+        const hash = computeHash(img);
         img.close();
-        self.postMessage({ index, hash: h.toString(16).padStart(16, '0') });
+        self.postMessage({ index, hash });
     } catch (err) {
         self.postMessage({ index, hash: 'error-' + (err.message || 'unknown').substring(0, 20) });
     }
@@ -3056,19 +3075,29 @@ async function startPreprocessing(file) {
         startProgressRefresh();
         
         const tasks = [];
+        const BATCH_SIZE = 12;
         
-        for (let idx = 0; idx < totalImagesCount && !state.abortSearch; idx++) {
-            await waitForWorkerSlot();
+        for (let idx = 0; idx < totalImagesCount && !state.abortSearch; idx += BATCH_SIZE) {
             if (state.abortSearch) break;
-            try {
-                const filename = state.entries[idx].filename;
-                const blob = await state.entries[idx].getData(new BlobWriter());
+            
+            const batchIdx = [];
+            const batchPromises = [];
+            
+            for (let j = 0; j < BATCH_SIZE && idx + j < totalImagesCount; j++) {
                 if (state.abortSearch) break;
-                const task = processImageInWorker(blob, idx, filename);
+                const i = idx + j;
+                batchIdx.push(i);
+                batchPromises.push(state.entries[i].getData(new BlobWriter()));
+            }
+            
+            const blobs = await Promise.all(batchPromises);
+            
+            for (let k = 0; k < batchIdx.length && !state.abortSearch; k++) {
+                const i = batchIdx[k];
+                const blob = blobs[k];
+                const filename = state.entries[i].filename;
+                const task = processImageInWorker(blob, i, filename);
                 tasks.push(task);
-            } catch (e) {
-                processedCount++;
-                updateProgressUI();
             }
         }
         
