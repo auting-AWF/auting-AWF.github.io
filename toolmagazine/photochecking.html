@@ -583,7 +583,7 @@ input[type="file"] { display: none; }
     position: fixed;
     right: 20px;
     top: 80px;
-    width: 340px;
+    width: 380px;
     max-height: calc(100vh - 120px);
     background: var(--surface);
     border: 1px solid var(--border);
@@ -621,18 +621,19 @@ input[type="file"] { display: none; }
 .candidate-list {
     flex: 1;
     overflow-y: auto;
-    padding: 8px;
+    padding: 10px;
 }
 .candidate-list::-webkit-scrollbar { width: 6px; }
 .candidate-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 .candidate-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px;
+    gap: 10px;
+    padding: 10px;
     border-radius: 8px;
     cursor: pointer;
     transition: background 0.15s;
+    margin-bottom: 6px;
 }
 .candidate-item:hover { background: var(--border); }
 .candidate-item.current {
@@ -640,27 +641,32 @@ input[type="file"] { display: none; }
     background: rgba(74, 158, 255, 0.1);
 }
 .candidate-item .thumb {
-    width: 40px;
-    height: 32px;
+    width: 48px;
+    height: 36px;
     object-fit: cover;
     border-radius: 4px;
     background: #111;
+    flex-shrink: 0;
 }
 .candidate-item .fname {
     flex: 1;
     font-size: 12px;
     word-break: break-all;
-    line-height: 1.3;
+    line-height: 1.4;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
 }
-.candidate-item input[type="checkbox"] {
-    accent-color: var(--accent);
-    width: 16px;
-    height: 16px;
-}
+.candidate-item input[type="checkbox"],
 .candidate-item input[type="radio"] {
     accent-color: var(--accent);
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
 }
 .candidate-steps {
     display: flex;
@@ -688,30 +694,40 @@ input[type="file"] { display: none; }
 }
 .base-group-select {
     display: flex;
-    gap: 6px;
-    align-items: center;
-    flex: 1;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
 }
 .base-group-select select {
-    flex: 1;
-    padding: 6px 8px;
+    width: 100%;
+    padding: 8px 10px;
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: 6px;
     background: var(--bg-input);
     color: var(--text);
     font-size: 12px;
-}
-.base-group-select button {
-    padding: 6px 10px;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    font-size: 11px;
     cursor: pointer;
 }
-.base-group-select button:hover {
-    background: var(--accent-hover);
+.base-group-select select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.base-group-select .btn-new-group {
+    width: 100%;
+    padding: 8px;
+    background: var(--bg-secondary);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.base-group-select .btn-new-group:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
 }
 .candidate-footer {
     padding: 10px;
@@ -944,10 +960,6 @@ input[type="file"] { display: none; }
     </div>
     <div class="candidate-list" id="candidateList"></div>
     <div class="candidate-footer">
-        <div class="base-group-select" id="baseGroupSelect">
-            <select id="baseGroupDropdown"></select>
-            <button id="createNewGroup">+ 新建分组</button>
-        </div>
         <button class="cancel" id="candidateCancel">取消</button>
         <button class="confirm" id="candidateConfirm">下一步</button>
     </div>
@@ -1377,7 +1389,7 @@ const lazyObserver = new IntersectionObserver((entries) => {
             lazyObserver.unobserve(img);
         }
     });
-}, { rootMargin: '400px', threshold: 0.01 });
+}, { rootMargin: '600px', threshold: 0 });
 
 function revokeThumbURL(filename) {
     const url = thumbCache.get(filename);
@@ -2046,7 +2058,13 @@ function createImageCard(filename, options = {}) {
         <div class="filename" title="${filename}">${filename}</div>
     `;
     
-    if (!cached) lazyObserver.observe(card.querySelector('.thumb'));
+    if (cached) {
+        const idx = thumbLRU.indexOf(filename);
+        if (idx !== -1) {
+            thumbLRU.splice(idx, 1);
+            thumbLRU.push(filename);
+        }
+    }
     
     card.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -2142,6 +2160,13 @@ function renderVirtualGrid(container, files, area) {
         }
         
         gridContent.appendChild(grid);
+        
+        requestAnimationFrame(() => {
+            const thumbs = gridContent.querySelectorAll('.thumb:not([src])');
+            thumbs.forEach(img => {
+                lazyObserver.observe(img);
+            });
+        });
     };
     
     container._renderChunk = renderChunk;
@@ -2498,12 +2523,55 @@ function startCandidateCheck(filename) {
 
 function showCandidatePanelStep1() {
     const title = document.getElementById('candidateTitle');
-    title.textContent = '🔍 第1步：选择基准图片';
+    title.textContent = '🔍 第1步：选择基准图片和分组';
     
     const steps = document.querySelectorAll('#candidateSteps .step');
     steps[0].classList.add('active');
     steps[0].classList.remove('done');
     steps[1].classList.remove('active', 'done');
+    
+    els.candidateList.innerHTML = '';
+    
+    let groupSelect = document.getElementById('baseGroupSelect');
+    if (!groupSelect) {
+        groupSelect = document.createElement('div');
+        groupSelect.id = 'baseGroupSelect';
+        groupSelect.className = 'base-group-select';
+        
+        const label = document.createElement('div');
+        label.style.cssText = 'font-size:11px;color:var(--text-muted);margin-bottom:2px;';
+        label.textContent = '选择基准组：';
+        
+        const dropdown = document.createElement('select');
+        dropdown.id = 'baseGroupDropdown';
+        
+        const newBtn = document.createElement('button');
+        newBtn.id = 'createNewGroup';
+        newBtn.className = 'btn-new-group';
+        newBtn.textContent = '+ 新建分组';
+        newBtn.addEventListener('click', () => {
+            const groupName = prompt('请输入新分组名称：', `基准组_${new Date().toLocaleTimeString()}`);
+            if (!groupName) return;
+            const gid = Date.now().toString();
+            state.baseGroups.set(gid, { name: groupName.trim(), images: [] });
+            state.candidateSelectedGroup = gid;
+            updateGroupDropdown();
+        });
+        
+        groupSelect.appendChild(label);
+        groupSelect.appendChild(dropdown);
+        groupSelect.appendChild(newBtn);
+        
+        const listEl = els.candidateList;
+        listEl.parentNode.insertBefore(groupSelect, listEl);
+        
+        dropdown.addEventListener('change', () => {
+            state.candidateSelectedGroup = dropdown.value || null;
+        });
+    }
+    
+    groupSelect.style.display = 'flex';
+    updateGroupDropdown();
     
     els.candidateList.innerHTML = '';
     const baseFilename = state.currentCandidateBase;
@@ -2520,7 +2588,7 @@ function showCandidatePanelStep1() {
         item.innerHTML = `
             <input type="radio" name="baseImg" data-fn="${filename}" ${isSelected ? 'checked' : ''}>
             <img class="thumb" data-filename="${filename}" ${cached ? `src="${cached}"` : ''} alt="">
-            <div class="fname">${filename}${isFirst ? ' <span style="color:var(--accent)">(你选择的)</span>' : ''}</div>
+            <div class="fname">${filename}${isFirst ? ' <span style="color:var(--accent)">(你选的)</span>' : ''}</div>
         `;
         
         const radio = item.querySelector('input');
@@ -2533,10 +2601,6 @@ function showCandidatePanelStep1() {
         if (!cached) lazyObserver.observe(item.querySelector('.thumb'));
         els.candidateList.appendChild(item);
     }
-    
-    const groupSelect = document.getElementById('baseGroupSelect');
-    groupSelect.style.display = 'flex';
-    updateGroupDropdown();
     
     els.candidateConfirm.textContent = '下一步：选择重复图';
     els.candidateConfirm.disabled = false;
@@ -2576,6 +2640,9 @@ function showCandidatePanelStep2() {
     steps[1].classList.add('active');
     steps[1].classList.remove('done');
     
+    const groupSelect = document.getElementById('baseGroupSelect');
+    if (groupSelect) groupSelect.style.display = 'none';
+    
     els.candidateList.innerHTML = '';
     const baseFilename = state.candidateSelectedBase;
     const remaining = state.candidateList.filter(f => f !== baseFilename);
@@ -2609,15 +2676,16 @@ function showCandidatePanelStep2() {
         els.candidateList.appendChild(item);
     }
     
-    const groupSelect = document.getElementById('baseGroupSelect');
-    groupSelect.style.display = 'none';
-    
     els.candidateConfirm.textContent = '完成归类';
     els.candidateConfirm.disabled = false;
 }
 
 function hideCandidatePanel() {
     els.candidatePanel.classList.remove('show');
+    
+    const groupSelect = document.getElementById('baseGroupSelect');
+    if (groupSelect) groupSelect.style.display = 'flex';
+    
     state.currentCandidateBase = null;
     state.candidateList = [];
     state.selectedCandidate.clear();
@@ -2931,12 +2999,43 @@ function hideProgress() {
 /* ================================================
  *  图片预览
  * ================================================ */
+let currentPreviewOriginalUrl = null;
+
 function previewImage(filename) {
     els.previewModal.classList.add('show');
-    els.previewImg.src = '';
+    
+    if (currentPreviewOriginalUrl) {
+        URL.revokeObjectURL(currentPreviewOriginalUrl);
+        currentPreviewOriginalUrl = null;
+    }
+    
+    const thumbUrl = thumbCache.get(filename);
+    if (thumbUrl) {
+        els.previewImg.src = thumbUrl;
+    } else {
+        els.previewImg.src = '';
+    }
+    
+    els.previewImg.dataset.loading = 'true';
     loadOriginal(filename).then(url => {
-        if (url) els.previewImg.src = url;
+        if (url && els.previewImg.dataset.loading === 'true') {
+            if (thumbUrl && thumbUrl !== url) {
+                URL.revokeObjectURL(thumbUrl);
+            }
+            els.previewImg.src = url;
+            els.previewImg.dataset.loading = 'done';
+            currentPreviewOriginalUrl = url;
+        }
     });
+}
+
+function closePreview() {
+    els.previewModal.classList.remove('show');
+    els.previewImg.dataset.loading = '';
+    if (currentPreviewOriginalUrl) {
+        URL.revokeObjectURL(currentPreviewOriginalUrl);
+        currentPreviewOriginalUrl = null;
+    }
 }
 
 /* ================================================
@@ -3605,17 +3704,15 @@ function bindEvents() {
         state.abortSearch = true;
     });
     
-    els.previewClose.addEventListener('click', () => {
-        els.previewModal.classList.remove('show');
-    });
+    els.previewClose.addEventListener('click', closePreview);
     els.previewModal.addEventListener('click', (e) => {
         if (e.target.id === 'previewModal') {
-            els.previewModal.classList.remove('show');
+            closePreview();
         }
     });
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && els.previewModal.classList.contains('show')) {
-            els.previewModal.classList.remove('show');
+            closePreview();
         }
     });
     
@@ -3633,25 +3730,6 @@ function bindEvents() {
     els.candidateClose.addEventListener('click', hideCandidatePanel);
     els.candidateCancel.addEventListener('click', hideCandidatePanel);
     els.candidateConfirm.addEventListener('click', confirmCandidate);
-    
-    const createGroupBtn = document.getElementById('createNewGroup');
-    if (createGroupBtn) {
-        createGroupBtn.addEventListener('click', () => {
-            const groupName = prompt('请输入新分组名称：', `基准组_${new Date().toLocaleTimeString()}`);
-            if (!groupName) return;
-            const gid = Date.now().toString();
-            state.baseGroups.set(gid, { name: groupName.trim(), images: [] });
-            state.candidateSelectedGroup = gid;
-            updateGroupDropdown();
-        });
-    }
-    
-    const groupDropdown = document.getElementById('baseGroupDropdown');
-    if (groupDropdown) {
-        groupDropdown.addEventListener('change', () => {
-            state.candidateSelectedGroup = groupDropdown.value || null;
-        });
-    }
     
     window.addEventListener('resize', () => {
         if (state.currentTab === 'pending' || state.currentTab === 'ignored') {
