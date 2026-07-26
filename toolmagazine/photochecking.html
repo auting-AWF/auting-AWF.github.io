@@ -1065,7 +1065,7 @@ const workerBlob = new Blob([`
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tiff', 'svg', 'avif'];
 
 self.onmessage = async function(e) {
-    const { blob, index, filename } = e.data;
+    const { arrayBuffer, index, filename } = e.data;
     
     if (filename) {
         const ext = filename.split('.').pop().toLowerCase();
@@ -1076,8 +1076,9 @@ self.onmessage = async function(e) {
     }
     
     try {
+        const blob = new Blob([arrayBuffer]);
         const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('超时')), 10000)
+            setTimeout(() => reject(new Error('timeout')), 10000)
         );
         const imgPromise = createImageBitmap(blob, { resizeWidth: 9, resizeHeight: 8, resizeQuality: 'pixelated' });
         const img = await Promise.race([imgPromise, timeoutPromise]);
@@ -1100,7 +1101,7 @@ self.onmessage = async function(e) {
         img.close();
         self.postMessage({ index, hash: h.toString(16).padStart(16, '0') });
     } catch (err) {
-        self.postMessage({ index, hash: 'error-' + err.message.substring(0, 20) });
+        self.postMessage({ index, hash: 'error-' + (err.message || 'unknown').substring(0, 20) });
     }
 }
 `], { type: 'application/javascript' });
@@ -1144,7 +1145,7 @@ function destroyAllWorkers() {
 
 async function processImageInWorker(blob, index, filename) {
     return new Promise((resolve) => {
-        const trySend = () => {
+        const trySend = async () => {
             const freeIdx = workerBusy.findIndex(b => !b);
             if (freeIdx === -1) {
                 setTimeout(trySend, 50);
@@ -1167,7 +1168,16 @@ async function processImageInWorker(blob, index, filename) {
             };
             
             workers[freeIdx].addEventListener('message', handler);
-            workers[freeIdx].postMessage({ blob, index, filename }, [blob]);
+            try {
+                const arrayBuffer = await blob.arrayBuffer();
+                workers[freeIdx].postMessage({ arrayBuffer, index, filename }, [arrayBuffer]);
+            } catch (err) {
+                workerBusy[freeIdx] = false;
+                activeTasks--;
+                processedCount++;
+                updateProgressUI();
+                resolve();
+            }
         };
         trySend();
     });
