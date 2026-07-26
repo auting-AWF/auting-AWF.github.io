@@ -933,10 +933,10 @@ const state = {
 
 const CONFIG = {
     THUMB_WIDTH: 200,
-    MAX_WORKERS: Math.min(navigator.hardwareConcurrency || 8, 12),
+    MAX_WORKERS: 12,
     MAX_OCR_CONCURRENT: 5,
     MAX_FEATURE_CONCURRENT: 3,
-    MAX_PENDING_TASKS: 30,
+    MAX_PENDING_TASKS: 200,
     VIRTUAL_BUFFER: 5,
     THRESHOLD_DEFAULT: 8,
     PYRAMID_LEVELS: [0, 1.2, 2.5, 5.0],
@@ -1062,25 +1062,30 @@ async function loadState() {
  *  Worker 哈希计算
  * ================================================ */
 const workerBlob = new Blob([`
-const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tiff', 'svg', 'avif'];
-
 self.onmessage = async function(e) {
-    const { blob, index, filename } = e.data;
-    
     try {
-        if (filename) {
-            const ext = filename.split('.').pop().toLowerCase();
-            if (!IMAGE_EXTENSIONS.includes(ext)) {
-                self.postMessage({ index, hash: 'non-image' });
+        const { blob, index, filename } = e.data;
+        
+        if (filename && /\.(jpg|jpeg|png|webp|bmp|gif|tiff?)$/i.test(filename) === false) {
+            self.postMessage({ index, hash: 'non-image' });
+            return;
+        }
+        
+        let img;
+        try {
+            img = await createImageBitmap(blob, {
+                resizeWidth: 9,
+                resizeHeight: 8,
+                resizeQuality: 'pixelated'
+            });
+        } catch (e1) {
+            try {
+                img = await createImageBitmap(blob);
+            } catch (e2) {
+                self.postMessage({ index, hash: 'error-decode:' + (e2.message || 'unknown').substring(0, 30) });
                 return;
             }
         }
-        
-        const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('timeout')), 10000)
-        );
-        
-        const img = await Promise.race([createImageBitmap(blob), timeoutPromise]);
         
         const c = new OffscreenCanvas(9, 8);
         const ctx = c.getContext('2d');
@@ -1102,7 +1107,7 @@ self.onmessage = async function(e) {
         img.close();
         self.postMessage({ index, hash: h.toString(16).padStart(16, '0') });
     } catch (err) {
-        self.postMessage({ index, hash: 'error-' + (err.message || 'unknown').substring(0, 20) });
+        self.postMessage({ index, hash: 'error:' + (err.message || 'unknown').substring(0, 50) });
     }
 }
 `], { type: 'application/javascript' });
@@ -1146,55 +1151,52 @@ function destroyAllWorkers() {
 
 async function processImageInWorker(blob, index, filename) {
     return new Promise((resolve) => {
-        let timeoutId = null;
-        
-        const cleanup = () => {
-            if (timeoutId) clearTimeout(timeoutId);
-            workers[freeIdx]?.removeEventListener('message', handler);
-            workerBusy[freeIdx] = false;
-            activeTasks--;
-            processedCount++;
-            updateProgressUI();
-            resolve();
-        };
-        
-        let freeIdx = -1;
-        
-        const handler = (e) => {
-            const { index: idx, hash } = e.data;
-            if (hash && !hash.startsWith('error-') && hash !== 'non-image') {
-                state.imageHashMap.set(state.entries[idx].filename, hash);
-            }
-            cleanup();
-        };
-        
         const trySend = () => {
-            freeIdx = workerBusy.findIndex(b => !b);
+            const freeIdx = workerBusy.findIndex(b => !b);
             if (freeIdx === -1) {
-                setTimeout(trySend, 50);
+                setTimeout(trySend, 10);
                 return;
             }
             workerBusy[freeIdx] = true;
             activeTasks++;
             
-            timeoutId = setTimeout(() => {
+            let done = false;
+            const timeoutId = setTimeout(() => {
+                if (done) return;
+                done = true;
                 workers[freeIdx].removeEventListener('message', handler);
                 workerBusy[freeIdx] = false;
                 activeTasks--;
                 processedCount++;
-                updateProgressUI();
                 resolve();
-            }, 30000);
+            }, 15000);
+            
+            const handler = (e) => {
+                if (e.data.index !== index) return;
+                if (done) return;
+                done = true;
+                clearTimeout(timeoutId);
+                workers[freeIdx].removeEventListener('message', handler);
+                workerBusy[freeIdx] = false;
+                activeTasks--;
+                const { hash } = e.data;
+                if (hash && !hash.startsWith('error-') && hash !== 'non-image') {
+                    state.imageHashMap.set(state.entries[index].filename, hash);
+                }
+                processedCount++;
+                resolve();
+            };
             
             workers[freeIdx].addEventListener('message', handler);
             try {
                 workers[freeIdx].postMessage({ blob, index, filename });
             } catch (err) {
+                if (done) return;
+                done = true;
                 clearTimeout(timeoutId);
                 workerBusy[freeIdx] = false;
                 activeTasks--;
                 processedCount++;
-                updateProgressUI();
                 resolve();
             }
         };
@@ -3050,37 +3052,72 @@ async function startPreprocessing(file) {
             }
         }
         
-        initWorkers();
+        destroyAllWorkers();
         startProgressRefresh();
         
-        const tasks = [];
-        const BATCH_SIZE = 50;
+        const CONCURRENT = 16;
+        let currentIdx = 0;
         
-        for (let idx = 0; idx < totalImagesCount && !state.abortSearch; idx += BATCH_SIZE) {
-            if (state.abortSearch) break;
-            
-            const batchIdx = [];
-            const batchPromises = [];
-            
-            for (let j = 0; j < BATCH_SIZE && idx + j < totalImagesCount; j++) {
-                if (state.abortSearch) break;
-                const i = idx + j;
-                batchIdx.push(i);
-                batchPromises.push(state.entries[i].getData(new BlobWriter()));
+        function createHashCanvas() {
+            const c = document.createElement('canvas');
+            c.width = 9;
+            c.height = 8;
+            return c.getContext('2d', { willReadFrequently: true });
+        }
+        
+        function computePHash(ctx, img) {
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, 0, 0, 9, 8);
+            const d = ctx.getImageData(0, 0, 9, 8).data;
+            let h = 0n;
+            for (let y = 0; y < 8; y++) {
+                for (let x = 0; x < 8; x++) {
+                    const i = (y * 9 + x) * 4;
+                    const j = i + 4;
+                    const g = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
+                    const g2 = d[j] * 0.299 + d[j+1] * 0.587 + d[j+2] * 0.114;
+                    h <<= 1n;
+                    if (g > g2) h |= 1n;
+                }
             }
+            return h.toString(16).padStart(16, '0');
+        }
+        
+        async function processOne() {
+            const ctx = createHashCanvas();
             
-            const blobs = await Promise.all(batchPromises);
-            
-            for (let k = 0; k < batchIdx.length && !state.abortSearch; k++) {
-                const i = batchIdx[k];
-                const blob = blobs[k];
-                const filename = state.entries[i].filename;
-                const task = processImageInWorker(blob, i, filename);
-                tasks.push(task);
+            while (currentIdx < totalImagesCount && !state.abortSearch) {
+                const idx = currentIdx++;
+                const entry = state.entries[idx];
+                const filename = entry.filename;
+                
+                try {
+                    const blob = await entry.getData(new BlobWriter());
+                    const url = URL.createObjectURL(blob);
+                    
+                    const img = new Image();
+                    await new Promise((resolve, reject) => {
+                        img.onload = resolve;
+                        img.onerror = reject;
+                        img.src = url;
+                    });
+                    
+                    const hash = computePHash(ctx, img);
+                    state.imageHashMap.set(filename, hash);
+                    URL.revokeObjectURL(url);
+                } catch (e) {
+                }
+                
+                processedCount++;
             }
         }
         
-        await Promise.all(tasks);
+        const workers = [];
+        for (let i = 0; i < CONCURRENT; i++) {
+            workers.push(processOne());
+        }
+        
+        await Promise.all(workers);
         stopProgressRefresh();
         
         if (state.abortSearch) {
