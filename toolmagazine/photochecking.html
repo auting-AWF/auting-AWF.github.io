@@ -1065,27 +1065,30 @@ const workerBlob = new Blob([`
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tiff', 'svg', 'avif'];
 
 self.onmessage = async function(e) {
-    const { arrayBuffer, index, filename } = e.data;
-    
-    if (filename) {
-        const ext = filename.split('.').pop().toLowerCase();
-        if (!IMAGE_EXTENSIONS.includes(ext)) {
-            self.postMessage({ index, hash: 'non-image' });
-            return;
-        }
-    }
+    const { blob, index, filename } = e.data;
     
     try {
-        const blob = new Blob([arrayBuffer]);
+        if (filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            if (!IMAGE_EXTENSIONS.includes(ext)) {
+                self.postMessage({ index, hash: 'non-image' });
+                return;
+            }
+        }
+        
         const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('timeout')), 10000)
+            setTimeout(() => reject(new Error('timeout')), 15000)
         );
-        const imgPromise = createImageBitmap(blob, { resizeWidth: 9, resizeHeight: 8, resizeQuality: 'pixelated' });
+        
+        const imgPromise = createImageBitmap(blob);
         const img = await Promise.race([imgPromise, timeoutPromise]);
         
         const c = new OffscreenCanvas(9, 8);
         const ctx = c.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'low';
+        ctx.drawImage(img, 0, 0, 9, 8);
+        
         const d = ctx.getImageData(0, 0, 9, 8).data;
         let h = 0n;
         for (let y = 0; y < 8; y++) {
@@ -1145,8 +1148,30 @@ function destroyAllWorkers() {
 
 async function processImageInWorker(blob, index, filename) {
     return new Promise((resolve) => {
-        const trySend = async () => {
-            const freeIdx = workerBusy.findIndex(b => !b);
+        let timeoutId = null;
+        
+        const cleanup = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            workers[freeIdx]?.removeEventListener('message', handler);
+            workerBusy[freeIdx] = false;
+            activeTasks--;
+            processedCount++;
+            updateProgressUI();
+            resolve();
+        };
+        
+        let freeIdx = -1;
+        
+        const handler = (e) => {
+            const { index: idx, hash } = e.data;
+            if (hash && !hash.startsWith('error-') && hash !== 'non-image') {
+                state.imageHashMap.set(state.entries[idx].filename, hash);
+            }
+            cleanup();
+        };
+        
+        const trySend = () => {
+            freeIdx = workerBusy.findIndex(b => !b);
             if (freeIdx === -1) {
                 setTimeout(trySend, 50);
                 return;
@@ -1154,24 +1179,20 @@ async function processImageInWorker(blob, index, filename) {
             workerBusy[freeIdx] = true;
             activeTasks++;
             
-            const handler = (e) => {
+            timeoutId = setTimeout(() => {
                 workers[freeIdx].removeEventListener('message', handler);
                 workerBusy[freeIdx] = false;
                 activeTasks--;
-                const { index: idx, hash } = e.data;
-                if (hash && !hash.startsWith('error-') && hash !== 'non-image') {
-                    state.imageHashMap.set(state.entries[idx].filename, hash);
-                }
                 processedCount++;
                 updateProgressUI();
                 resolve();
-            };
+            }, 30000);
             
             workers[freeIdx].addEventListener('message', handler);
             try {
-                const arrayBuffer = await blob.arrayBuffer();
-                workers[freeIdx].postMessage({ arrayBuffer, index, filename }, [arrayBuffer]);
+                workers[freeIdx].postMessage({ blob, index, filename });
             } catch (err) {
+                clearTimeout(timeoutId);
                 workerBusy[freeIdx] = false;
                 activeTasks--;
                 processedCount++;
