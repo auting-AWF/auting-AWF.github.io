@@ -774,7 +774,7 @@ input[type="file"] { display: none; }
     <div class="search-box">
         <input type="text" id="searchInput" placeholder="搜索图片... (Enter 确认)">
         <div class="search-mode">
-            <button id="modeFuzzy" class="active" title="按文件名/路径模糊搜索">🔤 模糊</button>
+            <button id="modeFuzzy" class="active" title="按文件名/路径搜索">🔤 文件名</button>
             <button id="modeHash" title="基于图片内容相似度">🎯 算法</button>
             <button id="modeOcr" title="基于图片内文字内容">📝 OCR</button>
         </div>
@@ -907,6 +907,8 @@ const state = {
     entryMap: new Map(),
     imageHashMap: new Map(),
     ocrTextMap: new Map(),
+    imageFeatureMap: new Map(),
+    invertedIndex: new Map(),
     statusMap: new Map(),
     duplicateGroups: new Map(),
     baseGroups: new Map(),
@@ -933,8 +935,13 @@ const CONFIG = {
     THUMB_WIDTH: 200,
     MAX_WORKERS: Math.min(navigator.hardwareConcurrency || 4, 6),
     MAX_OCR_CONCURRENT: 5,
+    MAX_FEATURE_CONCURRENT: 3,
     VIRTUAL_BUFFER: 5,
     THRESHOLD_DEFAULT: 8,
+    PYRAMID_LEVELS: [0, 1.2, 2.5, 5.0],
+    PYRAMID_WEIGHTS: [0.1, 0.2, 0.3, 0.4],
+    MAX_EDGE_DISTANCE: 2,
+    MAX_IMAGE_SIZE: 512,
     TOOL_VERSION: '3.0.0',
 };
 
@@ -977,9 +984,12 @@ async function saveState() {
         
         const allData = [];
         for (const [fname, hash] of state.imageHashMap) {
+            const features = state.imageFeatureMap.get(fname);
+            const fingerprint = features ? computeVisualFingerprint(features) : '';
             allData.push({
                 filename: fname,
                 hash,
+                fingerprint,
                 status: state.statusMap.get(fname) || 'pending',
                 ocrText: state.ocrTextMap.get(fname) || ''
             });
@@ -1015,6 +1025,8 @@ async function loadState() {
         
         state.imageHashMap.clear();
         state.ocrTextMap.clear();
+        state.imageFeatureMap.clear();
+        state.invertedIndex.clear();
         state.statusMap.clear();
         state.duplicateGroups.clear();
         state.baseGroups.clear();
@@ -1030,6 +1042,12 @@ async function loadState() {
                 state.imageHashMap.set(item.filename, item.hash);
                 state.statusMap.set(item.filename, item.status || 'pending');
                 if (item.ocrText) state.ocrTextMap.set(item.filename, item.ocrText);
+                if (item.fingerprint) {
+                    state.imageFeatureMap.set(item.filename, {
+                        fingerprint: item.fingerprint,
+                        fullFeatures: null
+                    });
+                }
             }
         }
     } catch (e) {
@@ -1250,6 +1268,416 @@ function hammingDistance(h1, h2) {
     return d;
 }
 
+/* ================================================
+ *  视觉特征提取 - 多级模糊金字塔
+ * ================================================ */
+async function extractVisualFeatures(blob) {
+    const bitmap = await createImageBitmap(blob);
+    const maxSize = CONFIG.MAX_IMAGE_SIZE;
+    let w = bitmap.width, h = bitmap.height;
+    const scale = Math.min(1, maxSize / Math.max(w, h));
+    w = Math.round(w * scale);
+    h = Math.round(h * scale);
+    
+    const features = [];
+    
+    for (let level = 0; level < CONFIG.PYRAMID_LEVELS.length; level++) {
+        const sigma = CONFIG.PYRAMID_LEVELS[level];
+        const canvas = new OffscreenCanvas(w, h);
+        const ctx = canvas.getContext('2d');
+        
+        if (sigma === 0) {
+            ctx.drawImage(bitmap, 0, 0, w, h);
+        } else {
+            const tempCanvas = new OffscreenCanvas(w, h);
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(bitmap, 0, 0, w, h);
+            
+            const blurCanvas = new OffscreenCanvas(w, h);
+            const blurCtx = blurCanvas.getContext('2d');
+            blurCtx.filter = `blur(${sigma}px)`;
+            blurCtx.drawImage(tempCanvas, 0, 0);
+            blurCtx.filter = 'none';
+            
+            ctx.drawImage(blurCanvas, 0, 0);
+        }
+        
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const colorHist = extractColorHistogram(imageData, w, h);
+        const lbpHist = extractLBP(imageData, w, h);
+        const levelHash = computeLevelHash(imageData, w, h);
+        
+        features.push({
+            color: colorHist,
+            lbp: lbpHist,
+            hash: levelHash,
+            level: level
+        });
+    }
+    
+    bitmap.close();
+    return features;
+}
+
+function computeLevelHash(imageData, w, h) {
+    const smallCanvas = new OffscreenCanvas(16, 16);
+    const ctx = smallCanvas.getContext('2d');
+    ctx.drawImage(imageData, 0, 0, 16, 16);
+    const smallData = ctx.getImageData(0, 0, 16, 16).data;
+    
+    const gray = [];
+    for (let i = 0; i < 256; i++) {
+        gray.push(0.299 * smallData[i*4] + 0.587 * smallData[i*4+1] + 0.114 * smallData[i*4+2]);
+    }
+    
+    let hash = '';
+    for (let i = 0; i < 8; i++) {
+        for (let j = 0; j < 8; j++) {
+            const idx = i * 2 * 16 + j * 2;
+            const avg = (gray[idx] + gray[idx+1] + gray[idx+16] + gray[idx+17]) / 4;
+            if (avg > 128) hash += '1';
+            else hash += '0';
+        }
+    }
+    
+    return BigInt('0b' + hash).toString(16).padStart(16, '0');
+}
+
+function computeVisualFingerprint(features) {
+    const hashes = features.map(f => f.hash);
+    let fingerprint = '';
+    for (const h of hashes) {
+        fingerprint += h;
+    }
+    return fingerprint;
+}
+
+function extractColorHistogram(imageData, w, h) {
+    const data = imageData.data;
+    const histSize = 11 * 8 * 8;
+    const hist = new Float32Array(histSize);
+    const hBins = 11, sBins = 8, vBins = 8;
+    
+    for (let i = 0; i < w * h; i++) {
+        const r = data[i * 4] / 255;
+        const g = data[i * 4 + 1] / 255;
+        const b = data[i * 4 + 2] / 255;
+        
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const d = max - min;
+        
+        let hVal = 0;
+        if (d !== 0) {
+            if (max === r) hVal = ((g - b) / d) % 6;
+            else if (max === g) hVal = (b - r) / d + 2;
+            else hVal = (r - g) / d + 4;
+            hVal *= 60;
+            if (hVal < 0) hVal += 360;
+        }
+        const sVal = max === 0 ? 0 : d / max;
+        const vVal = max;
+        
+        const hBin = Math.min(Math.floor(hVal / (360 / hBins)), hBins - 1);
+        const sBin = Math.min(Math.floor(sVal * sBins), sBins - 1);
+        const vBin = Math.min(Math.floor(vVal * vBins), vBins - 1);
+        
+        hist[hBin * sBins * vBins + sBin * vBins + vBin]++;
+    }
+    
+    const total = w * h;
+    for (let i = 0; i < histSize; i++) hist[i] /= total;
+    
+    return hist;
+}
+
+function extractLBP(imageData, w, h) {
+    const data = imageData.data;
+    const hist = new Float32Array(59);
+    
+    const gray = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+        gray[i] = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
+    }
+    
+    for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+            const center = gray[y * w + x];
+            let code = 0;
+            const neighbors = [
+                gray[(y-1) * w + (x-1)], gray[(y-1) * w + x], gray[(y-1) * w + (x+1)],
+                gray[y * w + (x+1)], gray[(y+1) * w + (x+1)],
+                gray[(y+1) * w + x], gray[(y+1) * w + (x-1)], gray[y * w + (x-1)]
+            ];
+            
+            for (let i = 0; i < 8; i++) {
+                if (neighbors[i] >= center) code |= (1 << i);
+            }
+            
+            let transitions = 0;
+            let ones = 0;
+            for (let i = 0; i < 8; i++) {
+                if (((code >> i) & 1) !== ((code >> ((i + 1) % 8)) & 1)) transitions++;
+                if ((code >> i) & 1) ones++;
+            }
+            
+            let uniformBin;
+            if (transitions <= 2) {
+                if (ones === 0) uniformBin = 0;
+                else if (ones === 1) uniformBin = 1;
+                else if (ones === 2) uniformBin = 2;
+                else if (ones === 3) uniformBin = 3;
+                else uniformBin = 4 + ones;
+            } else {
+                uniformBin = 9;
+            }
+            hist[uniformBin]++;
+        }
+    }
+    
+    const validPixels = (w - 2) * (h - 2);
+    if (validPixels > 0) {
+        for (let i = 0; i < 59; i++) hist[i] /= validPixels;
+    }
+    
+    return hist;
+}
+
+function cosineSimilarity(v1, v2) {
+    let dot = 0, norm1 = 0, norm2 = 0;
+    for (let i = 0; i < v1.length; i++) {
+        dot += v1[i] * v2[i];
+        norm1 += v1[i] * v1[i];
+        norm2 += v2[i] * v2[i];
+    }
+    if (norm1 === 0 || norm2 === 0) return 0;
+    return dot / (Math.sqrt(norm1) * Math.sqrt(norm2));
+}
+
+function computeVisualSimilarity(features1, features2) {
+    const hashDistances = [];
+    for (let level = 0; level < features1.length; level++) {
+        const h1 = features1[level].hash;
+        const h2 = features2[level].hash;
+        const dist = hammingDistance(h1, h2);
+        hashDistances.push(dist);
+    }
+    
+    const avgHashDist = hashDistances.reduce((a, b) => a + b, 0) / hashDistances.length;
+    if (avgHashDist > 20) return 0;
+    
+    let totalSim = 0;
+    for (let level = 0; level < features1.length; level++) {
+        const f1 = features1[level];
+        const f2 = features2[level];
+        
+        const colorSim = cosineSimilarity(f1.color, f2.color);
+        const lbpSim = cosineSimilarity(f1.lbp, f2.lbp);
+        const hashSim = 1 - (hashDistances[level] / 32);
+        const levelSim = colorSim * 0.4 + lbpSim * 0.3 + hashSim * 0.3;
+        
+        totalSim += CONFIG.PYRAMID_WEIGHTS[level] * levelSim;
+    }
+    
+    return totalSim;
+}
+
+/* ================================================
+ *  OCR 倒排索引
+ * ================================================ */
+function buildInvertedIndex() {
+    state.invertedIndex.clear();
+    
+    for (const [filename, text] of state.ocrTextMap) {
+        if (!text) continue;
+        const words = tokenizeText(text);
+        for (const word of words) {
+            if (!state.invertedIndex.has(word)) {
+                state.invertedIndex.set(word, new Set());
+            }
+            state.invertedIndex.get(word).add(filename);
+        }
+    }
+}
+
+function tokenizeText(text) {
+    const cleaned = text
+        .replace(/[\u4e00-\u9fa5]/g, ' $& ')
+        .replace(/[^a-zA-Z0-9\u4e00-\u9fa5\s]/g, ' ')
+        .toLowerCase();
+    
+    const words = cleaned.split(/\s+/).filter(w => w.length > 0);
+    
+    const result = [];
+    for (const word of words) {
+        if (/[\u4e00-\u9fa5]/.test(word)) {
+            for (let i = 0; i < word.length - 1; i++) {
+                result.push(word.substring(i, i + 2));
+            }
+            result.push(word);
+        } else {
+            result.push(word);
+            result.push(stemWord(word));
+        }
+    }
+    
+    return result.filter(w => w.length >= 1);
+}
+
+function stemWord(word) {
+    const suffixes = ['ing', 'ed', 'tion', 'sion', 'ment', 'ness', 'able', 'ible', 'ful', 'less', 'ly'];
+    for (const suffix of suffixes) {
+        if (word.endsWith(suffix) && word.length > suffix.length + 2) {
+            return word.substring(0, word.length - suffix.length);
+        }
+    }
+    return word;
+}
+
+function editDistance(s1, s2) {
+    const m = s1.length, n = s2.length;
+    const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+    
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            if (s1[i-1] === s2[j-1]) {
+                dp[i][j] = dp[i-1][j-1];
+            } else {
+                dp[i][j] = 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+            }
+        }
+    }
+    
+    return dp[m][n];
+}
+
+function fuzzyMatchTerm(term, maxDistance) {
+    const matches = [];
+    for (const word of state.invertedIndex.keys()) {
+        if (word === term) {
+            matches.push({ word, distance: 0 });
+        } else if (word.length >= term.length - maxDistance && word.length <= term.length + maxDistance) {
+            const dist = editDistance(term, word);
+            if (dist <= maxDistance) {
+                matches.push({ word, distance: dist });
+            }
+        }
+    }
+    return matches.sort((a, b) => a.distance - b.distance);
+}
+
+function searchOcrIndex(query) {
+    const tokens = tokenizeText(query);
+    let candidateScores = new Map();
+    
+    for (const token of tokens) {
+        const matches = fuzzyMatchTerm(token, CONFIG.MAX_EDGE_DISTANCE);
+        
+        for (const match of matches) {
+            const files = state.invertedIndex.get(match.word);
+            if (!files) continue;
+            
+            const weight = 1 / (match.distance + 1);
+            for (const file of files) {
+                if (!candidateScores.has(file)) {
+                    candidateScores.set(file, 0);
+                }
+                candidateScores.set(file, candidateScores.get(file) + weight);
+            }
+        }
+    }
+    
+    return [...candidateScores.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([file, score]) => file);
+}
+
+/* ================================================
+ *  图片搜索 - 视觉相似度优化版
+ * ================================================ */
+async function computeAllVisualFeatures() {
+    const pendingFiles = getFilesByStatus('pending');
+    const uncachedFiles = pendingFiles.filter(f => {
+        const entry = state.imageFeatureMap.get(f);
+        return !entry || !entry.fullFeatures;
+    });
+    
+    if (uncachedFiles.length === 0) return;
+    
+    showProgress('🎨 提取视觉特征中...', 0, `0 / ${uncachedFiles.length}`);
+    
+    let processed = 0;
+    
+    for (let i = 0; i < uncachedFiles.length && !state.abortSearch; i += CONFIG.MAX_FEATURE_CONCURRENT) {
+        const batch = uncachedFiles.slice(i, Math.min(i + CONFIG.MAX_FEATURE_CONCURRENT, uncachedFiles.length));
+        const promises = batch.map(async (filename) => {
+            if (state.abortSearch) return;
+            try {
+                const entry = state.entryMap.get(filename);
+                if (!entry) return;
+                const blob = await entry.getData(new BlobWriter());
+                if (state.abortSearch) return;
+                const features = await extractVisualFeatures(blob);
+                const fingerprint = computeVisualFingerprint(features);
+                const existingEntry = state.imageFeatureMap.get(filename) || {};
+                state.imageFeatureMap.set(filename, {
+                    fingerprint: existingEntry.fingerprint || fingerprint,
+                    fullFeatures: features
+                });
+            } catch (e) {
+                console.error('特征提取失败:', filename, e);
+            }
+            processed++;
+            showProgress('🎨 提取视觉特征中...', Math.round(processed / uncachedFiles.length * 100), `${processed} / ${uncachedFiles.length}`);
+        });
+        await Promise.all(promises);
+    }
+}
+
+function findSimilarByVisual(baseFilename, threshold) {
+    const baseEntry = state.imageFeatureMap.get(baseFilename);
+    if (!baseEntry) return [];
+    
+    const pendingFiles = getFilesByStatus('pending');
+    const candidates = [];
+    
+    for (const filename of pendingFiles) {
+        if (filename === baseFilename) continue;
+        const entry = state.imageFeatureMap.get(filename);
+        if (!entry) continue;
+        
+        const similarity = computeFeatureSimilarity(baseEntry, entry);
+        candidates.push({ filename, similarity });
+    }
+    
+    candidates.sort((a, b) => b.similarity - a.similarity);
+    
+    const t = threshold ?? parseInt(document.getElementById('threshold').value);
+    const thresholdNorm = 1 - (t / 32);
+    
+    return candidates
+        .filter(c => c.similarity >= thresholdNorm && c.similarity < 0.99)
+        .map(c => c.filename);
+}
+
+function computeFeatureSimilarity(entry1, entry2) {
+    if (entry1.fullFeatures && entry2.fullFeatures) {
+        return computeVisualSimilarity(entry1.fullFeatures, entry2.fullFeatures);
+    }
+    
+    if (entry1.fingerprint && entry2.fingerprint) {
+        return 1 - (hammingDistance(entry1.fingerprint, entry2.fingerprint) / (entry1.fingerprint.length * 4));
+    }
+    
+    return 0;
+}
+
+/* ================================================
+ *  兼容函数 - 保留原 hash 搜索作为快速模式
+ * ================================================ */
 function findSimilarByHash(baseFilename, threshold) {
     const hash = state.imageHashMap.get(baseFilename);
     if (!hash) return [];
@@ -1987,13 +2415,25 @@ async function performHashSearch(query) {
     const threshold = parseInt(els.threshold.value);
     const results = [];
     
+    showProgress('🎨 准备视觉特征...', 0, '提取特征中...');
+    
+    await computeAllVisualFeatures();
+    
+    if (state.abortSearch) {
+        state.searchResults = [];
+        return;
+    }
+    
     if (query.startsWith('file:')) {
         const targetFile = query.slice(5).trim();
-        if (state.imageHashMap.has(targetFile)) {
+        if (state.imageFeatureMap.has(targetFile)) {
+            const similar = findSimilarByVisual(targetFile, threshold);
+            results.push(targetFile, ...similar);
+        } else if (state.imageHashMap.has(targetFile)) {
             const similar = findSimilarByHash(targetFile, threshold);
             results.push(targetFile, ...similar);
         } else {
-            alert('未找到该文件的哈希记录');
+            alert('未找到该文件的记录');
             return;
         }
     } else {
@@ -2005,9 +2445,23 @@ async function performHashSearch(query) {
             }
         }
         
-        showProgress('🔍 算法搜索中...', 0, '计算相似度...');
+        showProgress('🎨 视觉搜索中...', 0, '使用多级特征计算相似度...');
         
-        for (const baseFile of pendingFiles) {
+        const featureFiles = pendingFiles.filter(f => state.imageFeatureMap.has(f));
+        let processed = 0;
+        
+        for (const baseFile of featureFiles) {
+            if (state.abortSearch) break;
+            const similar = findSimilarByVisual(baseFile, threshold);
+            for (const f of similar) {
+                if (!results.includes(f)) results.push(f);
+            }
+            processed++;
+            showProgress('🎨 视觉搜索中...', Math.round(processed / featureFiles.length * 100), `${results.length} 张已找到`);
+        }
+        
+        const hashOnlyFiles = pendingFiles.filter(f => !state.imageFeatureMap.has(f));
+        for (const baseFile of hashOnlyFiles) {
             if (state.abortSearch) break;
             const hash = state.imageHashMap.get(baseFile);
             if (!hash) continue;
@@ -2015,7 +2469,6 @@ async function performHashSearch(query) {
             for (const f of similar) {
                 if (!results.includes(f)) results.push(f);
             }
-            showProgress('🔍 算法搜索中...', Math.round((pendingFiles.indexOf(baseFile) + 1) / pendingFiles.length * 100), `${results.length} 张已找到`);
         }
     }
     
@@ -2039,7 +2492,18 @@ async function performOcrSearch(query) {
     }
     
     if (uncachedFiles.length === 0) {
-        state.searchResults = results;
+        buildInvertedIndex();
+        const indexedResults = searchOcrIndex(query);
+        if (indexedResults.length > 0) {
+            const scoredResults = indexedResults.filter(f => pendingFiles.includes(f));
+            if (scoredResults.length > results.length) {
+                state.searchResults = scoredResults;
+            } else {
+                state.searchResults = results;
+            }
+        } else {
+            state.searchResults = results;
+        }
         return;
     }
     
@@ -2090,7 +2554,11 @@ async function performOcrSearch(query) {
         }
     }
     
-    state.searchResults = results;
+    buildInvertedIndex();
+    const indexedResults = searchOcrIndex(query);
+    const finalResults = [...new Set([...results, ...indexedResults.filter(f => pendingFiles.includes(f))])];
+    
+    state.searchResults = finalResults;
     await saveState();
 }
 
