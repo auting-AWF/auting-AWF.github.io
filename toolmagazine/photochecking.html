@@ -657,6 +657,62 @@ input[type="file"] { display: none; }
     width: 16px;
     height: 16px;
 }
+.candidate-item input[type="radio"] {
+    accent-color: var(--accent);
+    width: 16px;
+    height: 16px;
+}
+.candidate-steps {
+    display: flex;
+    padding: 8px 10px;
+    gap: 6px;
+    border-bottom: 1px solid var(--border);
+}
+.candidate-steps .step {
+    flex: 1;
+    text-align: center;
+    padding: 4px 8px;
+    font-size: 11px;
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    transition: all 0.2s;
+}
+.candidate-steps .step.active {
+    background: var(--accent);
+    color: #fff;
+}
+.candidate-steps .step.done {
+    background: var(--success, #22c55e);
+    color: #fff;
+}
+.base-group-select {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex: 1;
+}
+.base-group-select select {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-input);
+    color: var(--text);
+    font-size: 12px;
+}
+.base-group-select button {
+    padding: 6px 10px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+}
+.base-group-select button:hover {
+    background: var(--accent-hover);
+}
 .candidate-footer {
     padding: 10px;
     display: flex;
@@ -730,6 +786,8 @@ input[type="file"] { display: none; }
 }
 .batch-bar button:hover { background: var(--border); }
 .batch-bar .btn-ignore:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+.batch-bar .btn-restore { background: var(--success, #22c55e); border-color: var(--success, #22c55e); color: #fff; }
+.batch-bar .btn-restore:hover { background: #16a34a; border-color: #16a34a; }
 .batch-bar .btn-cancel:hover { background: var(--border-light); }
 
 /* ============ 动画 ============ */
@@ -854,6 +912,7 @@ input[type="file"] { display: none; }
         <span>张</span>
     </div>
     <button class="btn-ignore" id="batchIgnoreBtn">🚫 批量忽略</button>
+    <button class="btn-restore" id="batchRestoreBtn" style="display:none;">↩️ 取消忽略</button>
     <button id="batchCheckBtn">🔍 批量查重</button>
     <button class="btn-cancel" id="batchCancelBtn">取消</button>
 </div>
@@ -869,20 +928,28 @@ input[type="file"] { display: none; }
     <div class="context-item" data-action="check">🔍 查重图片</div>
     <div class="context-item danger" data-action="ignore">🚫 忽略图片</div>
     <div class="context-divider"></div>
-    <div class="context-item" data-action="restore">↩️ 恢复到待处理</div>
+    <div class="context-item" data-action="restore">↩️ 取消忽略</div>
     <div class="context-item danger" data-action="delBase">🗑️ 删除基准图</div>
 </div>
 
 <!-- 候选面板 -->
 <div class="candidate-panel" id="candidatePanel">
     <div class="candidate-header">
-        <span>🔍 相似图片候选</span>
+        <span id="candidateTitle">🔍 相似图片候选</span>
         <span class="close" id="candidateClose">✕</span>
+    </div>
+    <div class="candidate-steps" id="candidateSteps">
+        <div class="step active" data-step="1">1. 选择基准图</div>
+        <div class="step" data-step="2">2. 选择重复图</div>
     </div>
     <div class="candidate-list" id="candidateList"></div>
     <div class="candidate-footer">
+        <div class="base-group-select" id="baseGroupSelect">
+            <select id="baseGroupDropdown"></select>
+            <button id="createNewGroup">+ 新建分组</button>
+        </div>
         <button class="cancel" id="candidateCancel">取消</button>
-        <button class="confirm" id="candidateConfirm">确认归类</button>
+        <button class="confirm" id="candidateConfirm">下一步</button>
     </div>
 </div>
 
@@ -916,6 +983,9 @@ const state = {
     currentCandidateBase: null,
     candidateList: [],
     selectedCandidate: new Set(),
+    candidateStep: 1,
+    candidateSelectedBase: null,
+    candidateSelectedGroup: null,
     multiSelectMode: false,
     selectedFiles: new Set(),
     dragSource: null,
@@ -1914,6 +1984,7 @@ function initElements() {
     els.batchBar = document.getElementById('batchBar');
     els.batchCount = document.getElementById('batchCount');
     els.batchIgnoreBtn = document.getElementById('batchIgnoreBtn');
+    els.batchRestoreBtn = document.getElementById('batchRestoreBtn');
     els.batchCheckBtn = document.getElementById('batchCheckBtn');
     els.batchCancelBtn = document.getElementById('batchCancelBtn');
     
@@ -2363,7 +2434,8 @@ function renderDuplicateGroups() {
  *  图片操作
  * ================================================ */
 function markAsUnique(filename) {
-    if (state.statusMap.get(filename) !== 'pending') return;
+    const status = state.statusMap.get(filename);
+    if (status !== 'pending' && status !== 'search') return;
     state.statusMap.set(filename, 'unique');
     state.selectedFiles.delete(filename);
     saveState();
@@ -2415,30 +2487,120 @@ function createNewGroup() {
 function startCandidateCheck(filename) {
     state.currentCandidateBase = filename;
     const threshold = parseInt(els.threshold.value);
-    state.candidateList = findSimilarByHash(filename, threshold);
+    const similar = findSimilarByHash(filename, threshold);
+    state.candidateList = [filename, ...similar.filter(f => f !== filename)];
     state.selectedCandidate.clear();
-    showCandidatePanel();
+    state.candidateStep = 1;
+    state.candidateSelectedBase = filename;
+    state.candidateSelectedGroup = null;
+    showCandidatePanelStep1();
 }
 
-function showCandidatePanel() {
-    els.candidateList.innerHTML = '';
+function showCandidatePanelStep1() {
+    const title = document.getElementById('candidateTitle');
+    title.textContent = '🔍 第1步：选择基准图片';
     
+    const steps = document.querySelectorAll('#candidateSteps .step');
+    steps[0].classList.add('active');
+    steps[0].classList.remove('done');
+    steps[1].classList.remove('active', 'done');
+    
+    els.candidateList.innerHTML = '';
     const baseFilename = state.currentCandidateBase;
     
-    for (const filename of state.candidateList) {
+    for (let i = 0; i < state.candidateList.length; i++) {
+        const filename = state.candidateList[i];
         const item = document.createElement('div');
         item.className = 'candidate-item' + (filename === baseFilename ? ' current' : '');
         
+        const isSelected = state.candidateSelectedBase === filename;
+        const isFirst = i === 0;
+        
         const cached = thumbCache.get(filename);
         item.innerHTML = `
-            <input type="checkbox" data-fn="${filename}" ${filename === baseFilename || state.selectedCandidate.has(filename) ? 'checked' : ''}>
+            <input type="radio" name="baseImg" data-fn="${filename}" ${isSelected ? 'checked' : ''}>
+            <img class="thumb" data-filename="${filename}" ${cached ? `src="${cached}"` : ''} alt="">
+            <div class="fname">${filename}${isFirst ? ' <span style="color:var(--accent)">(你选择的)</span>' : ''}</div>
+        `;
+        
+        const radio = item.querySelector('input');
+        radio.addEventListener('change', () => {
+            if (radio.checked) {
+                state.candidateSelectedBase = filename;
+            }
+        });
+        
+        if (!cached) lazyObserver.observe(item.querySelector('.thumb'));
+        els.candidateList.appendChild(item);
+    }
+    
+    const groupSelect = document.getElementById('baseGroupSelect');
+    groupSelect.style.display = 'flex';
+    updateGroupDropdown();
+    
+    els.candidateConfirm.textContent = '下一步：选择重复图';
+    els.candidateConfirm.disabled = false;
+    els.candidatePanel.classList.add('show');
+}
+
+function updateGroupDropdown() {
+    const dropdown = document.getElementById('baseGroupDropdown');
+    dropdown.innerHTML = '';
+    
+    const existingGroups = [...state.baseGroups.entries()];
+    const selectedGid = state.candidateSelectedGroup;
+    
+    if (existingGroups.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '（暂无分组，点击+新建）';
+        dropdown.appendChild(opt);
+    } else {
+        for (const [gid, group] of existingGroups) {
+            const opt = document.createElement('option');
+            opt.value = gid;
+            opt.textContent = group.name;
+            if (gid === selectedGid) opt.selected = true;
+            dropdown.appendChild(opt);
+        }
+    }
+}
+
+function showCandidatePanelStep2() {
+    const title = document.getElementById('candidateTitle');
+    title.textContent = '🔍 第2步：选择重复图片（可多选）';
+    
+    const steps = document.querySelectorAll('#candidateSteps .step');
+    steps[0].classList.add('done');
+    steps[0].classList.remove('active');
+    steps[1].classList.add('active');
+    steps[1].classList.remove('done');
+    
+    els.candidateList.innerHTML = '';
+    const baseFilename = state.candidateSelectedBase;
+    const remaining = state.candidateList.filter(f => f !== baseFilename);
+    
+    if (remaining.length === 0) {
+        const item = document.createElement('div');
+        item.style.cssText = 'padding:30px;text-align:center;color:var(--text-muted);';
+        item.textContent = '没有找到相似图片，点击完成直接创建基准组';
+        els.candidateList.appendChild(item);
+    }
+    
+    for (const filename of remaining) {
+        const item = document.createElement('div');
+        item.className = 'candidate-item';
+        
+        const isSelected = state.selectedCandidate.has(filename);
+        const cached = thumbCache.get(filename);
+        item.innerHTML = `
+            <input type="checkbox" data-fn="${filename}" ${isSelected ? 'checked' : ''}>
             <img class="thumb" data-filename="${filename}" ${cached ? `src="${cached}"` : ''} alt="">
             <div class="fname">${filename}</div>
         `;
         
         const checkbox = item.querySelector('input');
         checkbox.addEventListener('change', () => {
-            if (filename === baseFilename) return;
             if (checkbox.checked) state.selectedCandidate.add(filename);
             else state.selectedCandidate.delete(filename);
         });
@@ -2447,7 +2609,11 @@ function showCandidatePanel() {
         els.candidateList.appendChild(item);
     }
     
-    els.candidatePanel.classList.add('show');
+    const groupSelect = document.getElementById('baseGroupSelect');
+    groupSelect.style.display = 'none';
+    
+    els.candidateConfirm.textContent = '完成归类';
+    els.candidateConfirm.disabled = false;
 }
 
 function hideCandidatePanel() {
@@ -2455,31 +2621,58 @@ function hideCandidatePanel() {
     state.currentCandidateBase = null;
     state.candidateList = [];
     state.selectedCandidate.clear();
+    state.candidateStep = 1;
+    state.candidateSelectedBase = null;
+    state.candidateSelectedGroup = null;
 }
 
 function confirmCandidate() {
-    if (state.selectedCandidate.size === 0) {
-        alert('请至少勾选一张图片');
+    if (state.candidateStep === 1) {
+        if (!state.candidateSelectedBase) {
+            alert('请选择一张图片作为基准图');
+            return;
+        }
+        
+        const dropdown = document.getElementById('baseGroupDropdown');
+        state.candidateSelectedGroup = dropdown.value || null;
+        
+        state.candidateStep = 2;
+        showCandidatePanelStep2();
         return;
     }
-    const selectedArr = [...state.selectedCandidate];
-    const baseFile = state.currentCandidateBase;
-    const dupFiles = selectedArr.filter(f => f !== baseFile);
     
-    if (!selectedArr.includes(baseFile)) {
-        alert('请勾选基准图片');
-        return;
+    if (state.candidateStep === 2) {
+        const baseFile = state.candidateSelectedBase;
+        const groupGid = state.candidateSelectedGroup;
+        const dupFiles = [...state.selectedCandidate];
+        
+        if (groupGid) {
+            const group = state.baseGroups.get(groupGid);
+            if (group) {
+                group.images.push(baseFile);
+            }
+        } else {
+            const groupName = prompt('请输入基准组名称：', `基准组_${baseFile.substring(0, 10)}`);
+            if (!groupName) {
+                hideCandidatePanel();
+                return;
+            }
+            const gid = Date.now().toString();
+            state.baseGroups.set(gid, { name: groupName.trim(), images: [baseFile] });
+        }
+        
+        state.statusMap.set(baseFile, 'base');
+        
+        if (dupFiles.length > 0) {
+            const dupGid = Date.now().toString();
+            state.duplicateGroups.set(dupGid, { base: baseFile, duplicates: dupFiles });
+            dupFiles.forEach(f => state.statusMap.set(f, 'duplicate'));
+        }
+        
+        hideCandidatePanel();
+        saveState();
+        renderAll();
     }
-    
-    state.statusMap.set(baseFile, 'base');
-    dupFiles.forEach(f => state.statusMap.set(f, 'duplicate'));
-    
-    const gid = Date.now().toString();
-    state.duplicateGroups.set(gid, { base: baseFile, duplicates: dupFiles });
-    
-    hideCandidatePanel();
-    saveState();
-    renderAll();
 }
 
 /* ================================================
@@ -2952,6 +3145,11 @@ function updateBatchBar() {
     els.batchCount.textContent = count;
     if (count > 0) {
         els.batchBar.classList.add('show');
+        
+        const isIgnoredTab = state.currentTab === 'ignored';
+        els.batchIgnoreBtn.style.display = isIgnoredTab ? 'none' : '';
+        els.batchRestoreBtn.style.display = isIgnoredTab ? '' : 'none';
+        els.batchCheckBtn.style.display = isIgnoredTab ? 'none' : '';
     } else {
         els.batchBar.classList.remove('show');
     }
@@ -3375,6 +3573,11 @@ function bindEvents() {
         state.selectedFiles.clear();
         updateBatchBar();
     });
+    els.batchRestoreBtn.addEventListener('click', () => {
+        state.selectedFiles.forEach(f => moveToPending(f));
+        state.selectedFiles.clear();
+        updateBatchBar();
+    });
     els.batchCheckBtn.addEventListener('click', () => {
         if (state.selectedFiles.size > 0) {
             startCandidateCheck(state.selectedFiles.values().next().value);
@@ -3430,6 +3633,25 @@ function bindEvents() {
     els.candidateClose.addEventListener('click', hideCandidatePanel);
     els.candidateCancel.addEventListener('click', hideCandidatePanel);
     els.candidateConfirm.addEventListener('click', confirmCandidate);
+    
+    const createGroupBtn = document.getElementById('createNewGroup');
+    if (createGroupBtn) {
+        createGroupBtn.addEventListener('click', () => {
+            const groupName = prompt('请输入新分组名称：', `基准组_${new Date().toLocaleTimeString()}`);
+            if (!groupName) return;
+            const gid = Date.now().toString();
+            state.baseGroups.set(gid, { name: groupName.trim(), images: [] });
+            state.candidateSelectedGroup = gid;
+            updateGroupDropdown();
+        });
+    }
+    
+    const groupDropdown = document.getElementById('baseGroupDropdown');
+    if (groupDropdown) {
+        groupDropdown.addEventListener('change', () => {
+            state.candidateSelectedGroup = groupDropdown.value || null;
+        });
+    }
     
     window.addEventListener('resize', () => {
         if (state.currentTab === 'pending' || state.currentTab === 'ignored') {
