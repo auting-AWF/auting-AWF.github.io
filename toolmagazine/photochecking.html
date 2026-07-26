@@ -1060,10 +1060,26 @@ async function loadState() {
  *  Worker 哈希计算
  * ================================================ */
 const workerBlob = new Blob([`
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tiff', 'svg', 'avif'];
+
 self.onmessage = async function(e) {
-    const { blob, index } = e.data;
+    const { blob, index, filename } = e.data;
+    
+    if (filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        if (!IMAGE_EXTENSIONS.includes(ext)) {
+            self.postMessage({ index, hash: 'non-image' });
+            return;
+        }
+    }
+    
     try {
-        const img = await createImageBitmap(blob, { resizeWidth: 9, resizeHeight: 8, resizeQuality: 'pixelated' });
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('超时')), 10000)
+        );
+        const imgPromise = createImageBitmap(blob, { resizeWidth: 9, resizeHeight: 8, resizeQuality: 'pixelated' });
+        const img = await Promise.race([imgPromise, timeoutPromise]);
+        
         const c = new OffscreenCanvas(9, 8);
         const ctx = c.getContext('2d');
         ctx.drawImage(img, 0, 0);
@@ -1082,7 +1098,7 @@ self.onmessage = async function(e) {
         img.close();
         self.postMessage({ index, hash: h.toString(16).padStart(16, '0') });
     } catch (err) {
-        self.postMessage({ index, error: err.message });
+        self.postMessage({ index, hash: 'error-' + err.message.substring(0, 20) });
     }
 }
 `], { type: 'application/javascript' });
@@ -1090,12 +1106,9 @@ self.onmessage = async function(e) {
 const workerUrl = URL.createObjectURL(workerBlob);
 let workers = [];
 let workerBusy = [];
-let taskQueue = [];
 let totalImages = 0;
 let processedCount = 0;
-let pendingTaskCount = 0;
-let producerPaused = false;
-let producerResumeResolver = null;
+let activeTasks = 0;
 
 function initWorkers() {
     destroyAllWorkers();
@@ -1105,22 +1118,13 @@ function initWorkers() {
         const w = new Worker(workerUrl);
         w.onmessage = (e) => {
             workerBusy[i] = false;
+            activeTasks--;
             const { index, hash, error } = e.data;
             if (!error) {
                 state.imageHashMap.set(state.entries[index].filename, hash);
             }
             processedCount++;
-            pendingTaskCount--;
             updateProgressUI();
-            processQueue();
-            if (producerPaused && pendingTaskCount < CONFIG.MAX_PENDING_TASKS) {
-                producerPaused = false;
-                if (producerResumeResolver) {
-                    const resolver = producerResumeResolver;
-                    producerResumeResolver = null;
-                    resolver();
-                }
-            }
         };
         workers.push(w);
     }
@@ -1130,32 +1134,51 @@ function destroyAllWorkers() {
     workers.forEach(w => w.terminate());
     workers = [];
     workerBusy = [];
-    taskQueue = [];
-    pendingTaskCount = 0;
+    activeTasks = 0;
 }
 
-function processQueue() {
-    if (taskQueue.length === 0) return;
-    const freeIdx = workerBusy.findIndex(b => !b);
-    if (freeIdx === -1) return;
-    const task = taskQueue.shift();
-    workerBusy[freeIdx] = true;
-    workers[freeIdx].postMessage(task, [task.blob]);
+async function processImageInWorker(blob, index, filename) {
+    return new Promise((resolve) => {
+        const trySend = () => {
+            const freeIdx = workerBusy.findIndex(b => !b);
+            if (freeIdx === -1) {
+                setTimeout(trySend, 50);
+                return;
+            }
+            workerBusy[freeIdx] = true;
+            activeTasks++;
+            
+            const handler = (e) => {
+                workers[freeIdx].removeEventListener('message', handler);
+                workerBusy[freeIdx] = false;
+                activeTasks--;
+                const { index: idx, hash } = e.data;
+                if (hash && !hash.startsWith('error-') && hash !== 'non-image') {
+                    state.imageHashMap.set(state.entries[idx].filename, hash);
+                }
+                processedCount++;
+                updateProgressUI();
+                resolve();
+            };
+            
+            workers[freeIdx].addEventListener('message', handler);
+            workers[freeIdx].postMessage({ blob, index, filename }, [blob]);
+        };
+        trySend();
+    });
 }
 
-function dispatchHashTask(blob, index) {
-    taskQueue.push({ blob, index });
-    pendingTaskCount++;
-    processQueue();
-}
-
-async function waitForQueueSpace() {
-    if (pendingTaskCount >= CONFIG.MAX_PENDING_TASKS) {
-        producerPaused = true;
-        await new Promise(resolve => {
-            producerResumeResolver = resolve;
-        });
-    }
+async function waitForWorkerSlot() {
+    return new Promise((resolve) => {
+        const check = () => {
+            if (activeTasks < CONFIG.MAX_PENDING_TASKS) {
+                resolve();
+            } else {
+                setTimeout(check, 30);
+            }
+        };
+        check();
+    });
 }
 
 /* ================================================
@@ -2819,11 +2842,14 @@ let totalImagesCount = 0;
 
 function updateProgressUI() {
     if (totalImagesCount > 0) {
-        const pct = Math.round((processedCount / totalImagesCount) * 100);
+        const pct = (processedCount / totalImagesCount) * 100;
         const memInfo = (performance.memory ? `内存: ${(performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(0)}MB | ` : '');
-        showProgress('⏳ 预处理中...', pct, `${memInfo}${processedCount} / ${totalImagesCount}`);
+        const speed = processedCount > 0 ? `${(processedCount / ((Date.now() - preprocessStartTime) / 1000)).toFixed(1)}/s` : '-';
+        showProgress('⏳ 预处理中...', pct, `${memInfo}${processedCount} / ${totalImagesCount} | ${speed}`);
     }
 }
+
+let preprocessStartTime = 0;
 
 let progressRefreshTimer = null;
 function startProgressRefresh() {
@@ -2848,6 +2874,7 @@ async function startPreprocessing(file) {
     if (state.isProcessing) return;
     state.isProcessing = true;
     state.abortSearch = false;
+    preprocessStartTime = Date.now();
     
     try {
         if (state.zipReader && file.name === state.zipFileName && file.size === state.zipFileSize && state.entries.length > 0) {
@@ -2870,6 +2897,7 @@ async function startPreprocessing(file) {
         state.entries = [];
         state.zipFileName = file.name;
         state.zipFileSize = file.size;
+        processedCount = 0;
         
         els.dropzone.style.display = 'none';
         els.contentArea.style.display = 'none';
@@ -2905,26 +2933,24 @@ async function startPreprocessing(file) {
         initWorkers();
         startProgressRefresh();
         
-        const readNext = async () => {
-            for (let idx = 0; idx < totalImagesCount && !state.abortSearch; idx++) {
-                await waitForQueueSpace();
+        const tasks = [];
+        
+        for (let idx = 0; idx < totalImagesCount && !state.abortSearch; idx++) {
+            await waitForWorkerSlot();
+            if (state.abortSearch) break;
+            try {
+                const filename = state.entries[idx].filename;
+                const blob = await state.entries[idx].getData(new BlobWriter());
                 if (state.abortSearch) break;
-                try {
-                    const blob = await state.entries[idx].getData(new BlobWriter());
-                    dispatchHashTask(blob, idx);
-                } catch (e) {
-                    processedCount++;
-                    updateProgressUI();
-                }
+                const task = processImageInWorker(blob, idx, filename);
+                tasks.push(task);
+            } catch (e) {
+                processedCount++;
+                updateProgressUI();
             }
-        };
-        
-        readNext();
-        
-        while (processedCount < totalImagesCount && !state.abortSearch) {
-            await new Promise(r => setTimeout(r, 100));
         }
         
+        await Promise.all(tasks);
         stopProgressRefresh();
         
         if (state.abortSearch) {
