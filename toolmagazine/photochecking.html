@@ -1254,12 +1254,13 @@ function findSimilarByHash(baseFilename, threshold) {
     const hash = state.imageHashMap.get(baseFilename);
     if (!hash) return [];
     const t = threshold ?? parseInt(document.getElementById('threshold').value);
+    const minDist = Math.floor(t * 0.15);
     const results = [];
     for (const [f, h] of state.imageHashMap) {
         if (f === baseFilename) continue;
         if (state.statusMap.get(f) !== 'pending') continue;
         const dist = hammingDistance(hash, h);
-        if (dist <= t) results.push(f);
+        if (dist <= t && dist >= minDist) results.push(f);
     }
     return results;
 }
@@ -1375,7 +1376,12 @@ function getStatusBadge(status) {
  *  虚拟滚动网格
  * ================================================ */
 const VIRTUAL_ITEM_HEIGHT = 180;
-const GRID_COLUMNS = 6;
+const GRID_MIN_WIDTH = 160;
+const GRID_GAP = 10;
+function getGridColumns(container) {
+    const width = container.clientWidth - 32;
+    return Math.max(1, Math.floor((width + GRID_GAP) / (GRID_MIN_WIDTH + GRID_GAP)));
+}
 
 function createImageCard(filename, options = {}) {
     const card = document.createElement('div');
@@ -1449,7 +1455,8 @@ function renderVirtualGrid(container, files, area) {
         return;
     }
     
-    const totalHeight = Math.ceil(files.length / GRID_COLUMNS) * VIRTUAL_ITEM_HEIGHT;
+    const columns = getGridColumns(container);
+    const totalHeight = Math.ceil(files.length / columns) * VIRTUAL_ITEM_HEIGHT;
     
     const gridContainer = document.createElement('div');
     gridContainer.className = 'grid-container';
@@ -1468,20 +1475,21 @@ function renderVirtualGrid(container, files, area) {
     container.appendChild(gridContainer);
     
     const renderChunk = () => {
+        const cols = getGridColumns(container);
         const scrollTop = container.scrollTop;
         const viewportHeight = container.clientHeight;
         const chunkSize = Math.ceil(viewportHeight / VIRTUAL_ITEM_HEIGHT) + CONFIG.VIRTUAL_BUFFER * 2;
         const startRow = Math.max(0, Math.floor(scrollTop / VIRTUAL_ITEM_HEIGHT) - CONFIG.VIRTUAL_BUFFER);
-        const endRow = Math.min(Math.ceil(files.length / GRID_COLUMNS), startRow + chunkSize);
-        const startIdx = startRow * GRID_COLUMNS;
-        const endIdx = Math.min(files.length, endRow * GRID_COLUMNS);
+        const endRow = Math.min(Math.ceil(files.length / cols), startRow + chunkSize);
+        const startIdx = startRow * cols;
+        const endIdx = Math.min(files.length, endRow * cols);
         
         gridContent.innerHTML = '';
         gridContent.style.transform = `translateY(${startRow * VIRTUAL_ITEM_HEIGHT}px)`;
         
         const grid = document.createElement('div');
         grid.className = 'image-grid';
-        grid.style.gridTemplateColumns = `repeat(${GRID_COLUMNS}, 1fr)`;
+        grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
         
         for (let i = startIdx; i < endIdx; i++) {
             const card = createImageCard(files[i], { area });
@@ -1491,11 +1499,15 @@ function renderVirtualGrid(container, files, area) {
         gridContent.appendChild(grid);
     };
     
-    renderChunk();
-    container.addEventListener('scroll', () => {
+    container._renderChunk = renderChunk;
+    container._onVirtualScroll = () => {
         clearTimeout(container._scrollTimer);
         container._scrollTimer = setTimeout(renderChunk, 30);
-    });
+    };
+    
+    renderChunk();
+    container.removeEventListener('scroll', container._onVirtualScroll);
+    container.addEventListener('scroll', container._onVirtualScroll);
 }
 
 /* ================================================
@@ -2740,3 +2752,6 @@ bindEvents();
         renderAll();
     }
 })();
+</script>
+</body>
+</html>
