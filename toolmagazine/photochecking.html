@@ -933,16 +933,17 @@ const state = {
 
 const CONFIG = {
     THUMB_WIDTH: 200,
-    MAX_WORKERS: Math.min(navigator.hardwareConcurrency || 4, 6),
+    MAX_WORKERS: 2,
     MAX_OCR_CONCURRENT: 5,
     MAX_FEATURE_CONCURRENT: 3,
+    MAX_PENDING_TASKS: 4,
     VIRTUAL_BUFFER: 5,
     THRESHOLD_DEFAULT: 8,
     PYRAMID_LEVELS: [0, 1.2, 2.5, 5.0],
     PYRAMID_WEIGHTS: [0.1, 0.2, 0.3, 0.4],
     MAX_EDGE_DISTANCE: 2,
     MAX_IMAGE_SIZE: 512,
-    TOOL_VERSION: '3.0.0',
+    TOOL_VERSION: '3.1.0',
 };
 
 const thumbCache = new Map();
@@ -1092,6 +1093,9 @@ let workerBusy = [];
 let taskQueue = [];
 let totalImages = 0;
 let processedCount = 0;
+let pendingTaskCount = 0;
+let producerPaused = false;
+let producerResumeResolver = null;
 
 function initWorkers() {
     destroyAllWorkers();
@@ -1106,8 +1110,17 @@ function initWorkers() {
                 state.imageHashMap.set(state.entries[index].filename, hash);
             }
             processedCount++;
+            pendingTaskCount--;
             updateProgressUI();
             processQueue();
+            if (producerPaused && pendingTaskCount < CONFIG.MAX_PENDING_TASKS) {
+                producerPaused = false;
+                if (producerResumeResolver) {
+                    const resolver = producerResumeResolver;
+                    producerResumeResolver = null;
+                    resolver();
+                }
+            }
         };
         workers.push(w);
     }
@@ -1118,6 +1131,7 @@ function destroyAllWorkers() {
     workers = [];
     workerBusy = [];
     taskQueue = [];
+    pendingTaskCount = 0;
 }
 
 function processQueue() {
@@ -1131,7 +1145,17 @@ function processQueue() {
 
 function dispatchHashTask(blob, index) {
     taskQueue.push({ blob, index });
+    pendingTaskCount++;
     processQueue();
+}
+
+async function waitForQueueSpace() {
+    if (pendingTaskCount >= CONFIG.MAX_PENDING_TASKS) {
+        producerPaused = true;
+        await new Promise(resolve => {
+            producerResumeResolver = resolve;
+        });
+    }
 }
 
 /* ================================================
@@ -2796,7 +2820,27 @@ let totalImagesCount = 0;
 function updateProgressUI() {
     if (totalImagesCount > 0) {
         const pct = Math.round((processedCount / totalImagesCount) * 100);
-        showProgress('⏳ 预处理中...', pct, `${processedCount} / ${totalImagesCount}`);
+        const memInfo = (performance.memory ? `内存: ${(performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(0)}MB | ` : '');
+        showProgress('⏳ 预处理中...', pct, `${memInfo}${processedCount} / ${totalImagesCount}`);
+    }
+}
+
+let progressRefreshTimer = null;
+function startProgressRefresh() {
+    if (progressRefreshTimer) return;
+    progressRefreshTimer = setInterval(() => {
+        updateProgressUI();
+        if (!state.isProcessing) {
+            clearInterval(progressRefreshTimer);
+            progressRefreshTimer = null;
+        }
+    }, 500);
+}
+
+function stopProgressRefresh() {
+    if (progressRefreshTimer) {
+        clearInterval(progressRefreshTimer);
+        progressRefreshTimer = null;
     }
 }
 
@@ -2859,27 +2903,29 @@ async function startPreprocessing(file) {
         }
         
         initWorkers();
-        const CONCURRENT = CONFIG.MAX_WORKERS;
-        let readIdx = 0;
+        startProgressRefresh();
         
         const readNext = async () => {
-            if (readIdx >= totalImagesCount) return;
-            const idx = readIdx++;
-            try {
-                const blob = await state.entries[idx].getData(new BlobWriter());
-                dispatchHashTask(blob, idx);
-            } catch (e) {
-                processedCount++;
-                updateProgressUI();
+            for (let idx = 0; idx < totalImagesCount && !state.abortSearch; idx++) {
+                await waitForQueueSpace();
+                if (state.abortSearch) break;
+                try {
+                    const blob = await state.entries[idx].getData(new BlobWriter());
+                    dispatchHashTask(blob, idx);
+                } catch (e) {
+                    processedCount++;
+                    updateProgressUI();
+                }
             }
-            await readNext();
         };
         
-        await Promise.all(Array(CONCURRENT).fill(0).map(() => readNext()));
+        readNext();
         
         while (processedCount < totalImagesCount && !state.abortSearch) {
-            await new Promise(r => setTimeout(r, 200));
+            await new Promise(r => setTimeout(r, 100));
         }
+        
+        stopProgressRefresh();
         
         if (state.abortSearch) {
             destroyAllWorkers();
