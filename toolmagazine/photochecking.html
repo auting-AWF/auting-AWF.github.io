@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>图片查重管理工具 Pro v3.2</title>
+<title>图片查重工具 Pro v3.5</title>
 <style>
 :root {
     --bg: #0f0f1a;
@@ -2643,7 +2643,7 @@ function renderBaseGroups() {
             grid.style.gap = '8px';
             
             group.images.forEach(filename => {
-                const card = createImageCard(filename, { area: 'base', draggable: true });
+                const card = createImageCard(filename, { area: 'base', draggable: true, immediate: true });
                 card.classList.add('base');
                 if (state.multiSelectMode && state.selectedFiles.has(filename)) {
                     card.classList.add('multi-selected');
@@ -2743,7 +2743,7 @@ function renderDuplicateGroups() {
         grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(120px, 1fr))';
         grid.style.gap = '8px';
         
-        const baseCard = createImageCard(group.base, { area: 'dup' });
+        const baseCard = createImageCard(group.base, { area: 'dup', immediate: true });
         baseCard.classList.add('base');
         baseCard.querySelector('.filename').textContent = '⭐ 基准: ' + group.base;
         if (!baseCard.querySelector('.badge')) {
@@ -2755,7 +2755,7 @@ function renderDuplicateGroups() {
         grid.appendChild(baseCard);
         
         group.duplicates.forEach(filename => {
-            const dupCard = createImageCard(filename, { area: 'dup' });
+            const dupCard = createImageCard(filename, { area: 'dup', immediate: true });
             dupCard.classList.add('duplicate');
             if (state.multiSelectMode && state.selectedFiles.has(filename)) {
                 dupCard.classList.add('multi-selected');
