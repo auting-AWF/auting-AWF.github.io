@@ -173,6 +173,16 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     gap: 8px;
     padding-right: 8px;
 }
+.back-top-btn {
+    min-width: 40px;
+    justify-content: center;
+    padding: 6px 10px;
+    transition: all 0.2s;
+}
+.back-top-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(74, 158, 255, 0.3);
+}
 
 /* ============ 主内容区 ============ */
 .main {
@@ -1029,6 +1039,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         <span class="count" id="searchCount">0</span>
     </div>
     <div class="tab-actions">
+        <button class="btn back-top-btn" id="backToTopBtn" title="回到顶部" style="display:none;">⬆️</button>
         <button class="btn" id="multiSelectBtn" style="display:none;">☑️ 多选模式</button>
         <button class="btn accent" id="addGroupBtn" style="display:none;">➕ 新建分组</button>
     </div>
@@ -2197,6 +2208,7 @@ function initElements() {
     els.candidateConfirm = document.getElementById('candidateConfirm');
     els.multiSelectBtn = document.getElementById('multiSelectBtn');
     els.addGroupBtn = document.getElementById('addGroupBtn');
+    els.backToTopBtn = document.getElementById('backToTopBtn');
     els.batchBar = document.getElementById('batchBar');
     els.batchCount = document.getElementById('batchCount');
     els.batchIgnoreBtn = document.getElementById('batchIgnoreBtn');
@@ -2231,6 +2243,13 @@ function updateTabActions() {
     els.addGroupBtn.style.display = state.currentTab === 'base' ? '' : 'none';
     els.multiSelectBtn.textContent = state.multiSelectMode ? '✅ 完成选择' : '☑️ 多选模式';
     els.multiSelectBtn.classList.toggle('accent', state.multiSelectMode);
+    updateBackToTopBtn();
+}
+
+function updateBackToTopBtn() {
+    if (!els.backToTopBtn) return;
+    const hasScroll = els.contentArea.scrollTop > 100;
+    els.backToTopBtn.style.display = hasScroll ? '' : 'none';
 }
 
 function getStatusBadge(status) {
@@ -2405,6 +2424,11 @@ function renderVirtualGrid(container, files, area) {
         const startIdx = startRow * cols;
         const endIdx = Math.min(files.length, endRow * cols);
         
+        const visibleStartRow = Math.max(0, Math.floor(scrollTop / VIRTUAL_ITEM_HEIGHT));
+        const visibleEndRow = Math.min(Math.ceil(files.length / cols), visibleStartRow + Math.ceil(viewportHeight / VIRTUAL_ITEM_HEIGHT));
+        const visibleStartIdx = visibleStartRow * cols;
+        const visibleEndIdx = Math.min(files.length, visibleEndRow * cols);
+        
         gridContent.innerHTML = '';
         gridContent.style.transform = `translateY(${startRow * VIRTUAL_ITEM_HEIGHT}px)`;
         
@@ -2412,33 +2436,39 @@ function renderVirtualGrid(container, files, area) {
         grid.className = 'image-grid';
         grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
         
+        const visibleCards = [];
+        const bufferCards = [];
+        
         for (let i = startIdx; i < endIdx; i++) {
-            const card = createImageCard(files[i], { area, immediate: true });
+            const isVisible = i >= visibleStartIdx && i < visibleEndIdx;
+            const card = createImageCard(files[i], { area, immediate: isVisible });
             grid.appendChild(card);
+            if (!isVisible) bufferCards.push(card);
         }
         
         gridContent.appendChild(grid);
         
-        // 扫描未加载的缩略图并触发加载
-        const missingThumbs = gridContent.querySelectorAll('img.thumb:not([src])');
-        missingThumbs.forEach(img => {
-            const fn = img.dataset.filename;
-            if (!fn) return;
-            // 清除旧的 loading 标记（可能从 innerHTML 继承）
-            img.removeAttribute('data-loading');
-            // 直接调用 loadThumbnail，Promise 缓存保证不会重复加载
-            img.dataset.loading = 'true';
-            loadThumbnail(fn).then(url => {
-                if (!url) return;
-                // 按 filename 查找当前 DOM 中所有匹配的 img
-                const allImgs = document.querySelectorAll(`img.thumb[data-filename="${fn}"]`);
-                allImgs.forEach(el => {
-                    if (!el.src) {
-                        el.src = url;
-                        el.removeAttribute('data-loading');
-                        if (el.decode) el.decode().catch(() => {});
-                    }
-                });
+        requestAnimationFrame(() => {
+            bufferCards.forEach(card => {
+                const img = card.querySelector('img.thumb');
+                if (!img || img.src) return;
+                const fn = img.dataset.filename;
+                if (!fn || img.dataset.loading) return;
+                const cachedUrl = thumbCache.get(fn);
+                if (cachedUrl) {
+                    img.src = cachedUrl;
+                    img.removeAttribute('data-loading');
+                } else {
+                    img.dataset.loading = 'true';
+                    loadThumbnail(fn).then(url => {
+                        if (!url) return;
+                        if (!img.src) {
+                            img.src = url;
+                            img.removeAttribute('data-loading');
+                            if (img.decode) img.decode().catch(() => {});
+                        }
+                    });
+                }
             });
         });
     };
@@ -2447,6 +2477,7 @@ function renderVirtualGrid(container, files, area) {
     container._onVirtualScroll = () => {
         clearTimeout(container._scrollTimer);
         container._scrollTimer = setTimeout(renderChunk, 16);
+        updateBackToTopBtn();
     };
     
     renderChunk();
@@ -2458,7 +2489,8 @@ function renderVirtualGrid(container, files, area) {
  *  渲染主视图
  * ================================================ */
 function renderContent() {
-    els.contentArea.scrollTop = 0;
+    const savedScrollTop = els.contentArea.scrollTop;
+    
     els.contentArea.innerHTML = '';
     
     updateTabActions();
@@ -2475,6 +2507,13 @@ function renderContent() {
     } else {
         renderVirtualGrid(els.contentArea, files, tab);
     }
+    
+    els.contentArea.dataset.currentTab = tab;
+    
+    requestAnimationFrame(() => {
+        els.contentArea.scrollTop = savedScrollTop;
+        updateBackToTopBtn();
+    });
 }
 
 function renderSearchResults(files) {
@@ -4275,6 +4314,12 @@ function bindEvents() {
     });
     
     els.multiSelectBtn.addEventListener('click', toggleMultiSelect);
+    
+    els.backToTopBtn.addEventListener('click', () => {
+        els.contentArea.scrollTo({ top: 0, behavior: 'smooth' });
+        setTimeout(updateBackToTopBtn, 300);
+    });
+    
     els.batchCancelBtn.addEventListener('click', () => {
         state.selectedFiles.clear();
         updateBatchBar();
