@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>图片查重工具 Pro v3.5</title>
+<title>图片查重工具 Pro v3.6</title>
 <style>
 :root {
     --bg: #0f0f1a;
@@ -4099,7 +4099,7 @@ async function exportGroupsAsZip() {
     els.exportBtn.textContent = '📦 正在打包...';
     
     try {
-        const zip = new ZipWriter(new BlobWriter('application/zip'));
+        const zipWriter = new ZipWriter(new BlobWriter('application/zip'));
         let totalFiles = 0;
         let processedFiles = 0;
         
@@ -4156,10 +4156,16 @@ async function exportGroupsAsZip() {
                     continue;
                 }
                 try {
-                    const blob = await entry.getData(new BlobWriter());
+                    const writer = new BlobWriter();
+                    await entry.getData(writer);
+                    const blob = writer.getData();
+                    if (!blob) {
+                        console.warn(`跳过空blob: ${fname}`);
+                        continue;
+                    }
                     const safeFname = fname.replace(/[\\/:*?"<>|]/g, '_');
                     const path = `${group.safePath}/${safeFname}`;
-                    await zip.add(path, blob);
+                    await zipWriter.add(path, blob);
                     processedFiles++;
                 } catch (err) {
                     console.error(`导出文件失败 ${fname}:`, err);
@@ -4174,7 +4180,7 @@ async function exportGroupsAsZip() {
             return;
         }
         
-        const content = await zip.close();
+        const content = await zipWriter.close();
         const url = URL.createObjectURL(content);
         const a = document.createElement('a');
         a.href = url;
