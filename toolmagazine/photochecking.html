@@ -838,10 +838,25 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     transition: all 0.15s;
 }
 .batch-bar button:hover { background: var(--border); }
-.batch-bar .btn-ignore:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
-.batch-bar .btn-restore { background: var(--success, #22c55e); border-color: var(--success, #22c55e); color: #fff; }
-.batch-bar .btn-restore:hover { background: #16a34a; border-color: #16a34a; }
 .batch-bar .btn-cancel:hover { background: var(--border-light); }
+.batch-bar .batch-group-select {
+    background: var(--surface-light);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    min-width: 140px;
+    outline: none;
+}
+.batch-bar .batch-group-select:focus {
+    border-color: var(--accent);
+}
+.batch-bar .batch-group-select option {
+    background: var(--surface);
+    color: var(--text);
+}
 
 /* ============ 动画 ============ */
 @keyframes fadeInUp {
@@ -1078,9 +1093,10 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         <span class="batch-count" id="batchCount">0</span>
         <span>张</span>
     </div>
-    <button class="btn-ignore" id="batchIgnoreBtn">🚫 批量忽略</button>
-    <button class="btn-restore" id="batchRestoreBtn" style="display:none;">↩️ 取消忽略</button>
-    <button id="batchCheckBtn">🔍 批量查重</button>
+    <select id="batchGroupSelect" class="batch-group-select">
+        <option value="">选择基准组...</option>
+    </select>
+    <button id="batchMoveBtn">📥 移入基准组</button>
     <button class="btn-cancel" id="batchCancelBtn">取消</button>
 </div>
 
@@ -2210,9 +2226,8 @@ function initElements() {
     els.backToTopBtn = document.getElementById('backToTopBtn');
     els.batchBar = document.getElementById('batchBar');
     els.batchCount = document.getElementById('batchCount');
-    els.batchIgnoreBtn = document.getElementById('batchIgnoreBtn');
-    els.batchRestoreBtn = document.getElementById('batchRestoreBtn');
-    els.batchCheckBtn = document.getElementById('batchCheckBtn');
+    els.batchGroupSelect = document.getElementById('batchGroupSelect');
+    els.batchMoveBtn = document.getElementById('batchMoveBtn');
     els.batchCancelBtn = document.getElementById('batchCancelBtn');
     els.baseFloatWindow = document.getElementById('baseFloatWindow');
     els.baseFloatList = document.getElementById('baseFloatList');
@@ -3826,6 +3841,30 @@ function setupBaseFloatScroll() {
 /* ================================================
  *  批量操作
  * ================================================ */
+function moveBatchToBaseGroup(files, groupId) {
+    const group = state.baseGroups.get(groupId);
+    if (!group) {
+        alert('分组不存在');
+        return;
+    }
+    
+    let movedCount = 0;
+    for (const filename of files) {
+        for (const [_, g] of state.baseGroups) g.images = g.images.filter(f => f !== filename);
+        for (const [_, g] of state.duplicateGroups) g.duplicates = g.duplicates.filter(f => f !== filename);
+        state.statusMap.set(filename, 'base');
+        if (!group.images.includes(filename)) {
+            group.images.push(filename);
+        }
+        movedCount++;
+    }
+    
+    state.selectedFiles.clear();
+    saveState();
+    renderAll();
+    updateBatchBar();
+}
+
 function toggleFileSelection(filename) {
     if (state.selectedFiles.has(filename)) {
         state.selectedFiles.delete(filename);
@@ -3851,13 +3890,37 @@ function updateBatchBar() {
     els.batchCount.textContent = count;
     if (count > 0) {
         els.batchBar.classList.add('show');
-        
-        const isIgnoredTab = state.currentTab === 'ignored';
-        els.batchIgnoreBtn.style.display = isIgnoredTab ? 'none' : '';
-        els.batchRestoreBtn.style.display = isIgnoredTab ? '' : 'none';
-        els.batchCheckBtn.style.display = isIgnoredTab ? 'none' : '';
+        updateBatchGroupSelect();
+        els.batchMoveBtn.textContent = `📥 移入基准组 (${count}张)`;
     } else {
         els.batchBar.classList.remove('show');
+    }
+}
+
+function updateBatchGroupSelect() {
+    const select = els.batchGroupSelect;
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">选择基准组...</option>';
+    
+    if (state.baseGroups.size === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '（暂无分组，请先新建）';
+        opt.disabled = true;
+        select.appendChild(opt);
+        return;
+    }
+    
+    for (const [gid, group] of state.baseGroups) {
+        const opt = document.createElement('option');
+        opt.value = gid;
+        opt.textContent = group.name;
+        if (gid === currentVal) opt.selected = true;
+        select.appendChild(opt);
+    }
+    
+    if (currentVal && state.baseGroups.has(currentVal)) {
+        select.value = currentVal;
     }
 }
 
@@ -4381,26 +4444,18 @@ function bindEvents() {
         state.selectedFiles.clear();
         updateBatchBar();
     });
-    els.batchIgnoreBtn.addEventListener('click', () => {
+    els.batchMoveBtn.addEventListener('click', () => {
         const selected = [...state.selectedFiles];
-        selected.forEach(f => markAsUnique(f, true));
-        state.selectedFiles.clear();
-        saveState();
-        renderAll();
-        updateBatchBar();
-    });
-    els.batchRestoreBtn.addEventListener('click', () => {
-        const selected = [...state.selectedFiles];
-        selected.forEach(f => moveToPending(f, true));
-        state.selectedFiles.clear();
-        saveState();
-        renderAll();
-        updateBatchBar();
-    });
-    els.batchCheckBtn.addEventListener('click', () => {
-        if (state.selectedFiles.size > 0) {
-            startCandidateCheck(state.selectedFiles.values().next().value);
+        const groupId = els.batchGroupSelect.value;
+        if (selected.length === 0) {
+            alert('请先选择图片');
+            return;
         }
+        if (!groupId) {
+            alert('请先选择要移入的基准组');
+            return;
+        }
+        moveBatchToBaseGroup(selected, groupId);
     });
     
     els.addGroupBtn.addEventListener('click', createNewGroup);
