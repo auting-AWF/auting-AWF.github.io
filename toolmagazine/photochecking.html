@@ -1639,8 +1639,9 @@ async function _loadThumbnailInternal(filename) {
 const originalUrls = new Map();
 
 async function loadOriginal(filename) {
+    // 复用已有URL，避免revoke正在使用的URL
     if (originalUrls.has(filename)) {
-        URL.revokeObjectURL(originalUrls.get(filename));
+        return originalUrls.get(filename);
     }
     const entry = state.entryMap.get(filename);
     if (!entry) return null;
@@ -2292,49 +2293,19 @@ function createImageCard(filename, options = {}) {
     
     // WeChat-style multi-select drag: long press on ✓ overlay
     const checkOverlay = card.querySelector('.check-overlay');
-    let multiSelectTimer = null;
-    let multiSelectActive = false;
-    
     checkOverlay.addEventListener('mousedown', (e) => {
         if (!state.multiSelectMode) return;
         e.preventDefault();
         e.stopPropagation();
         state.multiSelectDragStartX = e.clientX;
         state.multiSelectDragStartY = e.clientY;
-        multiSelectTimer = setTimeout(() => {
-            multiSelectActive = true;
+        state.multiSelectDragInitiator = filename;
+        state.multiSelectDragTimer = setTimeout(() => {
             state.multiSelectDragging = true;
             toggleFileSelection(filename);
             els.multiDragIndicator.classList.add('show');
             els.multiDragCount.textContent = `已选 ${state.selectedFiles.size} 张`;
         }, 200);
-    });
-    
-    document.addEventListener('mousemove', (e) => {
-        if (!multiSelectActive) return;
-        const dx = Math.abs(e.clientX - state.multiSelectDragStartX);
-        const dy = Math.abs(e.clientY - state.multiSelectDragStartY);
-        if (dx > 5 || dy > 5) {
-            // 查找鼠标下的卡片
-            const el = document.elementFromPoint(e.clientX, e.clientY);
-            const targetCard = el ? el.closest('.image-card') : null;
-            if (targetCard && targetCard.dataset.filename) {
-                const fn = targetCard.dataset.filename;
-                if (!state.selectedFiles.has(fn)) {
-                    toggleFileSelection(fn);
-                    els.multiDragCount.textContent = `已选 ${state.selectedFiles.size} 张`;
-                }
-            }
-        }
-    });
-    
-    document.addEventListener('mouseup', () => {
-        if (multiSelectTimer) { clearTimeout(multiSelectTimer); multiSelectTimer = null; }
-        if (multiSelectActive) {
-            multiSelectActive = false;
-            state.multiSelectDragging = false;
-            els.multiDragIndicator.classList.remove('show');
-        }
     });
     
     card.addEventListener('dragstart', (e) => {
@@ -2734,7 +2705,8 @@ function renderDuplicateGroups() {
  * ================================================ */
 function markAsUnique(filename) {
     const status = state.statusMap.get(filename);
-    if (status === 'base' || status === 'duplicate' || status === 'ignored') return;
+    // 只允许忽略 pending 状态或搜索结果（undefined）
+    if (status !== 'pending' && status !== undefined) return;
     state.statusMap.set(filename, 'unique');
     state.selectedFiles.delete(filename);
     saveState();
@@ -3376,6 +3348,38 @@ function handleContextAction(action) {
  *  拖拽系统
  * ================================================ */
 function setupDragAndDrop() {
+    // 全局微信式多选拖拽：mousemove + mouseup（只绑定一次）
+    document.addEventListener('mousemove', (e) => {
+        if (!state.multiSelectDragging) return;
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        const targetCard = el ? el.closest('.image-card') : null;
+        if (targetCard && targetCard.dataset.filename) {
+            const fn = targetCard.dataset.filename;
+            if (!state.selectedFiles.has(fn)) {
+                toggleFileSelection(fn);
+                els.multiDragCount.textContent = `已选 ${state.selectedFiles.size} 张`;
+            }
+        }
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (state.multiSelectDragTimer) { clearTimeout(state.multiSelectDragTimer); state.multiSelectDragTimer = null; }
+        if (state.multiSelectDragging) {
+            state.multiSelectDragging = false;
+            state.multiSelectDragInitiator = null;
+            els.multiDragIndicator.classList.remove('show');
+        }
+        // 拖出浏览器窗口释放时也隐藏悬浮窗
+        hideBaseFloatWindow();
+    });
+    
+    // 拖出浏览器窗口时隐藏悬浮窗
+    document.addEventListener('dragleave', (e) => {
+        if (e.relatedTarget === null) {
+            hideBaseFloatWindow();
+        }
+    });
+    
     document.addEventListener('dragover', (e) => {
         e.preventDefault();
         if (state.dragSource) {
@@ -3547,6 +3551,7 @@ function renderBaseFloatList() {
             
             // 拖放高亮
             item.addEventListener('dragover', (e) => {
+                if (!state.dragSource) return;
                 e.preventDefault();
                 e.stopPropagation();
                 document.querySelectorAll('.base-float-item.drop-hover').forEach(el => el.classList.remove('drop-hover'));
@@ -3565,6 +3570,13 @@ function renderBaseFloatList() {
                 const sourceFilename = state.dragSource;
                 const targetFilename = imgFile;
                 const targetGid = gid;
+                
+                // 校验状态：不允许将基准图或重复图再次归类
+                const sourceStatus = state.statusMap.get(sourceFilename);
+                if (sourceStatus === 'base' || sourceStatus === 'duplicate') {
+                    alert('源图片已是基准图或重复图，无法再次归类');
+                    return;
+                }
                 
                 // 将源图片标记为目标图片的重复图
                 let dupGid = null;
@@ -3621,12 +3633,14 @@ function stopBaseFloatAutoScroll() {
 
 function setupBaseFloatScroll() {
     els.baseFloatScrollTop.addEventListener('dragover', (e) => {
+        if (!state.dragSource) return;
         e.preventDefault();
         startBaseFloatAutoScroll(-1);
     });
     els.baseFloatScrollTop.addEventListener('dragleave', stopBaseFloatAutoScroll);
     
     els.baseFloatScrollBottom.addEventListener('dragover', (e) => {
+        if (!state.dragSource) return;
         e.preventDefault();
         startBaseFloatAutoScroll(1);
     });
