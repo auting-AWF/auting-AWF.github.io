@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>图片查重工具 Pro v3.7</title>
+<title>图片查重工具 Pro v3.7.1</title>
 <style>
 :root {
     --bg: #0f0f1a;
@@ -658,6 +658,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
 .candidate-list {
     flex: 1;
     overflow-y: auto;
+    min-height: 0;
     padding: 10px;
 }
 .candidate-list::-webkit-scrollbar { width: 6px; }
@@ -929,6 +930,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
 .base-float-list {
     flex: 1;
     overflow-y: auto;
+    min-height: 0;
     padding: 8px;
 }
 .base-float-list::-webkit-scrollbar { width: 6px; }
@@ -3846,11 +3848,15 @@ function setupBaseFloatScroll() {
     // 悬浮窗鼠标滚轮滚动支持
     els.baseFloatWindow.addEventListener('wheel', (e) => {
         if (!els.baseFloatWindow.classList.contains('show')) return;
+        // 如果滚轮在列表区域内，让原生滚动生效（不拦截）
+        if (e.target.closest('.base-float-list')) {
+            return;
+        }
+        // 滚轮在其他区域（header/scroll-zone等），手动滚动列表并阻止页面滚动
         e.preventDefault();
-        e.stopPropagation();
         const scrollSpeed = Math.max(3, Math.abs(e.deltaY) * 0.8);
         els.baseFloatList.scrollTop += e.deltaY > 0 ? scrollSpeed : -scrollSpeed;
-    }, { passive: false });
+    }, { passive: false, capture: true });
 }
 
 /* ================================================
@@ -4548,6 +4554,17 @@ function bindEvents() {
     els.candidateClose.addEventListener('click', hideCandidatePanel);
     els.candidateCancel.addEventListener('click', hideCandidatePanel);
     els.candidateConfirm.addEventListener('click', confirmCandidate);
+    
+    // 候选面板滚轮支持
+    els.candidatePanel.addEventListener('wheel', (e) => {
+        if (!els.candidatePanel.classList.contains('show')) return;
+        if (e.target.closest('.candidate-list')) {
+            return;
+        }
+        e.preventDefault();
+        const scrollSpeed = Math.max(3, Math.abs(e.deltaY) * 0.8);
+        els.candidateList.scrollTop += e.deltaY > 0 ? scrollSpeed : -scrollSpeed;
+    }, { passive: false, capture: true });
     
     window.addEventListener('resize', () => {
         if (state.currentTab === 'pending' || state.currentTab === 'ignored') {
