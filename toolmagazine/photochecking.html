@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>图片查重管理工具 Pro v3.1</title>
+<title>图片查重管理工具 Pro v3.2</title>
 <style>
 :root {
     --bg: #0f0f1a;
@@ -72,7 +72,7 @@ body {
 .btn.accent:hover { background: var(--accent-hover); }
 .btn.danger { background: var(--danger); color: #fff; border-color: transparent; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-input[type="file"] { display: none; }
+input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
 
 .search-box {
     flex: 1;
@@ -3385,6 +3385,24 @@ function setupDragAndDrop() {
         }
     });
     
+    document.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const files = e.dataTransfer?.files;
+        if (files && files.length > 0) {
+            const file = files[0];
+            if (file.name.endsWith('.zip') && !state.dragSource && !state.isProcessing) {
+                const dropzoneEl = els.dropzone;
+                if (dropzoneEl.style.display !== 'none') {
+                    dropzoneEl.classList.remove('drag-over');
+                    await startPreprocessing(file);
+                } else if (els.contentArea.style.display !== 'none') {
+                    await startPreprocessing(file);
+                }
+            }
+        }
+    });
+    
     els.contentArea.addEventListener('dragover', (e) => {
         if (state.dragSource) {
             e.preventDefault();
@@ -3403,10 +3421,16 @@ function setupDragAndDrop() {
         }
     });
     
-    els.contentArea.addEventListener('drop', (e) => {
+    els.contentArea.addEventListener('drop', async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (!state.dragSource) return;
+        if (!state.dragSource) {
+            const files = e.dataTransfer?.files;
+            if (files && files.length > 0 && files[0].name.endsWith('.zip')) {
+                await startPreprocessing(files[0]);
+            }
+            return;
+        }
         
         const targetCard = e.target.closest('.image-card');
         const targetFolder = e.target.closest('.folder-group');
@@ -3431,6 +3455,7 @@ function setupDragAndDrop() {
     
     els.dropzone.addEventListener('drop', async (e) => {
         e.preventDefault();
+        e.stopPropagation();
         els.dropzone.classList.remove('drag-over');
         const file = e.dataTransfer.files[0];
         if (file && file.name.endsWith('.zip')) {
@@ -3644,8 +3669,6 @@ function setupBaseFloatScroll() {
     });
     els.baseFloatScrollBottom.addEventListener('dragleave', stopBaseFloatAutoScroll);
 }
-
-els.baseFloatClose.addEventListener('click', hideBaseFloatWindow);
 
 /* ================================================
  *  批量操作
@@ -4072,18 +4095,11 @@ function bindEvents() {
         e.target.value = '';
     });
     
-    els.openZipBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const fileInput = document.getElementById('fileInput');
-        if (!fileInput) {
+    els.openZipBtn.addEventListener('click', () => {
+        if (els.fileInput) {
+            els.fileInput.click();
+        } else {
             alert('文件输入框未找到，请刷新页面重试');
-            return;
-        }
-        try {
-            fileInput.click();
-        } catch (err) {
-            console.error('打开文件选择框失败:', err);
-            alert('打开文件选择框失败，请刷新页面重试');
         }
     });
     
