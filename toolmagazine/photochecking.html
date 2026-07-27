@@ -1414,6 +1414,7 @@ function clearThumbCache() {
     }
     thumbCache.clear();
     thumbLRU.length = 0;
+    thumbLoadPromises.clear();
     revokeAllOriginalUrls();
 }
 
