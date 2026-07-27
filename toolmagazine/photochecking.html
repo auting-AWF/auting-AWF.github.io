@@ -2382,7 +2382,7 @@ function createImageCard(filename, options = {}) {
     return card;
 }
 
-function renderVirtualGrid(container, files, area) {
+function renderVirtualGrid(container, files, area, initialScrollTop = null) {
     container.innerHTML = '';
     
     if (files.length === 0) {
@@ -2413,6 +2413,11 @@ function renderVirtualGrid(container, files, area) {
     gridContainer.appendChild(spacer);
     gridContainer.appendChild(gridContent);
     container.appendChild(gridContainer);
+    
+    if (initialScrollTop !== null && initialScrollTop > 0) {
+        const maxScroll = container.scrollHeight - container.clientHeight;
+        container.scrollTop = Math.min(initialScrollTop, Math.max(0, maxScroll));
+    }
     
     const renderChunk = () => {
         const cols = getGridColumns(container);
@@ -2505,15 +2510,16 @@ function renderContent() {
     } else if (tab === 'dup') {
         renderDuplicateGroups();
     } else {
-        renderVirtualGrid(els.contentArea, files, tab);
+        renderVirtualGrid(els.contentArea, files, tab, savedScrollTop);
     }
     
     els.contentArea.dataset.currentTab = tab;
     
-    requestAnimationFrame(() => {
-        els.contentArea.scrollTop = savedScrollTop;
-        updateBackToTopBtn();
-    });
+    if (tab !== 'pending' && tab !== 'ignored' && tab !== 'search') {
+        const maxScroll = els.contentArea.scrollHeight - els.contentArea.clientHeight;
+        els.contentArea.scrollTop = Math.min(savedScrollTop, Math.max(0, maxScroll));
+    }
+    updateBackToTopBtn();
 }
 
 function renderSearchResults(files) {
@@ -2771,17 +2777,18 @@ function renderDuplicateGroups() {
 /* ================================================
  *  图片操作
  * ================================================ */
-function markAsUnique(filename) {
+function markAsUnique(filename, skipRender = false) {
     const status = state.statusMap.get(filename);
-    // 只允许忽略 pending 状态或搜索结果（undefined）
     if (status !== 'pending' && status !== undefined) return;
     state.statusMap.set(filename, 'unique');
     state.selectedFiles.delete(filename);
-    saveState();
-    renderAll();
+    if (!skipRender) {
+        saveState();
+        renderAll();
+    }
 }
 
-function moveToPending(filename) {
+function moveToPending(filename, skipRender = false) {
     for (const [_, group] of state.baseGroups) group.images = group.images.filter(f => f !== filename);
     for (const [gid, group] of [...state.duplicateGroups]) {
         if (group.base === filename) {
@@ -2793,8 +2800,10 @@ function moveToPending(filename) {
     }
     state.statusMap.set(filename, 'pending');
     state.selectedFiles.delete(filename);
-    saveState();
-    renderAll();
+    if (!skipRender) {
+        saveState();
+        renderAll();
+    }
 }
 
 function deleteBaseImage(baseFilename) {
@@ -3331,6 +3340,7 @@ function hideProgress() {
  *  图片预览
  * ================================================ */
 let currentPreviewOriginalUrl = null;
+let currentPreviewFilename = null;
 let currentZoomScale = 1;
 
 function resetPreviewZoom() {
@@ -3374,6 +3384,8 @@ function previewImage(filename) {
     els.previewModal.classList.add('show');
     resetPreviewZoom();
     
+    currentPreviewFilename = filename;
+    
     if (currentPreviewOriginalUrl) {
         URL.revokeObjectURL(currentPreviewOriginalUrl);
         currentPreviewOriginalUrl = null;
@@ -3389,9 +3401,6 @@ function previewImage(filename) {
     els.previewImg.dataset.loading = 'true';
     loadOriginal(filename).then(url => {
         if (url && els.previewImg.dataset.loading === 'true') {
-            if (thumbUrl && thumbUrl !== url) {
-                URL.revokeObjectURL(thumbUrl);
-            }
             els.previewImg.src = url;
             els.previewImg.dataset.loading = 'done';
             currentPreviewOriginalUrl = url;
@@ -3404,9 +3413,13 @@ function closePreview() {
     els.previewImg.dataset.loading = '';
     resetPreviewZoom();
     if (currentPreviewOriginalUrl) {
+        if (currentPreviewFilename && originalUrls.has(currentPreviewFilename)) {
+            originalUrls.delete(currentPreviewFilename);
+        }
         URL.revokeObjectURL(currentPreviewOriginalUrl);
         currentPreviewOriginalUrl = null;
     }
+    currentPreviewFilename = null;
 }
 
 /* ================================================
@@ -4325,13 +4338,19 @@ function bindEvents() {
         updateBatchBar();
     });
     els.batchIgnoreBtn.addEventListener('click', () => {
-        state.selectedFiles.forEach(f => markAsUnique(f));
+        const selected = [...state.selectedFiles];
+        selected.forEach(f => markAsUnique(f, true));
         state.selectedFiles.clear();
+        saveState();
+        renderAll();
         updateBatchBar();
     });
     els.batchRestoreBtn.addEventListener('click', () => {
-        state.selectedFiles.forEach(f => moveToPending(f));
+        const selected = [...state.selectedFiles];
+        selected.forEach(f => moveToPending(f, true));
         state.selectedFiles.clear();
+        saveState();
+        renderAll();
         updateBatchBar();
     });
     els.batchCheckBtn.addEventListener('click', () => {
