@@ -1164,7 +1164,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
 </script>
 
 <script type="module">
-import { ZipReader, ZipWriter, BlobReader, BlobWriter } from '@zip.js/zip.js';
+import { ZipReader, ZipWriter, BlobReader, BlobWriter, Uint8ArrayWriter } from '@zip.js/zip.js';
 
 /* ================================================
  *  全局状态
@@ -4231,16 +4231,14 @@ async function exportGroupsAsZip() {
                     continue;
                 }
                 try {
-                    const writer = new BlobWriter();
-                    await entry.getData(writer);
-                    const blob = writer.getData();
-                    if (!blob) {
-                        console.warn(`跳过空blob: ${fname}`);
+                    const arrayBuffer = await entry.getData(new Uint8ArrayWriter());
+                    if (!arrayBuffer || arrayBuffer.length === 0) {
+                        console.warn(`跳过空文件: ${fname}`);
                         continue;
                     }
                     const safeFname = fname.replace(/[\\/:*?"<>|]/g, '_');
                     const path = `${group.safePath}/${safeFname}`;
-                    await zipWriter.add(path, blob);
+                    await zipWriter.add(path, arrayBuffer);
                     processedFiles++;
                 } catch (err) {
                     console.error(`导出文件失败 ${fname}:`, err);
