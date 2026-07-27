@@ -3016,12 +3016,35 @@ function showCandidatePanelStep2() {
         `;
         
         const checkbox = item.querySelector('input');
+        const thumb = item.querySelector('.thumb');
+        
         checkbox.addEventListener('change', () => {
-            if (checkbox.checked) state.selectedCandidate.add(filename);
-            else state.selectedCandidate.delete(filename);
+            if (checkbox.checked) {
+                state.selectedCandidate.add(filename);
+                item.classList.add('current');
+            } else {
+                state.selectedCandidate.delete(filename);
+                item.classList.remove('current');
+            }
         });
         
-        if (!cached) lazyObserver.observe(item.querySelector('.thumb'));
+        // 点击整个区域切换选中
+        item.addEventListener('click', (e) => {
+            if (e.target.classList.contains('thumb')) return;
+            if (e.target.tagName === 'INPUT') return;
+            checkbox.checked = !checkbox.checked;
+            checkbox.dispatchEvent(new Event('change'));
+        });
+        
+        // 点击缩略图预览
+        thumb.addEventListener('click', (e) => {
+            e.stopPropagation();
+            previewImage(filename);
+        });
+        
+        if (isSelected) item.classList.add('current');
+        
+        if (!cached) lazyObserver.observe(thumb);
         els.candidateList.appendChild(item);
     }
     
