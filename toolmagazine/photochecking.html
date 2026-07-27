@@ -1380,9 +1380,17 @@ const lazyObserver = new IntersectionObserver((entries) => {
             if (filename && !img.src && !img.dataset.loading) {
                 img.dataset.loading = 'true';
                 loadThumbnail(filename).then(url => {
-                    if (url && img.dataset.filename === filename) {
+                    if (!document.contains(img)) return;
+                    if (url && img.dataset.filename === filename && !img.src) {
                         img.src = url;
                         img.removeAttribute('data-loading');
+                        if (img.decode) {
+                            img.decode().catch(() => {});
+                        }
+                        img.style.opacity = '0.99';
+                        requestAnimationFrame(() => {
+                            img.style.opacity = '';
+                        });
                     }
                 });
             }
@@ -2085,9 +2093,18 @@ function createImageCard(filename, options = {}) {
         if (img) {
             img.dataset.loading = 'true';
             loadThumbnail(filename).then(url => {
-                if (url && img.dataset.filename === filename && !img.src) {
-                    img.src = url;
-                    img.removeAttribute('data-loading');
+                if (!document.contains(card)) return;
+                const currentImg = card.querySelector('.thumb');
+                if (currentImg && currentImg.dataset.filename === filename && !currentImg.src) {
+                    currentImg.src = url;
+                    currentImg.removeAttribute('data-loading');
+                    if (currentImg.decode) {
+                        currentImg.decode().catch(() => {});
+                    }
+                    currentImg.style.opacity = '0.99';
+                    requestAnimationFrame(() => {
+                        currentImg.style.opacity = '';
+                    });
                 }
             });
         }
