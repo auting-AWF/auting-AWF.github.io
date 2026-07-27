@@ -1160,6 +1160,7 @@ const state = {
     duplicateGroups: new Map(),
     baseGroups: new Map(),
     currentTab: 'pending',
+    tabScrollPositions: { pending: 0, ignored: 0, base: 0, dup: 0, search: 0 },
     currentCandidateBase: null,
     candidateList: [],
     selectedCandidate: new Set(),
@@ -1171,12 +1172,10 @@ const state = {
     dragSource: null,
     dragSourceArea: null,
     dropTarget: null,
-    // WeChat-style multi-select drag
     multiSelectDragging: false,
     multiSelectDragStartX: 0,
     multiSelectDragStartY: 0,
     multiSelectDragTimer: null,
-    // Floating base group window for drag-to-base
     showBaseFloat: false,
     baseFloatScrollDir: 0,
     baseFloatScrollTimer: null,
@@ -2483,6 +2482,9 @@ function renderVirtualGrid(container, files, area, initialScrollTop = null) {
         clearTimeout(container._scrollTimer);
         container._scrollTimer = setTimeout(renderChunk, 16);
         updateBackToTopBtn();
+        if (state.tabScrollPositions[state.currentTab] !== undefined) {
+            state.tabScrollPositions[state.currentTab] = container.scrollTop;
+        }
     };
     
     renderChunk();
@@ -2494,13 +2496,20 @@ function renderVirtualGrid(container, files, area, initialScrollTop = null) {
  *  渲染主视图
  * ================================================ */
 function renderContent() {
-    const savedScrollTop = els.contentArea.scrollTop;
+    const prevTab = els.contentArea.dataset.currentTab || state.currentTab;
+    const currentScrollTop = els.contentArea.scrollTop;
+    
+    if (prevTab !== state.currentTab && state.tabScrollPositions[prevTab] !== undefined) {
+        state.tabScrollPositions[prevTab] = currentScrollTop;
+    }
+    
+    const tab = state.currentTab;
+    const savedScrollTop = state.tabScrollPositions[tab] || 0;
     
     els.contentArea.innerHTML = '';
     
     updateTabActions();
     
-    const tab = state.currentTab;
     const files = getCurrentTabFiles();
     
     if (tab === 'search') {
@@ -4293,6 +4302,12 @@ function bindEvents() {
     initElements();
     setupDragAndDrop();
     setupBaseFloatScroll();
+    
+    els.contentArea.addEventListener('scroll', () => {
+        if (state.tabScrollPositions[state.currentTab] !== undefined) {
+            state.tabScrollPositions[state.currentTab] = els.contentArea.scrollTop;
+        }
+    }, { passive: true });
     
     els.fileInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
