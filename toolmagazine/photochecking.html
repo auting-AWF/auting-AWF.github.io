@@ -1372,6 +1372,8 @@ async function preprocessForOcr(blob) {
 /* ================================================
  *  缩略图系统
  * ================================================ */
+const thumbLoadPromises = new Map();
+
 const lazyObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
@@ -1380,18 +1382,15 @@ const lazyObserver = new IntersectionObserver((entries) => {
             if (filename && !img.src && !img.dataset.loading) {
                 img.dataset.loading = 'true';
                 loadThumbnail(filename).then(url => {
-                    if (!document.contains(img)) return;
-                    if (url && img.dataset.filename === filename && !img.src) {
-                        img.src = url;
-                        img.removeAttribute('data-loading');
-                        if (img.decode) {
-                            img.decode().catch(() => {});
+                    if (!url) return;
+                    const allImgs = document.querySelectorAll(`img.thumb[data-filename="${filename}"]`);
+                    allImgs.forEach(el => {
+                        if (!el.src) {
+                            el.src = url;
+                            el.removeAttribute('data-loading');
+                            if (el.decode) el.decode().catch(() => {});
                         }
-                        img.style.opacity = '0.99';
-                        requestAnimationFrame(() => {
-                            img.style.opacity = '';
-                        });
-                    }
+                    });
                 });
             }
             lazyObserver.unobserve(img);
@@ -1443,6 +1442,18 @@ async function loadThumbnail(filename) {
         }
         return url;
     }
+    
+    if (thumbLoadPromises.has(filename)) {
+        return thumbLoadPromises.get(filename);
+    }
+    
+    const promise = _loadThumbnailInternal(filename);
+    thumbLoadPromises.set(filename, promise);
+    promise.finally(() => thumbLoadPromises.delete(filename));
+    return promise;
+}
+
+async function _loadThumbnailInternal(filename) {
     const entry = state.entryMap.get(filename);
     if (!entry) return null;
     try {
@@ -2075,9 +2086,10 @@ function createImageCard(filename, options = {}) {
     const cached = thumbCache.get(filename);
     const status = state.statusMap.get(filename);
     
+    const imgSrcAttr = cached ? `src="${cached}"` : '';
     card.innerHTML = `
         <div class="check-overlay">✓</div>
-        <img class="thumb" data-filename="${filename}" ${cached ? `src="${cached}"` : ''} alt="${filename}">
+        <img class="thumb" data-filename="${filename}" ${imgSrcAttr} alt="${filename}">
         ${getStatusBadge(status)}
         <div class="filename" title="${filename}">${filename}</div>
     `;
@@ -2091,22 +2103,25 @@ function createImageCard(filename, options = {}) {
     } else if (options.immediate) {
         const img = card.querySelector('.thumb');
         if (img) {
-            img.dataset.loading = 'true';
-            loadThumbnail(filename).then(url => {
-                if (!document.contains(card)) return;
-                const currentImg = card.querySelector('.thumb');
-                if (currentImg && currentImg.dataset.filename === filename && !currentImg.src) {
-                    currentImg.src = url;
-                    currentImg.removeAttribute('data-loading');
-                    if (currentImg.decode) {
-                        currentImg.decode().catch(() => {});
-                    }
-                    currentImg.style.opacity = '0.99';
-                    requestAnimationFrame(() => {
-                        currentImg.style.opacity = '';
+            const cachedUrl = thumbCache.get(filename);
+            if (cachedUrl) {
+                img.src = cachedUrl;
+                img.removeAttribute('data-loading');
+                if (img.decode) img.decode().catch(() => {});
+            } else {
+                img.dataset.loading = 'true';
+                loadThumbnail(filename).then(url => {
+                    if (!url) return;
+                    const allImgs = document.querySelectorAll(`img.thumb[data-filename="${filename}"]`);
+                    allImgs.forEach(el => {
+                        if (!el.src) {
+                            el.src = url;
+                            el.removeAttribute('data-loading');
+                            if (el.decode) el.decode().catch(() => {});
+                        }
                     });
-                }
-            });
+                });
+            }
         }
     }
     
@@ -2204,6 +2219,29 @@ function renderVirtualGrid(container, files, area) {
         }
         
         gridContent.appendChild(grid);
+        
+        // 扫描未加载的缩略图并触发加载
+        const missingThumbs = gridContent.querySelectorAll('img.thumb:not([src])');
+        missingThumbs.forEach(img => {
+            const fn = img.dataset.filename;
+            if (!fn) return;
+            // 清除旧的 loading 标记（可能从 innerHTML 继承）
+            img.removeAttribute('data-loading');
+            // 直接调用 loadThumbnail，Promise 缓存保证不会重复加载
+            img.dataset.loading = 'true';
+            loadThumbnail(fn).then(url => {
+                if (!url) return;
+                // 按 filename 查找当前 DOM 中所有匹配的 img
+                const allImgs = document.querySelectorAll(`img.thumb[data-filename="${fn}"]`);
+                allImgs.forEach(el => {
+                    if (!el.src) {
+                        el.src = url;
+                        el.removeAttribute('data-loading');
+                        if (el.decode) el.decode().catch(() => {});
+                    }
+                });
+            });
+        });
     };
     
     container._renderChunk = renderChunk;
