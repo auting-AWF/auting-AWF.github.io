@@ -2144,13 +2144,12 @@ function findSimilarByHash(baseFilename, threshold) {
     const hash = state.imageHashMap.get(baseFilename);
     if (!hash) return [];
     const t = threshold ?? parseInt(document.getElementById('threshold').value);
-    const minDist = Math.floor(t * 0.15);
     const results = [];
     for (const [f, h] of state.imageHashMap) {
         if (f === baseFilename) continue;
         if (state.statusMap.get(f) !== 'pending') continue;
         const dist = hammingDistance(hash, h);
-        if (dist <= t && dist >= minDist) results.push(f);
+        if (dist <= t) results.push(f);
     }
     return results;
 }
