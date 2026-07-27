@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>图片查重管理工具 Pro v3.0</title>
+<title>图片查重管理工具 Pro v3.1</title>
 <style>
 :root {
     --bg: #0f0f1a;
@@ -1439,13 +1439,29 @@ async function loadThumbnail(filename) {
     if (!entry) return null;
     try {
         const blob = await entry.getData(new BlobWriter());
-        const bitmap = await createImageBitmap(blob, { colorSpaceConversion: 'none' });
-        const ratio = bitmap.height / bitmap.width;
-        const thumbH = Math.round(CONFIG.THUMB_WIDTH * ratio);
-        const canvas = new OffscreenCanvas(CONFIG.THUMB_WIDTH, thumbH);
+        
+        let bitmap;
+        try {
+            bitmap = await createImageBitmap(blob, {
+                resizeWidth: CONFIG.THUMB_WIDTH,
+                resizeQuality: 'medium'
+            });
+        } catch (e) {
+            bitmap = await createImageBitmap(blob, { colorSpaceConversion: 'none' });
+            const ratio = bitmap.height / bitmap.width;
+            const thumbH = Math.round(CONFIG.THUMB_WIDTH * ratio);
+            const canvas = new OffscreenCanvas(CONFIG.THUMB_WIDTH, thumbH);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(bitmap, 0, 0, CONFIG.THUMB_WIDTH, thumbH);
+            bitmap.close();
+            bitmap = canvas.transferToImageBitmap();
+        }
+        
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(bitmap, 0, 0, CONFIG.THUMB_WIDTH, thumbH);
+        ctx.drawImage(bitmap, 0, 0);
         bitmap.close();
+        
         const thumbBlob = await canvas.convertToBlob({ type: 'image/webp', quality: 0.75 });
         const url = URL.createObjectURL(thumbBlob);
         addToThumbCache(filename, url);
@@ -2064,6 +2080,17 @@ function createImageCard(filename, options = {}) {
             thumbLRU.splice(idx, 1);
             thumbLRU.push(filename);
         }
+    } else if (options.immediate) {
+        const img = card.querySelector('.thumb');
+        if (img) {
+            img.dataset.loading = 'true';
+            loadThumbnail(filename).then(url => {
+                if (url && img.dataset.filename === filename && !img.src) {
+                    img.src = url;
+                    img.removeAttribute('data-loading');
+                }
+            });
+        }
     }
     
     card.addEventListener('click', (e) => {
@@ -2155,24 +2182,17 @@ function renderVirtualGrid(container, files, area) {
         grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
         
         for (let i = startIdx; i < endIdx; i++) {
-            const card = createImageCard(files[i], { area });
+            const card = createImageCard(files[i], { area, immediate: true });
             grid.appendChild(card);
         }
         
         gridContent.appendChild(grid);
-        
-        requestAnimationFrame(() => {
-            const thumbs = gridContent.querySelectorAll('.thumb:not([src])');
-            thumbs.forEach(img => {
-                lazyObserver.observe(img);
-            });
-        });
     };
     
     container._renderChunk = renderChunk;
     container._onVirtualScroll = () => {
         clearTimeout(container._scrollTimer);
-        container._scrollTimer = setTimeout(renderChunk, 30);
+        container._scrollTimer = setTimeout(renderChunk, 16);
     };
     
     renderChunk();
