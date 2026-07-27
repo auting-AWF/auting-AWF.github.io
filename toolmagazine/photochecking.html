@@ -3369,8 +3369,6 @@ function setupDragAndDrop() {
             state.multiSelectDragInitiator = null;
             els.multiDragIndicator.classList.remove('show');
         }
-        // 拖出浏览器窗口释放时也隐藏悬浮窗
-        hideBaseFloatWindow();
     });
     
     // 拖出浏览器窗口时隐藏悬浮窗
@@ -3406,9 +3404,9 @@ function setupDragAndDrop() {
     });
     
     els.contentArea.addEventListener('drop', (e) => {
-        if (!state.dragSource) return;
         e.preventDefault();
         e.stopPropagation();
+        if (!state.dragSource) return;
         
         const targetCard = e.target.closest('.image-card');
         const targetFolder = e.target.closest('.folder-group');
@@ -4074,8 +4072,19 @@ function bindEvents() {
         e.target.value = '';
     });
     
-    els.openZipBtn.addEventListener('click', () => {
-        els.fileInput.click();
+    els.openZipBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const fileInput = document.getElementById('fileInput');
+        if (!fileInput) {
+            alert('文件输入框未找到，请刷新页面重试');
+            return;
+        }
+        try {
+            fileInput.click();
+        } catch (err) {
+            console.error('打开文件选择框失败:', err);
+            alert('打开文件选择框失败，请刷新页面重试');
+        }
     });
     
     els.exportBtn.addEventListener('click', exportGroupsAsZip);
