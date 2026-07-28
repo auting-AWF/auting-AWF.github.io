@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>图片查重工具 Pro v3.7.1</title>
+<title>图片查重工具 Pro v3.7.2</title>
 <style>
 :root {
     --bg: #0f0f1a;
@@ -1166,7 +1166,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
 </script>
 
 <script type="module">
-import { ZipReader, ZipWriter, BlobReader, BlobWriter, Uint8ArrayWriter } from '@zip.js/zip.js';
+import { ZipReader, ZipWriter, BlobReader, BlobWriter } from '@zip.js/zip.js';
 
 /* ================================================
  *  全局状态
@@ -4245,14 +4245,14 @@ async function exportGroupsAsZip() {
                     continue;
                 }
                 try {
-                    const arrayBuffer = await entry.getData(new Uint8ArrayWriter());
-                    if (!arrayBuffer || arrayBuffer.length === 0) {
+                    const blob = await entry.getData(new BlobWriter());
+                    if (!blob || blob.size === 0) {
                         console.warn(`跳过空文件: ${fname}`);
                         continue;
                     }
                     const safeFname = fname.replace(/[\\/:*?"<>|]/g, '_');
                     const path = `${group.safePath}/${safeFname}`;
-                    await zipWriter.add(path, arrayBuffer);
+                    await zipWriter.add(path, blob);
                     processedFiles++;
                 } catch (err) {
                     console.error(`导出文件失败 ${fname}:`, err);
