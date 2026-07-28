@@ -4246,20 +4246,17 @@ async function exportGroupsAsZip() {
                     continue;
                 }
                 try {
-                    const zipBlob = await entry.getData(new BlobWriter());
-                    if (!zipBlob || zipBlob.size === 0) {
+                    const rawData = await entry.getData(new Uint8ArrayWriter());
+                    if (!rawData || rawData.length === 0) {
                         console.warn(`跳过空文件: ${fname}`);
-                        continue;
-                    }
-                    const arrayBuf = await zipBlob.arrayBuffer();
-                    const nativeBlob = new Blob([arrayBuf], { type: 'application/octet-stream' });
-                    if (nativeBlob.size === 0) {
-                        console.warn(`跳过空blob: ${fname}`);
                         continue;
                     }
                     const safeFname = fname.replace(/[\\/:*?"<>|]/g, '_');
                     const path = `${group.safePath}/${safeFname}`;
-                    await zipWriter.add(path, nativeBlob);
+                    console.log(`导出: ${path}, 类型: ${typeof rawData}, 长度: ${rawData.length}, 构造: ${rawData.constructor.name}`);
+                    const dataStr = new TextDecoder().decode(rawData.slice(0, Math.min(50, rawData.length)));
+                    console.log(`预览前50字节: ${dataStr}`);
+                    await zipWriter.add(path, rawData);
                     processedFiles++;
                 } catch (err) {
                     console.error(`导出文件失败 ${fname}:`, err.message);
