@@ -4188,7 +4188,7 @@ async function exportGroupsAsZip() {
     els.exportBtn.textContent = '📦 正在打包...';
     
     try {
-        const writer = new BlobWriter('application/zip');
+        const writer = new BlobWriter();
         const zipWriter = new ZipWriter(writer);
         let totalFiles = 0;
         let processedFiles = 0;
@@ -4246,15 +4246,20 @@ async function exportGroupsAsZip() {
                     continue;
                 }
                 try {
-                    const blob = await entry.getData(new BlobWriter());
-                    if (!blob || blob.size === 0) {
+                    const zipBlob = await entry.getData(new BlobWriter());
+                    if (!zipBlob || zipBlob.size === 0) {
                         console.warn(`跳过空文件: ${fname}`);
+                        continue;
+                    }
+                    const arrayBuf = await zipBlob.arrayBuffer();
+                    const nativeBlob = new Blob([arrayBuf], { type: 'application/octet-stream' });
+                    if (nativeBlob.size === 0) {
+                        console.warn(`跳过空blob: ${fname}`);
                         continue;
                     }
                     const safeFname = fname.replace(/[\\/:*?"<>|]/g, '_');
                     const path = `${group.safePath}/${safeFname}`;
-                    const uint8 = new Uint8Array(await blob.arrayBuffer());
-                    await zipWriter.add(path, uint8);
+                    await zipWriter.add(path, nativeBlob);
                     processedFiles++;
                 } catch (err) {
                     console.error(`导出文件失败 ${fname}:`, err.message);
