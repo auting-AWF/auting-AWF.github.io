@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>图片查重工具 Pro v3.8.1</title>
+<title>图片查重工具 Pro v3.8.5</title>
 <style>
 :root {
     --bg: #0f0f1a;
@@ -3677,15 +3677,37 @@ function handleDropOnImage(sourceFilename, targetFilename) {
             state.statusMap.set(targetFilename, 'base');
             state.statusMap.set(sourceFilename, 'duplicate');
             
-            let gid = null;
+            // 确保 target 在某个基准组中
+            let targetInBaseGroup = false;
+            for (const [gid, g] of state.baseGroups) {
+                if (g.images.includes(targetFilename)) {
+                    targetInBaseGroup = true;
+                    break;
+                }
+            }
+            if (!targetInBaseGroup) {
+                // target 不在任何基准组，自动创建一个
+                const gid = Date.now().toString();
+                const groupName = targetFilename.split('/').pop() || targetFilename;
+                state.baseGroups.set(gid, { name: groupName, images: [targetFilename] });
+            }
+            
+            // 从待处理/重复组中移除 source
+            for (const [gid, g] of state.baseGroups) g.images = g.images.filter(f => f !== sourceFilename);
+            for (const [gid, g] of state.duplicateGroups) g.duplicates = g.duplicates.filter(f => f !== sourceFilename);
+            
+            // 把 source 加入 target 对应的重复组
+            let dupGid = null;
             for (const [id, g] of state.duplicateGroups) {
-                if (g.base === targetFilename) { gid = id; break; }
+                if (g.base === targetFilename) { dupGid = id; break; }
             }
-            if (!gid) {
-                gid = Date.now().toString();
-                state.duplicateGroups.set(gid, { base: targetFilename, duplicates: [] });
+            if (!dupGid) {
+                dupGid = Date.now().toString() + '_dup';
+                state.duplicateGroups.set(dupGid, { base: targetFilename, duplicates: [] });
             }
-            state.duplicateGroups.get(gid).duplicates.push(sourceFilename);
+            if (!state.duplicateGroups.get(dupGid).duplicates.includes(sourceFilename)) {
+                state.duplicateGroups.get(dupGid).duplicates.push(sourceFilename);
+            }
             saveState();
             renderAll();
         }
