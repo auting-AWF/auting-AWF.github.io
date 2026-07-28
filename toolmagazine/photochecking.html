@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>图片查重工具 Pro v3.8.0</title>
+<title>图片查重工具 Pro v3.8.1</title>
 <style>
 :root {
     --bg: #0f0f1a;
@@ -893,7 +893,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     right: 0;
     top: 60px;
     width: 280px;
-    max-height: calc(100vh - 120px);
+    height: calc(100vh - 120px);
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px 0 0 12px;
@@ -930,7 +930,9 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
 .base-float-list {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     min-height: 0;
+    max-height: 100%;
     padding: 8px;
 }
 .base-float-list::-webkit-scrollbar { width: 6px; }
@@ -3753,9 +3755,24 @@ function renderBaseFloatList() {
             item.addEventListener('dragover', (e) => {
                 if (!state.dragSource) return;
                 e.preventDefault();
-                e.stopPropagation();
+                // 不调用 stopPropagation，让事件能冒泡到滚动区域
                 document.querySelectorAll('.base-float-item.drop-hover').forEach(el => el.classList.remove('drop-hover'));
                 item.classList.add('drop-hover');
+                
+                // 检测是否在边缘区域，触发自动滚动
+                const rect = els.baseFloatList.getBoundingClientRect();
+                const mouseY = e.clientY;
+                const edgeThreshold = 60;
+                
+                if (mouseY - rect.top < edgeThreshold) {
+                    // 靠近顶部
+                    startBaseFloatAutoScroll(-1);
+                } else if (rect.bottom - mouseY < edgeThreshold) {
+                    // 靠近底部
+                    startBaseFloatAutoScroll(1);
+                } else {
+                    stopBaseFloatAutoScroll();
+                }
             });
             
             item.addEventListener('dragleave', () => {
@@ -3814,13 +3831,13 @@ function renderBaseFloatList() {
     }
 }
 
-// 悬浮窗自动滚动
+// 悬浮窗自动滚动（全局统一使用）
 function startBaseFloatAutoScroll(direction) {
     stopBaseFloatAutoScroll();
     state.baseFloatScrollDir = direction;
     state.baseFloatScrollTimer = setInterval(() => {
-        els.baseFloatList.scrollTop += direction * 30;
-    }, 50);
+        els.baseFloatList.scrollTop += direction * 15;
+    }, 40);
 }
 
 function stopBaseFloatAutoScroll() {
@@ -3832,30 +3849,38 @@ function stopBaseFloatAutoScroll() {
 }
 
 function setupBaseFloatScroll() {
-    els.baseFloatScrollTop.addEventListener('dragover', (e) => {
-        if (!state.dragSource) return;
-        e.preventDefault();
-        startBaseFloatAutoScroll(-1);
+    // 用全局 dragover 检测鼠标位置，解决 stopPropagation 导致冒泡失败的问题
+    document.addEventListener('dragover', (e) => {
+        if (!state.dragSource || !els.baseFloatWindow.classList.contains('show')) return;
+        
+        const rect = els.baseFloatList.getBoundingClientRect();
+        const mouseY = e.clientY;
+        const threshold = 60;
+        
+        if (mouseY - rect.top < threshold && mouseY >= rect.top) {
+            startBaseFloatAutoScroll(-1);
+        } else if (rect.bottom - mouseY < threshold && mouseY <= rect.bottom) {
+            startBaseFloatAutoScroll(1);
+        } else {
+            stopBaseFloatAutoScroll();
+        }
     });
-    els.baseFloatScrollTop.addEventListener('dragleave', stopBaseFloatAutoScroll);
     
-    els.baseFloatScrollBottom.addEventListener('dragover', (e) => {
-        if (!state.dragSource) return;
-        e.preventDefault();
-        startBaseFloatAutoScroll(1);
-    });
-    els.baseFloatScrollBottom.addEventListener('dragleave', stopBaseFloatAutoScroll);
+    // 拖拽结束清理
+    document.addEventListener('dragend', stopBaseFloatAutoScroll);
+    document.addEventListener('drop', stopBaseFloatAutoScroll);
     
-    // 悬浮窗滚轮支持 - 始终手动滚动，不依赖原生
-    const handleWheel = (e) => {
+    // 滚轮支持 - 用 capture 阶段确保优先处理
+    document.addEventListener('wheel', (e) => {
         if (!els.baseFloatWindow.classList.contains('show')) return;
-        e.preventDefault();
-        const scrollAmount = e.deltaY > 0 ? 30 : -30;
-        els.baseFloatList.scrollTop += scrollAmount;
-    };
-    
-    els.baseFloatWindow.addEventListener('wheel', handleWheel, { passive: false });
-    els.baseFloatList.addEventListener('wheel', handleWheel, { passive: false });
+        
+        const rect = els.baseFloatWindow.getBoundingClientRect();
+        if (e.clientX >= rect.left && e.clientX <= rect.right &&
+            e.clientY >= rect.top && e.clientY <= rect.bottom) {
+            e.preventDefault();
+            els.baseFloatList.scrollTop += e.deltaY;
+        }
+    }, { passive: false, capture: true });
 }
 
 /* ================================================
