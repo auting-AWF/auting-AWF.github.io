@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>图片查重工具 Pro v3.7.2</title>
+<title>图片查重工具 Pro v3.7.4</title>
 <style>
 :root {
     --bg: #0f0f1a;
@@ -4245,9 +4245,14 @@ async function exportGroupsAsZip() {
                     continue;
                 }
                 try {
-                    const arrayBuffer = await entry.getData(new Uint8ArrayWriter());
-                    if (!arrayBuffer || arrayBuffer.length === 0) {
+                    const blob = await entry.getData(new BlobWriter());
+                    if (!blob || blob.size === 0) {
                         console.warn(`跳过空文件: ${fname}`);
+                        continue;
+                    }
+                    const arrayBuffer = await blob.arrayBuffer();
+                    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+                        console.warn(`跳过无效文件: ${fname}`);
                         continue;
                     }
                     const safeFname = fname.replace(/[\\/:*?"<>|]/g, '_');
@@ -4255,7 +4260,7 @@ async function exportGroupsAsZip() {
                     await zipWriter.add(path, arrayBuffer);
                     processedFiles++;
                 } catch (err) {
-                    console.error(`导出文件失败 ${fname}:`, err);
+                    console.error(`导出文件失败 ${fname}:`, err.message);
                 }
             }
         }
