@@ -3642,7 +3642,7 @@ function setupDragAndDrop() {
     });
 }
 
-function handleDropOnImage(sourceFilename, targetFilename) {
+async function handleDropOnImage(sourceFilename, targetFilename) {
     const targetHash = state.imageHashMap.get(targetFilename);
     if (!targetHash) {
         alert('目标图片哈希尚未计算');
@@ -3677,19 +3677,29 @@ function handleDropOnImage(sourceFilename, targetFilename) {
             state.statusMap.set(targetFilename, 'base');
             state.statusMap.set(sourceFilename, 'duplicate');
             
-            // 确保 target 在某个基准组中
-            let targetInBaseGroup = false;
+            // 查找 target 所在的基准组
+            let targetGroupId = null;
             for (const [gid, g] of state.baseGroups) {
                 if (g.images.includes(targetFilename)) {
-                    targetInBaseGroup = true;
+                    targetGroupId = gid;
                     break;
                 }
             }
-            if (!targetInBaseGroup) {
-                // target 不在任何基准组，自动创建一个
-                const gid = Date.now().toString();
-                const groupName = targetFilename.split('/').pop() || targetFilename;
-                state.baseGroups.set(gid, { name: groupName, images: [targetFilename] });
+            
+            if (!targetGroupId) {
+                // target 不在任何基准组，让用户选择分组
+                targetGroupId = await showGroupSelectModal(targetFilename);
+                if (!targetGroupId) {
+                    // 用户取消了，回退状态
+                    state.statusMap.set(targetFilename, targetStatus);
+                    state.statusMap.set(sourceFilename, sourceStatus);
+                    return;
+                }
+                // 把 target 加入选中的分组
+                const group = state.baseGroups.get(targetGroupId);
+                if (group && !group.images.includes(targetFilename)) {
+                    group.images.push(targetFilename);
+                }
             }
             
             // 从待处理/重复组中移除 source
@@ -3714,6 +3724,90 @@ function handleDropOnImage(sourceFilename, targetFilename) {
     } else {
         alert(`相似度: ${dist} (阈值: ${threshold})\n\n这两张图片可能不相似，建议使用右键"查重图片"功能进行确认。`);
     }
+}
+
+// 分组选择弹窗
+function showGroupSelectModal(filename) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        
+        const modal = document.createElement('div');
+        modal.style.cssText = 'background:#1a1a2e;border:1px solid #333;border-radius:12px;padding:20px;width:380px;max-height:80vh;overflow-y:auto;color:#e0e0e0;';
+        
+        const shortName = filename.split('/').pop() || filename;
+        modal.innerHTML = `
+            <div style="font-size:15px;font-weight:600;margin-bottom:16px;">📁 选择分组</div>
+            <div style="font-size:12px;color:#aaa;margin-bottom:12px;">将「${shortName}」放入哪个基准组？</div>
+            <div id="groupSelectList" style="max-height:250px;overflow-y:auto;margin-bottom:12px;"></div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+                <input type="text" id="newGroupName" placeholder="或输入新分组名称" 
+                    style="flex:1;padding:8px 12px;border:1px solid #444;border-radius:6px;background:#111;color:#e0e0e0;font-size:13px;outline:none;">
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button id="gsCancel" style="padding:8px 16px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;cursor:pointer;font-size:13px;">取消</button>
+                <button id="gsConfirm" style="padding:8px 16px;border:none;border-radius:6px;background:#4a9eff;color:#fff;cursor:pointer;font-size:13px;">确认</button>
+            </div>
+        `;
+        
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        
+        const listEl = modal.querySelector('#groupSelectList');
+        let selectedGid = null;
+        
+        // 渲染现有分组
+        const renderGroups = () => {
+            listEl.innerHTML = '';
+            if (state.baseGroups.size === 0) {
+                listEl.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:12px;">暂无分组，请在下方创建</div>';
+                return;
+            }
+            for (const [gid, g] of state.baseGroups) {
+                const item = document.createElement('div');
+                item.style.cssText = `padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:4px;font-size:13px;display:flex;align-items:center;gap:8px;${selectedGid === gid ? 'background:rgba(74,158,255,0.2);border:1px solid #4a9eff;' : 'background:#111;border:1px solid #333;'}`;
+                item.innerHTML = `<span>📁</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name}</span><span style="color:#888;font-size:11px;">${g.images.length}张</span>`;
+                item.addEventListener('click', () => {
+                    selectedGid = gid;
+                    renderGroups();
+                });
+                listEl.appendChild(item);
+            }
+        };
+        renderGroups();
+        
+        const cleanup = () => document.body.removeChild(overlay);
+        
+        modal.querySelector('#gsCancel').addEventListener('click', () => {
+            cleanup();
+            resolve(null);
+        });
+        
+        modal.querySelector('#gsConfirm').addEventListener('click', () => {
+            const newGroupName = modal.querySelector('#newGroupName').value.trim();
+            if (selectedGid) {
+                // 使用选中的分组
+                cleanup();
+                resolve(selectedGid);
+            } else if (newGroupName) {
+                // 创建新分组
+                const gid = Date.now().toString();
+                state.baseGroups.set(gid, { name: newGroupName, images: [filename] });
+                cleanup();
+                resolve(gid);
+            } else {
+                alert('请选择一个分组或输入新分组名称');
+            }
+        });
+        
+        // 点击遮罩关闭
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                cleanup();
+                resolve(null);
+            }
+        });
+    });
 }
 
 function handleDropOnFolder(filename, groupId) {
