@@ -4188,7 +4188,8 @@ async function exportGroupsAsZip() {
     els.exportBtn.textContent = '📦 正在打包...';
     
     try {
-        const zipWriter = new ZipWriter(new BlobWriter('application/zip'));
+        const writer = new BlobWriter('application/zip');
+        const zipWriter = new ZipWriter(writer);
         let totalFiles = 0;
         let processedFiles = 0;
         
@@ -4204,7 +4205,7 @@ async function exportGroupsAsZip() {
             if (dupGroup.duplicates.length === 0) continue;
             allGroups.push({ 
                 prefix: '重复组', 
-                name: `基准: ${dupGroup.base}`, 
+                name: `基准_${dupGroup.base}`, 
                 images: dupGroup.duplicates 
             });
             totalFiles += dupGroup.duplicates.length;
@@ -4220,8 +4221,8 @@ async function exportGroupsAsZip() {
         const usedNames = new Map();
         
         for (const group of allGroups) {
-            let safeName = group.name.replace(/[\\/:*?"<>|]/g, '_');
-            if (!safeName.trim()) safeName = '未命名分组';
+            let safeName = group.name.replace(/[\\/:*?"<>|\s]/g, '_');
+            if (!safeName.trim()) safeName = 'unnamed';
             
             const key = `${group.prefix}/${safeName}`;
             if (usedNames.has(key)) {
@@ -4250,14 +4251,10 @@ async function exportGroupsAsZip() {
                         console.warn(`跳过空文件: ${fname}`);
                         continue;
                     }
-                    const arrayBuffer = await blob.arrayBuffer();
-                    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-                        console.warn(`跳过无效文件: ${fname}`);
-                        continue;
-                    }
                     const safeFname = fname.replace(/[\\/:*?"<>|]/g, '_');
                     const path = `${group.safePath}/${safeFname}`;
-                    await zipWriter.add(path, arrayBuffer);
+                    const uint8 = new Uint8Array(await blob.arrayBuffer());
+                    await zipWriter.add(path, uint8);
                     processedFiles++;
                 } catch (err) {
                     console.error(`导出文件失败 ${fname}:`, err.message);
