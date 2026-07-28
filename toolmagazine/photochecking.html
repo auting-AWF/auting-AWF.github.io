@@ -975,6 +975,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
 .base-float-scroll-zone {
     height: 40px;
     flex-shrink: 0;
+    pointer-events: none;
 }
 .base-float-scroll-zone.top { border-radius: 0 0 0 0; }
 .base-float-scroll-zone.bottom { border-radius: 0 0 0 12px; }
@@ -1148,9 +1149,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         <span>📁 基准组（拖到图片上归类）</span>
         <span class="close-btn" id="baseFloatClose">✕</span>
     </div>
-    <div class="base-float-scroll-zone top" id="baseFloatScrollTop"></div>
     <div class="base-float-list" id="baseFloatList"></div>
-    <div class="base-float-scroll-zone bottom" id="baseFloatScrollBottom"></div>
 </div>
 
 <!-- 微信式多选拖拽指示器 -->
@@ -2243,8 +2242,6 @@ function initElements() {
     els.baseFloatWindow = document.getElementById('baseFloatWindow');
     els.baseFloatList = document.getElementById('baseFloatList');
     els.baseFloatClose = document.getElementById('baseFloatClose');
-    els.baseFloatScrollTop = document.getElementById('baseFloatScrollTop');
-    els.baseFloatScrollBottom = document.getElementById('baseFloatScrollBottom');
     els.multiDragIndicator = document.getElementById('multiDragIndicator');
     els.multiDragCount = document.getElementById('multiDragCount');
     
@@ -3720,6 +3717,13 @@ function showBaseFloatWindow() {
     if (state.baseGroups.size === 0) return;
     renderBaseFloatList();
     els.baseFloatWindow.classList.add('show');
+    
+    // 显式设置列表高度，确保滚动区域正确
+    requestAnimationFrame(() => {
+        const headerHeight = els.baseFloatWindow.querySelector('.base-float-header').offsetHeight;
+        const windowHeight = els.baseFloatWindow.offsetHeight;
+        els.baseFloatList.style.height = `${windowHeight - headerHeight}px`;
+    });
 }
 
 function hideBaseFloatWindow() {
@@ -3870,17 +3874,8 @@ function setupBaseFloatScroll() {
     document.addEventListener('dragend', stopBaseFloatAutoScroll);
     document.addEventListener('drop', stopBaseFloatAutoScroll);
     
-    // 滚轮支持 - 用 capture 阶段确保优先处理
-    document.addEventListener('wheel', (e) => {
-        if (!els.baseFloatWindow.classList.contains('show')) return;
-        
-        const rect = els.baseFloatWindow.getBoundingClientRect();
-        if (e.clientX >= rect.left && e.clientX <= rect.right &&
-            e.clientY >= rect.top && e.clientY <= rect.bottom) {
-            e.preventDefault();
-            els.baseFloatList.scrollTop += e.deltaY;
-        }
-    }, { passive: false, capture: true });
+    // 滚轮支持 - 让浏览器原生滚动生效，不拦截
+    // CSS 已设置 overflow-y: auto，浏览器会自动处理
 }
 
 /* ================================================
