@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>图片查重工具 Pro v3.7.4</title>
+<title>图片查重工具 Pro v3.8.0</title>
 <style>
 :root {
     --bg: #0f0f1a;
@@ -3846,18 +3846,16 @@ function setupBaseFloatScroll() {
     });
     els.baseFloatScrollBottom.addEventListener('dragleave', stopBaseFloatAutoScroll);
     
-    // 悬浮窗鼠标滚轮滚动支持
-    els.baseFloatWindow.addEventListener('wheel', (e) => {
+    // 悬浮窗滚轮支持 - 始终手动滚动，不依赖原生
+    const handleWheel = (e) => {
         if (!els.baseFloatWindow.classList.contains('show')) return;
-        // 如果滚轮在列表区域内，让原生滚动生效（不拦截）
-        if (e.target.closest('.base-float-list')) {
-            return;
-        }
-        // 滚轮在其他区域（header/scroll-zone等），手动滚动列表并阻止页面滚动
         e.preventDefault();
-        const scrollSpeed = Math.max(3, Math.abs(e.deltaY) * 0.8);
-        els.baseFloatList.scrollTop += e.deltaY > 0 ? scrollSpeed : -scrollSpeed;
-    }, { passive: false, capture: true });
+        const scrollAmount = e.deltaY > 0 ? 30 : -30;
+        els.baseFloatList.scrollTop += scrollAmount;
+    };
+    
+    els.baseFloatWindow.addEventListener('wheel', handleWheel, { passive: false });
+    els.baseFloatList.addEventListener('wheel', handleWheel, { passive: false });
 }
 
 /* ================================================
