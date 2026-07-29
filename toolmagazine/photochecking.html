@@ -1191,7 +1191,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         </div>
         <div class="about-body">
             <div class="about-version">
-                <div>版本号：<span id="toolVersion">v4.2.1</span></div>
+                <div>版本号：<span id="toolVersion">v4.2.2</span></div>
                 <div>算法版本：<span id="algoVersion">v2</span></div>
             </div>
             <div class="about-section">
@@ -1229,6 +1229,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
             </div>
             <div class="about-footer">
                 <p>Copyright © 2025 Auting · 开源工具</p>
+                <p>由DeepSeek × Trae AI 提供支持</p>
             </div>
         </div>
     </div>
@@ -1351,6 +1352,7 @@ const state = {
     currentCandidateBase: null,
     searchMode: 'fuzzy',
     algoMode: 'precise',  // 'fast' = pHash only, 'precise' = multi-rotation + color
+    algoThresholds: { fast: 8, precise: 8 },  // 两套模式各自的阈值
     candidateList: [],
     selectedCandidate: new Set(),
     candidateStep: 1,
@@ -4605,13 +4607,22 @@ async function startPreprocessing(file) {
                 onPreprocessingDone();
                 return;
             }
-            // 版本不匹配或加载失败，继续重新处理
+            // 版本不匹配或加载失败：先备份进度数据（分组/状态/OCR）再重新处理
         }
+        
+        // ★ 关键：在清空前先从 DB 加载用户已有的分组/状态（算法升级不会丢进度）
+        const savedProgress = await loadGroupsAndStatusOnly();
+        const canRestoreProgress = savedProgress
+            && savedProgress.fileName === file.name
+            && savedProgress.fileSize === file.size;
         
         if (state.zipReader) { try { await state.zipReader.close(); } catch(e) {} state.zipReader = null; }
         destroyAllWorkers();
         clearThumbCache();
         state.imageHashMap.clear();
+        state.imageMultiHashMap.clear();
+        state.imageColorMap.clear();
+        state.imageFeatureMap.clear();
         state.ocrTextMap.clear();
         state.statusMap.clear();
         state.duplicateGroups.clear();
@@ -4621,6 +4632,14 @@ async function startPreprocessing(file) {
         state.zipFileName = file.name;
         state.zipFileSize = file.size;
         processedCount = 0;
+        
+        // ★ 恢复用户分组/状态/OCR（只恢复非 pending 的状态，pending 的由后面重新初始化）
+        if (canRestoreProgress) {
+            state.duplicateGroups = savedProgress.duplicateGroups;
+            state.baseGroups = savedProgress.baseGroups;
+            state.ocrTextMap = savedProgress.ocrTextMap;
+            // statusMap 等所有 entries 加载完再合并
+        }
         
         els.dropzone.style.display = 'none';
         els.contentArea.style.display = 'none';
@@ -4637,16 +4656,34 @@ async function startPreprocessing(file) {
         
         if (totalImagesCount === 0) throw new Error('压缩包内未找到图片文件');
         
-        showProgress('⏳ 预处理中（计算哈希）...', 0, `共 ${totalImagesCount} 张图片`);
-        
+        // 先默认所有都是 pending
         for (const e of state.entries) {
             state.statusMap.set(e.filename, 'pending');
         }
         
+        // ★ 合并已保存的状态（覆盖 pending）
+        if (canRestoreProgress) {
+            for (const [fname, status] of savedProgress.statusMap) {
+                if (state.entryMap.has(fname)) {  // 只恢复压缩包里确实存在的文件
+                    state.statusMap.set(fname, status);
+                }
+            }
+            console.log(`已恢复进度：${savedProgress.statusMap.size} 个状态，`
+                + `${savedProgress.baseGroups.size} 个基准组，`
+                + `${savedProgress.duplicateGroups.size} 个重复组`);
+        }
+        
+        showProgress('⏳ 预处理中（计算哈希）...', 0, `共 ${totalImagesCount} 张图片`);
+        
         const meta = await getDBMeta();
         if (meta && meta.fileName === file.name && meta.fileSize === file.size) {
-            await loadState();
-            if (state.imageHashMap.size >= totalImagesCount) {
+            const loaded = await loadState();
+            if (loaded && state.imageHashMap.size >= totalImagesCount) {
+                // 加载成功后，用 savedProgress 的分组覆盖（因为 loadState 的 algo 可能被版本验证清空）
+                if (canRestoreProgress) {
+                    state.duplicateGroups = savedProgress.duplicateGroups;
+                    state.baseGroups = savedProgress.baseGroups;
+                }
                 hideProgress();
                 onPreprocessingDone();
                 return;
@@ -4782,6 +4819,43 @@ async function startPreprocessing(file) {
     } finally {
         state.isProcessing = false;
         state.abortSearch = false;
+    }
+}
+
+async function loadGroupsAndStatusOnly() {
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const all = await promisifyRequest(tx.objectStore(STORE_NAME).getAll());
+        await new Promise(resolve => { tx.oncomplete = () => { db.close(); resolve(); }; });
+        
+        const result = {
+            statusMap: new Map(),
+            ocrTextMap: new Map(),
+            duplicateGroups: new Map(),
+            baseGroups: new Map(),
+            fileName: '',
+            fileSize: 0
+        };
+        
+        for (const item of all) {
+            if (item.filename === '__groups__') {
+                result.duplicateGroups = new Map(item.dupGroups || []);
+                result.baseGroups = new Map(item.baseGroups || []);
+            } else if (item.filename === '__meta__') {
+                result.fileName = item.fileName || '';
+                result.fileSize = item.fileSize || 0;
+            } else {
+                if (item.status && item.status !== 'pending') {
+                    result.statusMap.set(item.filename, item.status);
+                }
+                if (item.ocrText) result.ocrTextMap.set(item.filename, item.ocrText);
+            }
+        }
+        return result;
+    } catch (e) {
+        console.error('加载分组状态失败:', e);
+        return null;
     }
 }
 
@@ -4952,7 +5026,7 @@ async function exportProgress() {
 async function importProgress() {
     const file = els.importFile.files[0];
     if (!file) return;
-    if (!confirm('导入进度将覆盖当前所有状态，确定继续吗？')) {
+    if (!confirm('导入进度将覆盖当前分组和状态，确定继续吗？（已有的精确算法数据不会丢失）')) {
         els.importFile.value = '';
         return;
     }
@@ -4963,16 +5037,31 @@ async function importProgress() {
         const text = await file.text();
         const data = JSON.parse(text);
         
-        state.imageHashMap = new Map(data.images.map(i => [i.filename, i.hash]));
-        state.statusMap = new Map(data.images.map(i => [i.filename, i.status]));
-        state.ocrTextMap = new Map((data.images || []).filter(i => i.ocrText).map(i => [i.filename, i.ocrText]));
+        // 构建新的哈希/状态/OCR映射（仅覆盖导入的文件，保留已有的精确算法数据）
+        const newHashMap = new Map(data.images.map(i => [i.filename, i.hash]));
+        const newStatusMap = new Map(data.images.map(i => [i.filename, i.status]));
+        const newOcrMap = new Map((data.images || []).filter(i => i.ocrText).map(i => [i.filename, i.ocrText]));
+        
+        // 对于 imageHashMap：如果导入的文件已存在精确数据（multiHash/colorMap），只覆盖哈希，保留精确数据
+        for (const [fname, hash] of newHashMap) {
+            state.imageHashMap.set(fname, hash);
+            const status = newStatusMap.get(fname);
+            if (status !== undefined) state.statusMap.set(fname, status);
+            const ocrText = newOcrMap.get(fname);
+            if (ocrText) state.ocrTextMap.set(fname, ocrText);
+            // 注意：imageMultiHashMap、imageColorMap、imageFeatureMap 如果已存在则保留
+        }
+        
+        // 分组强制覆盖（导入的分组是用户期望恢复的）
         state.duplicateGroups = new Map(data.dupGroups);
         state.baseGroups = new Map(data.baseGroups);
+        
         if (data.zipFileName) state.zipFileName = data.zipFileName;
         if (data.zipFileSize) state.zipFileSize = data.zipFileSize;
         clearThumbCache();
         
-        await saveState();
+        // 保存到 DB：只更新有变化的条目，不破坏已有的精确算法数据
+        await saveStatePreservingAlgoData();
         alert('进度导入成功');
         if (state.entries.length > 0) {
             onPreprocessingDone();
@@ -4984,6 +5073,54 @@ async function importProgress() {
     } finally {
         state.isProcessing = false;
         els.importFile.value = '';
+    }
+}
+
+async function saveStatePreservingAlgoData() {
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const all = await promisifyRequest(store.getAll());
+        const existing = new Map(all.map(i => [i.filename, i]));
+        
+        // 只更新 imageHashMap/statusMap/ocrTextMap 中有的条目
+        for (const [fname, hash] of state.imageHashMap) {
+            const features = state.imageFeatureMap.get(fname);
+            const fingerprint = features ? computeVisualFingerprint(features) : '';
+            const oldItem = existing.get(fname);
+            const multiHash = state.imageMultiHashMap.get(fname) || (oldItem ? oldItem.multiHash : '') || '';
+            const colorHistArr = state.imageColorMap.get(fname)
+                ? Array.from(state.imageColorMap.get(fname))
+                : (oldItem && oldItem.colorHist) || null;
+            store.put({
+                filename: fname,
+                hash,
+                multiHash,
+                colorHist: colorHistArr,
+                fingerprint: fingerprint || (oldItem ? oldItem.fingerprint : '') || '',
+                status: state.statusMap.get(fname) || 'pending',
+                ocrText: state.ocrTextMap.get(fname) || (oldItem ? oldItem.ocrText : '') || ''
+            });
+        }
+        
+        // 分组和 meta 强制覆盖
+        store.put({
+            filename: '__groups__',
+            dupGroups: [...state.duplicateGroups],
+            baseGroups: [...state.baseGroups]
+        });
+        store.put({
+            filename: '__meta__',
+            fileName: state.zipFileName,
+            fileSize: state.zipFileSize,
+            version: getToolVersion(),
+            algoVersion: getAlgoVersion()
+        });
+        
+        await new Promise(resolve => { tx.oncomplete = () => { db.close(); resolve(); }; });
+    } catch (e) {
+        console.error('增量保存状态失败:', e);
     }
 }
 
@@ -5161,15 +5298,33 @@ function bindEvents() {
     document.getElementById('modeOcr').addEventListener('click', () => setSearchMode('ocr'));
     
     document.getElementById('modeFast').addEventListener('click', () => {
+        // 切换前保存当前阈值
+        if (state.algoMode && els.threshold) {
+            state.algoThresholds[state.algoMode] = parseInt(els.threshold.value);
+        }
         state.algoMode = 'fast';
         document.getElementById('modeFast').classList.add('active');
         document.getElementById('modePrecise').classList.remove('active');
+        // 恢复快速模式的阈值
+        if (els.threshold) {
+            els.threshold.value = state.algoThresholds.fast;
+            els.thresholdVal.textContent = state.algoThresholds.fast;
+        }
     });
     
     document.getElementById('modePrecise').addEventListener('click', () => {
+        // 切换前保存当前阈值
+        if (state.algoMode && els.threshold) {
+            state.algoThresholds[state.algoMode] = parseInt(els.threshold.value);
+        }
         state.algoMode = 'precise';
         document.getElementById('modePrecise').classList.add('active');
         document.getElementById('modeFast').classList.remove('active');
+        // 恢复精确模式的阈值
+        if (els.threshold) {
+            els.threshold.value = state.algoThresholds.precise;
+            els.thresholdVal.textContent = state.algoThresholds.precise;
+        }
     });
     
     els.searchInput.addEventListener('keydown', (e) => {
@@ -5181,6 +5336,10 @@ function bindEvents() {
     
     els.threshold.addEventListener('input', () => {
         els.thresholdVal.textContent = els.threshold.value;
+        // 同步保存到当前模式
+        if (state.algoMode) {
+            state.algoThresholds[state.algoMode] = parseInt(els.threshold.value);
+        }
     });
     
     els.progressCancelBtn.addEventListener('click', () => {
