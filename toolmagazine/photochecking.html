@@ -1229,7 +1229,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         </div>
         <div class="about-body">
             <div class="about-version">
-                <div>版本号：<span id="toolVersion">v4.2.5</span></div>
+                <div>版本号：<span id="toolVersion">v4.2.7</span></div>
                 <div>算法版本：<span id="algoVersion">v2</span></div>
             </div>
             <div class="about-section">
@@ -3133,7 +3133,16 @@ function renderBaseGroups() {
         folder.querySelector('.del-group').addEventListener('click', (e) => {
             e.stopPropagation();
             if (confirm(`确定删除分组「${group.name}」？分组内图片将恢复至待处理状态`)) {
-                group.images.forEach(f => state.statusMap.set(f, 'pending'));
+                // 同步清理以此组图片为基准的重复组
+                group.images.forEach(filename => {
+                    for (const [dupGid, dupGroup] of [...state.duplicateGroups]) {
+                        if (dupGroup.base === filename) {
+                            dupGroup.duplicates.forEach(f => state.statusMap.set(f, 'pending'));
+                            state.duplicateGroups.delete(dupGid);
+                        }
+                    }
+                    state.statusMap.set(filename, 'pending');
+                });
                 state.baseGroups.delete(gid);
                 state.collapsedFolders.delete(gid);
                 saveState();
@@ -3179,29 +3188,63 @@ function renderDuplicateGroups() {
         return;
     }
     
-    for (const [gid, group] of state.duplicateGroups) {
+    // 构建基准组ID → 重复组列表的映射
+    const baseGroupMap = new Map(); // baseGid -> [dupGid, ...]
+    const orphanDuplicates = []; // 孤立重复组（基准图不在任何基准组中）
+    
+    for (const [dupGid, dupGroup] of state.duplicateGroups) {
+        let found = false;
+        for (const [baseGid, baseGroup] of state.baseGroups) {
+            if (baseGroup.images.includes(dupGroup.base)) {
+                if (!baseGroupMap.has(baseGid)) {
+                    baseGroupMap.set(baseGid, []);
+                }
+                baseGroupMap.get(baseGid).push(dupGid);
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            orphanDuplicates.push(dupGid);
+        }
+    }
+    
+    // 计算总重复数
+    let totalDups = 0;
+    for (const [_, dupGroup] of state.duplicateGroups) {
+        totalDups += dupGroup.duplicates.length;
+    }
+    
+    // 渲染有归属的基准组
+    for (const [baseGid, dupGids] of baseGroupMap) {
+        const baseGroup = state.baseGroups.get(baseGid);
+        if (!baseGroup) continue;
+        
         const folder = document.createElement('div');
         folder.className = 'folder-group';
-        folder.dataset.groupId = gid;
+        folder.dataset.groupId = `base_${baseGid}`;
         
-        if (state.collapsedFolders.has(gid)) {
+        if (state.collapsedFolders.has(`base_${baseGid}`)) {
             folder.classList.add('collapsed');
         }
         
-        const baseThumb = thumbCache.get(group.base);
+        // 统计该基准组的重复总数
+        let groupDupCount = 0;
+        for (const dupGid of dupGids) {
+            groupDupCount += state.duplicateGroups.get(dupGid).duplicates.length;
+        }
         
         folder.innerHTML = `
             <div class="folder-header">
                 <span class="expand-icon">▼</span>
                 <div class="folder-title">
-                    <img class="base-thumb-preview" data-filename="${group.base}" ${baseThumb ? `src="${baseThumb}"` : ''} 
-                         style="width:28px;height:28px;border-radius:4px;object-fit:cover;border:2px solid var(--accent);cursor:pointer;margin-right:4px;">
-                    <span style="font-size:12px;color:var(--text-secondary);">基准：</span>
-                    <span style="font-weight:500;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${group.base}</span>
+                    <span style="font-size:12px;color:var(--accent);margin-right:4px;">📁</span>
+                    <span style="font-weight:500;">${baseGroup.name}</span>
+                    <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">(${dupGids.length} 个基准图)</span>
                 </div>
-                <span class="folder-count">${group.duplicates.length} 张重复</span>
+                <span class="folder-count">${groupDupCount} 张重复</span>
                 <div class="folder-actions">
-                    <button class="del-group" data-gid="${gid}" title="清空此分组">🗑️</button>
+                    <button class="del-base-group" data-gid="${baseGid}" title="清空此基准组的所有重复">🗑️</button>
                 </div>
             </div>
             <div class="folder-body"></div>
@@ -3209,70 +3252,285 @@ function renderDuplicateGroups() {
         
         const header = folder.querySelector('.folder-header');
         header.addEventListener('click', (e) => {
-            if (!e.target.closest('button') && !e.target.closest('img')) {
+            if (!e.target.closest('button')) {
+                const key = `base_${baseGid}`;
                 if (folder.classList.contains('collapsed')) {
                     folder.classList.remove('collapsed');
-                    state.collapsedFolders.delete(gid);
+                    state.collapsedFolders.delete(key);
                 } else {
                     folder.classList.add('collapsed');
-                    state.collapsedFolders.add(gid);
+                    state.collapsedFolders.add(key);
                 }
             }
         });
         
-        const baseImg = folder.querySelector('.base-thumb-preview');
-        if (!baseThumb) lazyObserver.observe(baseImg);
-        baseImg.addEventListener('click', (e) => {
+        // 清空整个基准组的重复
+        folder.querySelector('.del-base-group').addEventListener('click', (e) => {
             e.stopPropagation();
-            previewImage(group.base);
-        });
-        
-        folder.querySelector('.del-group').addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (confirm(`确定清空此重复分组？所有 ${group.duplicates.length + 1} 张图片将恢复至待处理`)) {
-                group.duplicates.forEach(f => state.statusMap.set(f, 'pending'));
-                state.statusMap.set(group.base, 'pending');
-                state.duplicateGroups.delete(gid);
-                state.collapsedFolders.delete(gid);
+            if (confirm(`确定清空基准组「${baseGroup.name}」的所有重复分组？`)) {
+                for (const dupGid of dupGids) {
+                    const dupGroup = state.duplicateGroups.get(dupGid);
+                    if (dupGroup) {
+                        dupGroup.duplicates.forEach(f => state.statusMap.set(f, 'pending'));
+                        state.statusMap.set(dupGroup.base, 'pending');
+                        state.duplicateGroups.delete(dupGid);
+                    }
+                }
                 saveState();
                 renderAll();
             }
         });
         
         const body = folder.querySelector('.folder-body');
-        body.innerHTML = `
-            <div style="margin-bottom:10px;padding:8px;background:var(--surface-light);border-radius:6px;font-size:12px;color:var(--text-secondary);">
-                📌 <strong style="color:var(--accent);">基准图：</strong>${group.base}
+        
+        // 渲染该基准组下的每个重复组（基准图子面板）
+        for (const dupGid of dupGids) {
+            const dupGroup = state.duplicateGroups.get(dupGid);
+            if (!dupGroup) continue;
+            
+            const subFolder = document.createElement('div');
+            subFolder.className = 'folder-group';
+            subFolder.dataset.groupId = dupGid;
+            subFolder.style.marginLeft = '12px';
+            subFolder.style.marginBottom = '8px';
+            subFolder.style.border = '1px solid var(--border-light)';
+            
+            if (state.collapsedFolders.has(dupGid)) {
+                subFolder.classList.add('collapsed');
+            }
+            
+            const baseThumb = thumbCache.get(dupGroup.base);
+            
+            subFolder.innerHTML = `
+                <div class="folder-header" style="padding:6px 10px;">
+                    <span class="expand-icon">▼</span>
+                    <div class="folder-title">
+                        <img class="base-thumb-preview" data-filename="${dupGroup.base}" ${baseThumb ? `src="${baseThumb}"` : ''} 
+                             style="width:24px;height:24px;border-radius:4px;object-fit:cover;border:2px solid var(--accent);cursor:pointer;margin-right:6px;">
+                        <span style="font-size:12px;color:var(--text-secondary);">基准：</span>
+                        <span style="font-weight:400;font-size:12px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${dupGroup.base}</span>
+                    </div>
+                    <span class="folder-count" style="font-size:11px;">${dupGroup.duplicates.length} 张重复</span>
+                    <div class="folder-actions">
+                        <button class="del-group" data-gid="${dupGid}" title="清空此分组" style="font-size:10px;">🗑️</button>
+                    </div>
+                </div>
+                <div class="folder-body"></div>
+            `;
+            
+            // 子面板折叠控制
+            const subHeader = subFolder.querySelector('.folder-header');
+            subHeader.addEventListener('click', (e) => {
+                if (!e.target.closest('button') && !e.target.closest('img')) {
+                    if (subFolder.classList.contains('collapsed')) {
+                        subFolder.classList.remove('collapsed');
+                        state.collapsedFolders.delete(dupGid);
+                    } else {
+                        subFolder.classList.add('collapsed');
+                        state.collapsedFolders.add(dupGid);
+                    }
+                }
+            });
+            
+            // 基准图预览
+            const baseImg = subFolder.querySelector('.base-thumb-preview');
+            if (!baseThumb) lazyObserver.observe(baseImg);
+            baseImg.addEventListener('click', (e) => {
+                e.stopPropagation();
+                previewImage(dupGroup.base);
+            });
+            
+            // 清空单个重复组
+            subFolder.querySelector('.del-group').addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm(`确定清空此重复分组？所有 ${dupGroup.duplicates.length + 1} 张图片将恢复至待处理`)) {
+                    dupGroup.duplicates.forEach(f => state.statusMap.set(f, 'pending'));
+                    state.statusMap.set(dupGroup.base, 'pending');
+                    state.duplicateGroups.delete(dupGid);
+                    state.collapsedFolders.delete(dupGid);
+                    saveState();
+                    renderAll();
+                }
+            });
+            
+            const subBody = subFolder.querySelector('.folder-body');
+            
+            // 渲染基准图 + 重复图网格
+            const grid = document.createElement('div');
+            grid.className = 'image-grid';
+            grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(120px, 1fr))';
+            grid.style.gap = '8px';
+            grid.style.padding = '8px';
+            
+            const baseCard = createImageCard(dupGroup.base, { area: 'dup', immediate: true });
+            baseCard.classList.add('base');
+            baseCard.querySelector('.filename').textContent = '⭐ ' + dupGroup.base;
+            if (!baseCard.querySelector('.badge')) {
+                const badge = document.createElement('span');
+                badge.className = 'badge';
+                badge.textContent = '基准';
+                baseCard.appendChild(badge);
+            }
+            grid.appendChild(baseCard);
+            
+            dupGroup.duplicates.forEach(filename => {
+                const dupCard = createImageCard(filename, { area: 'dup', immediate: true });
+                dupCard.classList.add('duplicate');
+                if (state.multiSelectMode && state.selectedFiles.has(filename)) {
+                    dupCard.classList.add('multi-selected');
+                }
+                grid.appendChild(dupCard);
+            });
+            
+            subBody.appendChild(grid);
+            body.appendChild(subFolder);
+        }
+        
+        els.contentArea.appendChild(folder);
+    }
+    
+    // 渲染孤立重复组（基准图不在任何基准组中）
+    if (orphanDuplicates.length > 0) {
+        const orphanFolder = document.createElement('div');
+        orphanFolder.className = 'folder-group';
+        orphanFolder.dataset.groupId = 'base_orphan';
+        
+        if (state.collapsedFolders.has('base_orphan')) {
+            orphanFolder.classList.add('collapsed');
+        }
+        
+        let orphanDupCount = 0;
+        for (const dupGid of orphanDuplicates) {
+            orphanDupCount += state.duplicateGroups.get(dupGid).duplicates.length;
+        }
+        
+        orphanFolder.innerHTML = `
+            <div class="folder-header">
+                <span class="expand-icon">▼</span>
+                <div class="folder-title">
+                    <span style="font-size:12px;color:var(--warning);margin-right:4px;">📄</span>
+                    <span style="font-weight:500;">未分组</span>
+                    <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">(${orphanDuplicates.length} 个基准图)</span>
+                </div>
+                <span class="folder-count">${orphanDupCount} 张重复</span>
             </div>
+            <div class="folder-body"></div>
         `;
         
-        const grid = document.createElement('div');
-        grid.className = 'image-grid';
-        grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(120px, 1fr))';
-        grid.style.gap = '8px';
-        
-        const baseCard = createImageCard(group.base, { area: 'dup', immediate: true });
-        baseCard.classList.add('base');
-        baseCard.querySelector('.filename').textContent = '⭐ 基准: ' + group.base;
-        if (!baseCard.querySelector('.badge')) {
-            const badge = document.createElement('span');
-            badge.className = 'badge';
-            badge.textContent = '基准';
-            baseCard.appendChild(badge);
-        }
-        grid.appendChild(baseCard);
-        
-        group.duplicates.forEach(filename => {
-            const dupCard = createImageCard(filename, { area: 'dup', immediate: true });
-            dupCard.classList.add('duplicate');
-            if (state.multiSelectMode && state.selectedFiles.has(filename)) {
-                dupCard.classList.add('multi-selected');
+        const orphanHeader = orphanFolder.querySelector('.folder-header');
+        orphanHeader.addEventListener('click', (e) => {
+            if (!e.target.closest('button')) {
+                if (orphanFolder.classList.contains('collapsed')) {
+                    orphanFolder.classList.remove('collapsed');
+                    state.collapsedFolders.delete('base_orphan');
+                } else {
+                    orphanFolder.classList.add('collapsed');
+                    state.collapsedFolders.add('base_orphan');
+                }
             }
-            grid.appendChild(dupCard);
         });
         
-        body.appendChild(grid);
-        els.contentArea.appendChild(folder);
+        const orphanBody = orphanFolder.querySelector('.folder-body');
+        
+        for (const dupGid of orphanDuplicates) {
+            const dupGroup = state.duplicateGroups.get(dupGid);
+            if (!dupGroup) continue;
+            
+            const subFolder = document.createElement('div');
+            subFolder.className = 'folder-group';
+            subFolder.dataset.groupId = dupGid;
+            subFolder.style.marginLeft = '12px';
+            subFolder.style.marginBottom = '8px';
+            subFolder.style.border = '1px solid var(--border-light)';
+            
+            if (state.collapsedFolders.has(dupGid)) {
+                subFolder.classList.add('collapsed');
+            }
+            
+            const baseThumb = thumbCache.get(dupGroup.base);
+            
+            subFolder.innerHTML = `
+                <div class="folder-header" style="padding:6px 10px;">
+                    <span class="expand-icon">▼</span>
+                    <div class="folder-title">
+                        <img class="base-thumb-preview" data-filename="${dupGroup.base}" ${baseThumb ? `src="${baseThumb}"` : ''} 
+                             style="width:24px;height:24px;border-radius:4px;object-fit:cover;border:2px solid var(--accent);cursor:pointer;margin-right:6px;">
+                        <span style="font-size:12px;color:var(--text-secondary);">基准：</span>
+                        <span style="font-weight:400;font-size:12px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${dupGroup.base}</span>
+                    </div>
+                    <span class="folder-count" style="font-size:11px;">${dupGroup.duplicates.length} 张重复</span>
+                    <div class="folder-actions">
+                        <button class="del-group" data-gid="${dupGid}" title="清空此分组" style="font-size:10px;">🗑️</button>
+                    </div>
+                </div>
+                <div class="folder-body"></div>
+            `;
+            
+            const subHeader = subFolder.querySelector('.folder-header');
+            subHeader.addEventListener('click', (e) => {
+                if (!e.target.closest('button') && !e.target.closest('img')) {
+                    if (subFolder.classList.contains('collapsed')) {
+                        subFolder.classList.remove('collapsed');
+                        state.collapsedFolders.delete(dupGid);
+                    } else {
+                        subFolder.classList.add('collapsed');
+                        state.collapsedFolders.add(dupGid);
+                    }
+                }
+            });
+            
+            const baseImg = subFolder.querySelector('.base-thumb-preview');
+            if (!baseThumb) lazyObserver.observe(baseImg);
+            baseImg.addEventListener('click', (e) => {
+                e.stopPropagation();
+                previewImage(dupGroup.base);
+            });
+            
+            subFolder.querySelector('.del-group').addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm(`确定清空此重复分组？所有 ${dupGroup.duplicates.length + 1} 张图片将恢复至待处理`)) {
+                    dupGroup.duplicates.forEach(f => state.statusMap.set(f, 'pending'));
+                    state.statusMap.set(dupGroup.base, 'pending');
+                    state.duplicateGroups.delete(dupGid);
+                    state.collapsedFolders.delete(dupGid);
+                    saveState();
+                    renderAll();
+                }
+            });
+            
+            const subBody = subFolder.querySelector('.folder-body');
+            
+            const grid = document.createElement('div');
+            grid.className = 'image-grid';
+            grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(120px, 1fr))';
+            grid.style.gap = '8px';
+            grid.style.padding = '8px';
+            
+            const baseCard = createImageCard(dupGroup.base, { area: 'dup', immediate: true });
+            baseCard.classList.add('base');
+            baseCard.querySelector('.filename').textContent = '⭐ ' + dupGroup.base;
+            if (!baseCard.querySelector('.badge')) {
+                const badge = document.createElement('span');
+                badge.className = 'badge';
+                badge.textContent = '基准';
+                baseCard.appendChild(badge);
+            }
+            grid.appendChild(baseCard);
+            
+            dupGroup.duplicates.forEach(filename => {
+                const dupCard = createImageCard(filename, { area: 'dup', immediate: true });
+                dupCard.classList.add('duplicate');
+                if (state.multiSelectMode && state.selectedFiles.has(filename)) {
+                    dupCard.classList.add('multi-selected');
+                }
+                grid.appendChild(dupCard);
+            });
+            
+            subBody.appendChild(grid);
+            orphanBody.appendChild(subFolder);
+        }
+        
+        els.contentArea.appendChild(orphanFolder);
     }
 }
 
@@ -3616,11 +3874,10 @@ function confirmCandidate() {
         
         state.statusMap.set(baseFile, 'base');
         
-        if (dupFiles.length > 0) {
-            const dupGid = Date.now().toString();
-            state.duplicateGroups.set(dupGid, { base: baseFile, duplicates: dupFiles });
-            dupFiles.forEach(f => state.statusMap.set(f, 'duplicate'));
-        }
+        // 无论是否有重复图，都创建重复组以确保基准图始终有对应的重复组条目
+        const dupGid = Date.now().toString();
+        state.duplicateGroups.set(dupGid, { base: baseFile, duplicates: dupFiles });
+        dupFiles.forEach(f => state.statusMap.set(f, 'duplicate'));
         
         // 清理候选状态，防止下次残留旧数据
         state.selectedCandidate.clear();
