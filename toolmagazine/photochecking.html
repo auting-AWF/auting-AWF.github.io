@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>图片查重工具 Pro v4.0.0</title>
+<title>图片查重工具 Pro v4.1.0</title>
 <style>
 :root {
     --bg: #0f0f1a;
@@ -1820,46 +1820,7 @@ function computeMultiRotationHash(ctx, img) {
     return `${h0}_${h90}_${h180}_${h270}`;
 }
 
-// 计算带小角度旋转的哈希（用于精确匹配）
-function computeRotationInvariantHash(ctx, img) {
-    const hashes = [];
-    
-    // 原始方向
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, 0, 0, 9, 8);
-    let d = ctx.getImageData(0, 0, 9, 8).data;
-    let grid = new Array(72);
-    for (let i = 0; i < 72; i++)
-        grid[i] = d[i*4]*0.299 + d[i*4+1]*0.587 + d[i*4+2]*0.114;
-    hashes.push(hashFromGrid(grid));
-    
-    // 90°, 180°, 270°
-    let g90 = rotateGrid90(grid, 9, 8);
-    hashes.push(hashFromGrid8x9(g90));
-    let g180 = rotateGrid90(g90, 8, 9);
-    hashes.push(hashFromGrid(g180));
-    let g270 = rotateGrid90(g180, 9, 8);
-    hashes.push(hashFromGrid8x9(g270));
-    
-    // 小角度旋转：通过偏移采样模拟 ±5°, ±10°
-    // 这里简化处理：使用不同的采样偏移来模拟轻微旋转
-    for (let offset = 1; offset <= 2; offset++) {
-        const gridOffset = new Array(72);
-        for (let y = 0; y < 8; y++) {
-            for (let x = 0; x < 9; x++) {
-                const srcX = (x + offset) % 9;
-                const srcY = (y + offset) % 8;
-                const i = (srcY * 9 + srcX) * 4;
-                gridOffset[y * 9 + x] = d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
-            }
-        }
-        hashes.push(hashFromGrid(gridOffset));
-    }
-    
-    return hashes.join('_');
-}
-
-// 从 8×9 网格计算 pHash
+// 从 8×9 网格计算 pHash（用于旋转 90°/270° 方向）
 function hashFromGrid8x9(grid) {
     let h = 0n;
     for (let y = 0; y < 8; y++) {
@@ -1948,7 +1909,7 @@ async function extractVisualFeatures(blob) {
         }
         
         const imageData = ctx.getImageData(0, 0, w, h);
-        const colorHist = extractColorHistogram(imageData, w, h);
+        const colorHist = extractColorHistogramFromData(imageData, w, h);
         const lbpHist = extractLBP(imageData, w, h);
         const levelHash = computeLevelHash(imageData, w, h);
         
@@ -1997,7 +1958,7 @@ function computeVisualFingerprint(features) {
     return fingerprint;
 }
 
-function extractColorHistogram(imageData, w, h) {
+function extractColorHistogramFromData(imageData, w, h) {
     const data = imageData.data;
     const histSize = 11 * 8 * 8;
     const hist = new Float32Array(histSize);
@@ -2375,8 +2336,8 @@ function findSimilarByHash(baseFilename, threshold) {
             const hashScore = 1 - (minDist / 64);
             const combinedScore = hashScore * 0.6 + colorSim * 0.4;
             
-            // 阈值转换：0-32 映射到 0.5-1.0
-            const thresholdScore = 0.5 + (32 - t) / 64;
+            // 阈值转换：0-32 映射到 1.0-0.3（越宽松阈值越低）
+            const thresholdScore = 1.0 - (t / 32) * 0.7;
             
             if (combinedScore >= thresholdScore) {
                 candidates.push({ filename: f, score: combinedScore });
@@ -3371,6 +3332,12 @@ function confirmCandidate() {
             dupFiles.forEach(f => state.statusMap.set(f, 'duplicate'));
         }
         
+        // 清理候选状态，防止下次残留旧数据
+        state.selectedCandidate.clear();
+        state.candidateList = [];
+        state.candidateStep = 1;
+        state.candidateSelectedGroup = null;
+        
         hideCandidatePanel();
         saveState();
         renderAll();
@@ -4086,7 +4053,25 @@ function hideBaseFloatWindow() {
     stopBaseFloatAutoScroll();
 }
 
+// 计算基准组签名，用于检测数据是否变化以决定是否需要重新渲染
+function getBaseGroupsSignature() {
+    const parts = [];
+    for (const [gid, group] of state.baseGroups) {
+        parts.push(`${gid}:${group.name}|${group.images.join(',')}`);
+    }
+    return parts.join('||');
+}
+
 function renderBaseFloatList() {
+    // 如果悬浮窗已显示且分组数据未变，复用现有DOM以保留滚动位置
+    if (els.baseFloatWindow.classList.contains('show') &&
+        els.baseFloatList._lastSignature === getBaseGroupsSignature()) {
+        return;
+    }
+    // 保存当前滚动位置（如果窗口已显示）
+    const wasVisible = els.baseFloatWindow.classList.contains('show');
+    const savedScrollTop = wasVisible ? els.baseFloatList.scrollTop : 0;
+    
     els.baseFloatList.innerHTML = '';
     for (const [gid, group] of state.baseGroups) {
         for (const imgFile of group.images) {
@@ -4187,6 +4172,13 @@ function renderBaseFloatList() {
             
             els.baseFloatList.appendChild(item);
         }
+    }
+    // 保存签名并恢复滚动位置
+    els.baseFloatList._lastSignature = getBaseGroupsSignature();
+    if (wasVisible && savedScrollTop > 0) {
+        requestAnimationFrame(() => {
+            els.baseFloatList.scrollTop = savedScrollTop;
+        });
     }
 }
 
@@ -4639,17 +4631,13 @@ async function exportGroupsAsZip() {
                     continue;
                 }
                 try {
-                    // 用 BlobWriter 获取标准 Blob
-                    const blobWriter = new BlobWriter();
-                    await entry.getData(blobWriter);
-                    const blob = await blobWriter.getData();
+                    const blob = await entry.getData(new BlobWriter());
                     if (!blob || blob.size === 0) {
                         console.warn(`跳过空文件: ${fname}`);
                         continue;
                     }
                     const safeFname = fname.replace(/[\\/:*?"<>|]/g, '_');
                     const path = `${group.safePath}/${safeFname}`;
-                    // 用 BlobReader 包装 Blob 传给 ZipWriter
                     await zipWriter.add(path, new BlobReader(blob));
                     processedFiles++;
                 } catch (err) {
