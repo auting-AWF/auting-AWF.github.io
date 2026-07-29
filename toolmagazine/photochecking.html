@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>图片查重工具 Pro v4.2.0</title>
+<title>图片查重工具 Pro</title>
 <style>
 :root {
     --bg: #0f0f1a;
@@ -1060,6 +1060,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     <button class="btn" id="importBtn">📥 导入</button>
     <button class="btn" id="exportProgressBtn" disabled>📤 导出进度</button>
     <button class="btn" id="resetBtn" disabled>🔄 重置</button>
+    <button class="btn" id="aboutBtn" title="关于">ℹ️</button>
     <input type="file" id="importFile" accept=".json">
 </div>
 
@@ -1181,6 +1182,142 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     <div class="drag-count" id="multiDragCount">已选 0 张</div>
 </div>
 
+---------<!-- 关于弹窗 -->
+<div class="about-modal" id="aboutModal">
+    <div class="about-content">
+        <div class="about-header">
+            <h2>🖼️ PhotoCheck Pro</h2>
+            <span class="close" id="aboutClose">✕</span>
+        </div>
+        <div class="about-body">
+            <div class="about-version">
+                <div>版本号：<span id="toolVersion">v4.2.1</span></div>
+                <div>算法版本：<span id="algoVersion">v2</span></div>
+            </div>
+            <div class="about-section">
+                <h3>功能特性</h3>
+                <ul>
+                    <li>📦 ZIP 压缩包批量处理（16GB运存支持最多万张图片）</li>
+                    <li>🔍 智能查重（快速/精确双模式）</li>
+                    <li>🎯 旋转不变感知哈希（4方向）</li>
+                    <li>🎨 HSV 颜色直方图对比</li>
+                    <li>📝 OCR 文字识别（支持中英文）</li>
+                    <li>📁 分组管理与批量操作</li>
+                    <li>📤 导出分组为 ZIP 文件</li>
+                    <li>✅ 支持导出工作进度（JSON 文件）</li>
+                    <li>💾 状态自动保存/恢复</li>
+                </ul>
+            </div>
+            <div class="about-section">
+                <h3>使用说明</h3>
+                <ul>
+                    <li>点击「打开压缩包」或拖入 ZIP 文件开始</li>
+                    <li>在待处理组右键图片可进行查重或忽略</li>
+                    <li>顶部「快速/精确」按钮切换查重算法</li>
+                    <li>支持多选模式批量操作</li>
+                </ul>
+            </div>
+            <div class="about-section">
+                <h3>技术栈</h3>
+                <ul>
+                    <li>纯前端实现，无需服务器</li>
+                    <li>IndexedDB 本地存储</li>
+                    <li>Tesseract.js OCR 识别</li>
+                    <li>@zip.js/zip.js ZIP 处理</li>
+                    <li>OffscreenCanvas 图像处理</li>
+                </ul>
+            </div>
+            <div class="about-footer">
+                <p>Copyright © 2025 Auting · 开源工具</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.about-modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.6);
+    z-index: 10000;
+    justify-content: center;
+    align-items: center;
+}
+.about-modal.show {
+    display: flex;
+}
+.about-content {
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+}
+.about-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.about-header h2 {
+    margin: 0;
+    font-size: 20px;
+}
+.about-body {
+    padding: 20px 24px;
+}
+.about-version {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    background: var(--bg);
+    border-radius: 8px;
+    font-size: 14px;
+}
+.about-version span {
+    color: var(--accent);
+    font-weight: 600;
+}
+.about-section {
+    margin-bottom: 18px;
+}
+.about-section h3 {
+    font-size: 14px;
+    margin: 0 0 10px 0;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.about-section ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.about-section li {
+    padding: 6px 0;
+    font-size: 13px;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+}
+.about-section li:last-child {
+    border-bottom: none;
+}
+.about-footer {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+</style>
+
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script type="importmap">
 {
@@ -1252,12 +1389,27 @@ const CONFIG = {
     PYRAMID_WEIGHTS: [0.1, 0.2, 0.3, 0.4],
     MAX_EDGE_DISTANCE: 2,
     MAX_IMAGE_SIZE: 512,
-    TOOL_VERSION: '3.1.0',
 };
 
 const thumbCache = new Map();
 const MAX_THUMB_CACHE = 500;
 const thumbLRU = [];
+
+/* ================================================
+ *  版本信息 - 从关于页面读取
+ * ================================================ */
+function getToolVersion() {
+    const el = document.getElementById('toolVersion');
+    return el ? el.textContent.trim() : 'v0.0.0';
+}
+
+function getAlgoVersion() {
+    const el = document.getElementById('algoVersion');
+    if (!el) return 1;
+    const text = el.textContent.trim();
+    const num = parseInt(text.replace('v', ''));
+    return isNaN(num) ? 1 : num;
+}
 let ocrWorker = null;
 let ocrWorkerReady = false;
 
@@ -1323,7 +1475,8 @@ async function saveState() {
             filename: '__meta__',
             fileName: state.zipFileName,
             fileSize: state.zipFileSize,
-            version: CONFIG.TOOL_VERSION
+            version: getToolVersion(),
+            algoVersion: getAlgoVersion()
         });
         
         await new Promise(resolve => { tx.oncomplete = () => { db.close(); resolve(); }; });
@@ -1338,6 +1491,20 @@ async function loadState() {
         const tx = db.transaction(STORE_NAME, 'readonly');
         const all = await promisifyRequest(tx.objectStore(STORE_NAME).getAll());
         await new Promise(resolve => { tx.oncomplete = () => { db.close(); resolve(); }; });
+        
+        // 检查算法版本是否匹配
+        let algoVersion = 0;
+        for (const item of all) {
+            if (item.filename === '__meta__') {
+                algoVersion = item.algoVersion || 1;  // 旧版本默认为1
+                break;
+            }
+        }
+        
+        if (algoVersion !== getAlgoVersion()) {
+            console.log(`算法版本不匹配（存储:${algoVersion}, 当前:${getAlgoVersion()}），需要重新处理`);
+            return false;
+        }
         
         state.imageHashMap.clear();
         state.imageMultiHashMap.clear();
@@ -1370,8 +1537,10 @@ async function loadState() {
                 }
             }
         }
+        return true;
     } catch (e) {
         console.error('加载状态失败:', e);
+        return false;
     }
 }
 
@@ -4431,11 +4600,12 @@ async function startPreprocessing(file) {
     
     try {
         if (state.zipReader && file.name === state.zipFileName && file.size === state.zipFileSize && state.entries.length > 0) {
-            await loadState();
-            if (state.imageHashMap.size > 0) {
+            const loaded = await loadState();
+            if (loaded && state.imageHashMap.size > 0) {
                 onPreprocessingDone();
                 return;
             }
+            // 版本不匹配或加载失败，继续重新处理
         }
         
         if (state.zipReader) { try { await state.zipReader.close(); } catch(e) {} state.zipReader = null; }
@@ -4758,7 +4928,8 @@ async function exportGroupsAsZip() {
 
 async function exportProgress() {
     const data = {
-        version: CONFIG.TOOL_VERSION,
+        version: getToolVersion(),
+        algoVersion: getAlgoVersion(),
         zipFileName: state.zipFileName,
         zipFileSize: state.zipFileSize,
         images: [...state.imageHashMap].map(([filename, hash]) => ({
@@ -4930,6 +5101,18 @@ function bindEvents() {
     });
     
     els.multiSelectBtn.addEventListener('click', toggleMultiSelect);
+    
+    // 关于弹窗事件
+    const aboutBtn = document.getElementById('aboutBtn');
+    const aboutModal = document.getElementById('aboutModal');
+    const aboutClose = document.getElementById('aboutClose');
+    if (aboutBtn && aboutModal) {
+        aboutBtn.addEventListener('click', () => aboutModal.classList.add('show'));
+        aboutClose.addEventListener('click', () => aboutModal.classList.remove('show'));
+        aboutModal.addEventListener('click', (e) => {
+            if (e.target === aboutModal) aboutModal.classList.remove('show');
+        });
+    }
     
     els.backToTopBtn.addEventListener('click', () => {
         els.contentArea.scrollTo({ top: 0, behavior: 'smooth' });
