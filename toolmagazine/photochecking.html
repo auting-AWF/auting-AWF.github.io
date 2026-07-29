@@ -3819,8 +3819,8 @@ function setupDragAndDrop() {
     });
     
     els.contentArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
         if (state.dragSource) {
-            e.preventDefault();
             e.stopPropagation();
             const card = e.target.closest('.image-card');
             document.querySelectorAll('.image-card.drop-target').forEach(el => el.classList.remove('drop-target'));
