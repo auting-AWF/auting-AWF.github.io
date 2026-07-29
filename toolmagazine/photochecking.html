@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>图片查重工具 Pro v4.1.0</title>
+<title>图片查重工具 Pro v4.2.0</title>
 <style>
 :root {
     --bg: #0f0f1a;
@@ -1042,8 +1042,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         <input type="text" id="searchInput" placeholder="搜索图片... (Enter 确认)">
         <div class="search-mode">
             <button id="modeFuzzy" class="active" title="按文件名/路径搜索">🔤 文件名</button>
-            <button id="modeHash" title="基于图片内容相似度">🎯 算法</button>
-            <button id="modeOcr" title="基于图片内文字内容">📝 OCR</button>
+            <button id="modeOcr" title="按图片内文字搜索">📝 OCR</button>
         </div>
     </div>
     
@@ -1053,9 +1052,9 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         <span id="thresholdVal">8</span>
     </div>
     
-    <div class="algo-mode" style="display: flex; gap: 4px; margin-left: 8px;">
-        <button id="modeFast" class="algo-btn active" title="仅使用 pHash，速度快">⚡ 快速</button>
-        <button id="modePrecise" class="algo-btn" title="多方向哈希+颜色直方图，更准确">🎯 精确</button>
+    <div class="algo-mode" style="display: flex; gap: 4px; margin-left: 8px;" title="右键查重时使用的算法">
+        <button id="modeFast" class="algo-btn" title="右键查重时：仅 pHash，速度快">⚡ 快速</button>
+        <button id="modePrecise" class="algo-btn active" title="右键查重时：多方向哈希+颜色直方图，更准确">🎯 精确</button>
     </div>
     
     <button class="btn" id="importBtn">📥 导入</button>
@@ -1213,7 +1212,8 @@ const state = {
     currentTab: 'pending',
     tabScrollPositions: { pending: 0, ignored: 0, base: 0, dup: 0, search: 0 },
     currentCandidateBase: null,
-    searchMode: 'precise',          // 'fast' = pHash only, 'precise' = multi-rotation + color
+    searchMode: 'fuzzy',
+    algoMode: 'precise',  // 'fast' = pHash only, 'precise' = multi-rotation + color
     candidateList: [],
     selectedCandidate: new Set(),
     candidateStep: 1,
@@ -1234,7 +1234,6 @@ const state = {
     zipFileName: '',
     zipFileSize: 0,
     isProcessing: false,
-    searchMode: 'fuzzy',
     isSearching: false,
     abortSearch: false,
     searchResults: [],
@@ -1772,6 +1771,8 @@ function hammingDistance(h1, h2) {
 /* ================================================
  *  旋转不变 pHash - 4方向哈希
  *  解决旋转/视角变化导致查重失败的问题
+ *  使用均值比较（pHash）替代相邻像素比较（dHash），
+ *  对亮度/对比度变化更鲁棒
  * ================================================ */
 
 // 旋转 9×8 灰度网格 90° 顺时针
@@ -1784,23 +1785,46 @@ function rotateGrid90(grid, w, h) {
 }
 
 // 从 9×8 灰度网格计算 pHash（64位）
+// 使用均值比较：每个像素与全局均值对比，对亮度变化鲁棒
 function hashFromGrid(grid) {
+    // 计算全局均值
+    let sum = 0;
+    for (let i = 0; i < grid.length; i++) sum += grid[i];
+    const mean = sum / grid.length;
+    
+    // 对 8×8 区域的每个像素与均值比较
     let h = 0n;
     for (let y = 0; y < 8; y++) {
         for (let x = 0; x < 8; x++) {
             const i = y * 9 + x;
-            const j = i + 1;
             h <<= 1n;
-            if (grid[i] > grid[j]) h |= 1n;
+            if (grid[i] >= mean) h |= 1n;
+        }
+    }
+    return h.toString(16).padStart(16, '0');
+}
+
+// 从 8×9 网格计算 pHash（用于旋转 90°/270° 方向）
+function hashFromGrid8x9(grid) {
+    // 计算全局均值
+    let sum = 0;
+    for (let i = 0; i < grid.length; i++) sum += grid[i];
+    const mean = sum / grid.length;
+    
+    let h = 0n;
+    for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+            const i = y * 9 + x;
+            h <<= 1n;
+            if (grid[i] >= mean) h |= 1n;
         }
     }
     return h.toString(16).padStart(16, '0');
 }
 
 // 计算多方向哈希，返回 "hash0_hash90_hash180_hash270"
-// 同时计算小角度旋转（±5°, ±10°）以处理轻微旋转
 function computeMultiRotationHash(ctx, img) {
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true;  // 启用平滑以减少锯齿影响
     ctx.drawImage(img, 0, 0, 9, 8);
     const d = ctx.getImageData(0, 0, 9, 8).data;
 
@@ -1818,20 +1842,6 @@ function computeMultiRotationHash(ctx, img) {
     const h270 = hashFromGrid8x9(grid270);
 
     return `${h0}_${h90}_${h180}_${h270}`;
-}
-
-// 从 8×9 网格计算 pHash（用于旋转 90°/270° 方向）
-function hashFromGrid8x9(grid) {
-    let h = 0n;
-    for (let y = 0; y < 8; y++) {
-        for (let x = 0; x < 8; x++) {
-            const i = y * 9 + x;
-            const j = i + 1;
-            h <<= 1n;
-            if (grid[i] > grid[j]) h |= 1n;
-        }
-    }
-    return h.toString(16).padStart(16, '0');
 }
 
 /* ================================================
@@ -1928,21 +1938,27 @@ async function extractVisualFeatures(blob) {
 function computeLevelHash(imageData, w, h) {
     const smallCanvas = new OffscreenCanvas(16, 16);
     const ctx = smallCanvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
     ctx.drawImage(imageData, 0, 0, 16, 16);
     const smallData = ctx.getImageData(0, 0, 16, 16).data;
     
     const gray = [];
+    let sum = 0;
     for (let i = 0; i < 256; i++) {
-        gray.push(0.299 * smallData[i*4] + 0.587 * smallData[i*4+1] + 0.114 * smallData[i*4+2]);
+        const g = 0.299 * smallData[i*4] + 0.587 * smallData[i*4+1] + 0.114 * smallData[i*4+2];
+        gray.push(g);
+        sum += g;
     }
+    const mean = sum / 256;
     
+    // 8×8 = 64 位哈希，每个 2×2 块与全局均值比较
     let hash = '';
     for (let i = 0; i < 8; i++) {
         for (let j = 0; j < 8; j++) {
             const idx = i * 2 * 16 + j * 2;
-            const avg = (gray[idx] + gray[idx+1] + gray[idx+16] + gray[idx+17]) / 4;
-            if (avg > 128) hash += '1';
-            else hash += '0';
+            // 取 2×2 块的平均值
+            const blockAvg = (gray[idx] + gray[idx+1] + gray[idx+16] + gray[idx+17]) / 4;
+            hash += blockAvg >= mean ? '1' : '0';
         }
     }
     
@@ -2070,7 +2086,9 @@ function computeVisualSimilarity(features1, features2) {
     }
     
     const avgHashDist = hashDistances.reduce((a, b) => a + b, 0) / hashDistances.length;
-    if (avgHashDist > 20) return 0;
+    // 放宽 hash 硬裁剪：从 20 提升到 40（64位哈希中允许较多差异）
+    // 这是为了处理素描 vs 彩色照片等结构相似但像素差异大的情况
+    if (avgHashDist > 40) return 0;
     
     let totalSim = 0;
     for (let level = 0; level < features1.length; level++) {
@@ -2080,7 +2098,11 @@ function computeVisualSimilarity(features1, features2) {
         const colorSim = cosineSimilarity(f1.color, f2.color);
         const lbpSim = cosineSimilarity(f1.lbp, f2.lbp);
         const hashSim = 1 - (hashDistances[level] / 64);
-        const levelSim = colorSim * 0.4 + lbpSim * 0.3 + hashSim * 0.3;
+        
+        // 对颜色相似度差异大的情况（灰度 vs 彩色），给更多权重给 LBP 和 hash
+        // LBP 关注纹理结构，hash 关注整体结构，这两个对灰度/彩色差异更鲁棒
+        const effectiveColorSim = colorSim > 0.3 ? colorSim : colorSim * 1.3;
+        const levelSim = effectiveColorSim * 0.3 + lbpSim * 0.35 + hashSim * 0.35;
         
         totalSim += CONFIG.PYRAMID_WEIGHTS[level] * levelSim;
     }
@@ -2262,7 +2284,8 @@ function findSimilarByVisual(baseFilename, threshold) {
     candidates.sort((a, b) => b.similarity - a.similarity);
     
     const t = threshold ?? parseInt(document.getElementById('threshold').value);
-    const thresholdNorm = 1 - (t / 32);
+    // 与 hash 模式统一：放宽映射，t=8 时约 0.587
+    const thresholdNorm = 0.75 - (t / 32) * 0.65;
     
     return candidates
         .filter(c => c.similarity >= thresholdNorm && c.similarity < 0.99)
@@ -2290,21 +2313,15 @@ function findSimilarByHash(baseFilename, threshold) {
     const t = threshold ?? parseInt(document.getElementById('threshold').value);
     const results = [];
     
-    // 精确模式：使用 4 方向哈希 + 颜色直方图
-    if (state.searchMode === 'precise') {
+    // 根据算法模式决定使用快速还是精确比较
+    // algoMode: 'fast' = 仅 pHash, 'precise' = 多方向哈希 + 颜色直方图
+    const algoMode = state.algoMode || 'precise';
+    const hasMultiHash = state.imageMultiHashMap.has(baseFilename);
+    const hasColor = state.imageColorMap.has(baseFilename);
+    
+    if (algoMode === 'precise' && hasMultiHash && hasColor) {
         const multiHash = state.imageMultiHashMap.get(baseFilename);
         const baseColor = state.imageColorMap.get(baseFilename);
-        
-        if (!multiHash || !baseColor) {
-            // 降级到快速模式
-            for (const [f, h] of state.imageHashMap) {
-                if (f === baseFilename) continue;
-                if (state.statusMap.get(f) !== 'pending') continue;
-                const dist = hammingDistance(hash, h);
-                if (dist <= t) results.push(f);
-            }
-            return results;
-        }
         
         const baseHashes = multiHash.split('_');
         const candidates = [];
@@ -2316,28 +2333,39 @@ function findSimilarByHash(baseFilename, threshold) {
             const multiHash2 = state.imageMultiHashMap.get(f);
             const color2 = state.imageColorMap.get(f);
             
-            if (!multiHash2 || !color2) continue;
+            if (!multiHash2 || !color2) {
+                // 没有完整数据，降级到快速模式
+                const dist = hammingDistance(hash, h);
+                if (dist <= t) results.push(f);
+                continue;
+            }
             
             const hashes2 = multiHash2.split('_');
             
-            // 计算 4 个方向的最小汉明距离
-            let minDist = 64;
+            // 计算 4 个方向的所有汉明距离，取最小和次小
+            const allDists = [];
             for (const bh of baseHashes) {
                 for (const h2 of hashes2) {
-                    const dist = hammingDistance(bh, h2);
-                    if (dist < minDist) minDist = dist;
+                    allDists.push(hammingDistance(bh, h2));
                 }
             }
+            allDists.sort((a, b) => a - b);
+            const minDist = allDists[0];
+            const secondMinDist = allDists[1] || minDist;
+            
+            // 哈希相似度：最佳方向为主，次佳方向为辅，避免单一方向误判
+            const bestHashScore = 1 - (minDist / 64);
+            const secondHashScore = 1 - (secondMinDist / 64);
+            const hashScore = bestHashScore * 0.6 + secondHashScore * 0.4;
             
             // 计算颜色相似度
             const colorSim = colorHistogramSimilarity(baseColor, color2);
             
-            // 加权融合：哈希距离 60% + 颜色相似度 40%
-            const hashScore = 1 - (minDist / 64);
-            const combinedScore = hashScore * 0.6 + colorSim * 0.4;
+            // 加权融合：哈希 50% + 颜色 50%
+            const combinedScore = hashScore * 0.5 + colorSim * 0.5;
             
-            // 阈值转换：0-32 映射到 1.0-0.3（越宽松阈值越低）
-            const thresholdScore = 1.0 - (t / 32) * 0.7;
+            // 阈值转换：放宽映射，t=8 时约 0.587，提高召回率
+            const thresholdScore = 0.75 - (t / 32) * 0.65;
             
             if (combinedScore >= thresholdScore) {
                 candidates.push({ filename: f, score: combinedScore });
@@ -2348,7 +2376,7 @@ function findSimilarByHash(baseFilename, threshold) {
         return candidates.map(c => c.filename);
     }
     
-    // 快速模式：仅使用 pHash
+    // 快速模式：仅使用 pHash（数据不完整时的降级方案）
     for (const [f, h] of state.imageHashMap) {
         if (f === baseFilename) continue;
         if (state.statusMap.get(f) !== 'pending') continue;
@@ -3064,10 +3092,30 @@ function createNewGroup() {
     renderAll();
 }
 
-function startCandidateCheck(filename) {
+async function startCandidateCheck(filename) {
     state.currentCandidateBase = filename;
     const threshold = parseInt(els.threshold.value);
-    const similar = findSimilarByHash(filename, threshold);
+    const algoMode = state.algoMode || 'precise';
+    
+    let similar = [];
+    if (algoMode === 'precise' && state.imageFeatureMap.size > 0) {
+        // 精确模式：使用视觉特征
+        if (state.imageFeatureMap.has(filename)) {
+            similar = findSimilarByVisual(filename, threshold);
+        } else {
+            // 没有视觉特征，先计算
+            await computeAllVisualFeatures();
+            if (state.imageFeatureMap.has(filename)) {
+                similar = findSimilarByVisual(filename, threshold);
+            } else {
+                similar = findSimilarByHash(filename, threshold);
+            }
+        }
+    } else {
+        // 快速模式：使用 pHash
+        similar = findSimilarByHash(filename, threshold);
+    }
+    
     state.candidateList = [filename, ...similar.filter(f => f !== filename)];
     state.selectedCandidate.clear();
     state.candidateStep = 1;
@@ -3350,15 +3398,14 @@ function confirmCandidate() {
 function setSearchMode(mode) {
     state.searchMode = mode;
     document.querySelectorAll('.search-mode button').forEach(b => b.classList.remove('active'));
-    const map = { fuzzy: 'modeFuzzy', hash: 'modeHash', ocr: 'modeOcr' };
-    document.getElementById(map[mode]).classList.add('active');
+    const map = { fuzzy: 'modeFuzzy', ocr: 'modeOcr' };
+    if (map[mode]) document.getElementById(map[mode]).classList.add('active');
     
     const placeholders = {
         fuzzy: '输入文件名关键词...',
-        hash: '输入文件名或 "file:xxx" 查找相似图...',
         ocr: '输入图片内文字内容...'
     };
-    els.searchInput.placeholder = placeholders[mode];
+    els.searchInput.placeholder = placeholders[mode] || placeholders.fuzzy;
 }
 
 async function performSearch() {
@@ -3378,8 +3425,6 @@ async function performSearch() {
     try {
         if (state.searchMode === 'fuzzy') {
             performFuzzySearch(query);
-        } else if (state.searchMode === 'hash') {
-            await performHashSearch(query);
         } else {
             await performOcrSearch(query);
         }
@@ -3426,19 +3471,23 @@ async function performHashSearch(query) {
     const pendingFiles = getFilesByStatus('pending');
     const threshold = parseInt(els.threshold.value);
     const results = [];
+    const algoMode = state.algoMode || 'precise';
     
-    showProgress('🎨 准备视觉特征...', 0, '提取特征中...');
-    
-    await computeAllVisualFeatures();
-    
-    if (state.abortSearch) {
-        state.searchResults = [];
-        return;
+    if (algoMode === 'precise') {
+        showProgress('🎨 准备视觉特征...', 0, '提取特征中...');
+        await computeAllVisualFeatures();
+        
+        if (state.abortSearch) {
+            state.searchResults = [];
+            return;
+        }
+    } else {
+        showProgress('⚡ 快速哈希搜索中...', 0, '使用 pHash 快速匹配...');
     }
     
     if (query.startsWith('file:')) {
         const targetFile = query.slice(5).trim();
-        if (state.imageFeatureMap.has(targetFile)) {
+        if (algoMode === 'precise' && state.imageFeatureMap.has(targetFile)) {
             const similar = findSimilarByVisual(targetFile, threshold);
             results.push(targetFile, ...similar);
         } else if (state.imageHashMap.has(targetFile)) {
@@ -3457,29 +3506,41 @@ async function performHashSearch(query) {
             }
         }
         
-        showProgress('🎨 视觉搜索中...', 0, '使用多级特征计算相似度...');
-        
-        const featureFiles = pendingFiles.filter(f => state.imageFeatureMap.has(f));
-        let processed = 0;
-        
-        for (const baseFile of featureFiles) {
-            if (state.abortSearch) break;
-            const similar = findSimilarByVisual(baseFile, threshold);
-            for (const f of similar) {
-                if (!results.includes(f)) results.push(f);
+        if (algoMode === 'precise') {
+            showProgress('🎨 视觉搜索中...', 0, '使用多级特征计算相似度...');
+            
+            const featureFiles = pendingFiles.filter(f => state.imageFeatureMap.has(f));
+            let processed = 0;
+            
+            for (const baseFile of featureFiles) {
+                if (state.abortSearch) break;
+                const similar = findSimilarByVisual(baseFile, threshold);
+                for (const f of similar) {
+                    if (!results.includes(f)) results.push(f);
+                }
+                processed++;
+                showProgress('🎨 视觉搜索中...', Math.round(processed / featureFiles.length * 100), `${results.length} 张已找到`);
             }
-            processed++;
-            showProgress('🎨 视觉搜索中...', Math.round(processed / featureFiles.length * 100), `${results.length} 张已找到`);
-        }
-        
-        const hashOnlyFiles = pendingFiles.filter(f => !state.imageFeatureMap.has(f));
-        for (const baseFile of hashOnlyFiles) {
-            if (state.abortSearch) break;
-            const hash = state.imageHashMap.get(baseFile);
-            if (!hash) continue;
-            const similar = findSimilarByHash(baseFile, threshold);
-            for (const f of similar) {
-                if (!results.includes(f)) results.push(f);
+            
+            const hashOnlyFiles = pendingFiles.filter(f => !state.imageFeatureMap.has(f));
+            for (const baseFile of hashOnlyFiles) {
+                if (state.abortSearch) break;
+                const hash = state.imageHashMap.get(baseFile);
+                if (!hash) continue;
+                const similar = findSimilarByHash(baseFile, threshold);
+                for (const f of similar) {
+                    if (!results.includes(f)) results.push(f);
+                }
+            }
+        } else {
+            showProgress('⚡ 快速搜索中...', 0, '使用 pHash 匹配...');
+            
+            for (const baseFile of pendingFiles) {
+                if (state.abortSearch) break;
+                const similar = findSimilarByHash(baseFile, threshold);
+                for (const f of similar) {
+                    if (!results.includes(f)) results.push(f);
+                }
             }
         }
     }
@@ -3730,6 +3791,17 @@ function handleContextAction(action) {
  *  拖拽系统
  * ================================================ */
 function setupDragAndDrop() {
+    // 窗口级安全处理：确保拖拽文件永远不会触发浏览器下载
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+    });
+    
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+    });
+    
     // 全局微信式多选拖拽：mousemove + mouseup（只绑定一次）
     document.addEventListener('mousemove', (e) => {
         if (!state.multiSelectDragging) return;
@@ -4432,18 +4504,26 @@ async function startPreprocessing(file) {
         }
         
         function computePHash(ctx, img) {
-            ctx.imageSmoothingEnabled = false;
+            ctx.imageSmoothingEnabled = true;
             ctx.drawImage(img, 0, 0, 9, 8);
             const d = ctx.getImageData(0, 0, 9, 8).data;
+            
+            // 计算灰度网格和均值
+            const gray = new Array(72);
+            let sum = 0;
+            for (let i = 0; i < 72; i++) {
+                gray[i] = d[i*4] * 0.299 + d[i*4+1] * 0.587 + d[i*4+2] * 0.114;
+                sum += gray[i];
+            }
+            const mean = sum / 72;
+            
+            // 均值 pHash：每个像素与均值比较
             let h = 0n;
             for (let y = 0; y < 8; y++) {
                 for (let x = 0; x < 8; x++) {
-                    const i = (y * 9 + x) * 4;
-                    const j = i + 4;
-                    const g = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
-                    const g2 = d[j] * 0.299 + d[j+1] * 0.587 + d[j+2] * 0.114;
+                    const i = y * 9 + x;
                     h <<= 1n;
-                    if (g > g2) h |= 1n;
+                    if (gray[i] >= mean) h |= 1n;
                 }
             }
             return h.toString(16).padStart(16, '0');
@@ -4574,7 +4654,7 @@ async function exportGroupsAsZip() {
     els.exportBtn.textContent = '📦 正在打包...';
     
     try {
-        const zipWriter = new ZipWriter(new BlobWriter('application/zip'));
+        const zipWriter = new ZipWriter(new BlobWriter());
         let totalFiles = 0;
         let processedFiles = 0;
         
@@ -4819,9 +4899,13 @@ function bindEvents() {
         e.target.value = '';
     });
     
-    els.openZipBtn.addEventListener('click', () => {
-        if (els.fileInput) {
-            els.fileInput.click();
+    els.openZipBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const fileInput = document.getElementById('fileInput');
+        if (fileInput) {
+            fileInput.value = '';  // 清空之前的选择，确保能再次选择同一个文件
+            fileInput.click();
         } else {
             alert('文件输入框未找到，请刷新页面重试');
         }
@@ -4891,17 +4975,16 @@ function bindEvents() {
     els.addGroupBtn.addEventListener('click', createNewGroup);
     
     document.getElementById('modeFuzzy').addEventListener('click', () => setSearchMode('fuzzy'));
-    document.getElementById('modeHash').addEventListener('click', () => setSearchMode('hash'));
     document.getElementById('modeOcr').addEventListener('click', () => setSearchMode('ocr'));
     
     document.getElementById('modeFast').addEventListener('click', () => {
-        state.searchMode = 'fast';
+        state.algoMode = 'fast';
         document.getElementById('modeFast').classList.add('active');
         document.getElementById('modePrecise').classList.remove('active');
     });
     
     document.getElementById('modePrecise').addEventListener('click', () => {
-        state.searchMode = 'precise';
+        state.algoMode = 'precise';
         document.getElementById('modePrecise').classList.add('active');
         document.getElementById('modeFast').classList.remove('active');
     });
