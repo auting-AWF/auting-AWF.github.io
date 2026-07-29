@@ -1191,7 +1191,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         </div>
         <div class="about-body">
             <div class="about-version">
-                <div>版本号：<span id="toolVersion">v4.2.2</span></div>
+                <div>版本号：<span id="toolVersion">v4.2.3</span></div>
                 <div>算法版本：<span id="algoVersion">v2</span></div>
             </div>
             <div class="about-section">
@@ -2436,6 +2436,85 @@ async function computeAllVisualFeatures() {
     }
 }
 
+/* ================================================
+ *  统一的两张图片相似度计算入口
+ *  - 所有需要比较两张图的地方都调用这里
+ *  - 规则跟右键查重（findSimilarByHash/Visual）完全一致
+ *  返回：{
+ *      distance: 0~32 (越小越相似，用于跟阈值比较与显示),
+ *      score: 0~1 (越大越相似),
+ *      passed: boolean (是否通过阈值)
+ *  }
+ * ================================================ */
+function computePairSimilarity(fileA, fileB, options = {}) {
+    const algoMode = options.algoMode || state.algoMode || 'precise';
+    const threshold = (options.threshold != null)
+        ? options.threshold
+        : parseInt(document.getElementById('threshold').value);
+    
+    const hashA = state.imageHashMap.get(fileA);
+    const hashB = state.imageHashMap.get(fileB);
+    if (!hashA || !hashB) {
+        return { distance: 999, score: 0, passed: false, mode: 'missing' };
+    }
+    
+    // 视觉特征金字塔（最高优先级，最精确）
+    const featA = state.imageFeatureMap.get(fileA);
+    const featB = state.imageFeatureMap.get(fileB);
+    if (algoMode === 'precise' && featA && featB) {
+        const sim = computeFeatureSimilarity(featA, featB);
+        const thresholdScore = 0.75 - (threshold / 32) * 0.65;
+        const dist = Math.max(0, Math.round(32 * (1 - sim)));
+        return {
+            distance: dist,
+            score: sim,
+            passed: sim >= thresholdScore,
+            mode: 'visual-pyramid'
+        };
+    }
+    
+    // 4方向旋转哈希 + HSV颜色直方图（精确模式次选）
+    const multiA = state.imageMultiHashMap.get(fileA);
+    const multiB = state.imageMultiHashMap.get(fileB);
+    const colorA = state.imageColorMap.get(fileA);
+    const colorB = state.imageColorMap.get(fileB);
+    if (algoMode === 'precise' && multiA && multiB && colorA && colorB) {
+        const hashesA = multiA.split('_');
+        const hashesB = multiB.split('_');
+        const allDists = [];
+        for (const ha of hashesA) {
+            for (const hb of hashesB) {
+                allDists.push(hammingDistance(ha, hb));
+            }
+        }
+        allDists.sort((a, b) => a - b);
+        const minD = allDists[0];
+        const secD = allDists[1] || minD;
+        const hashScore = (1 - minD / 64) * 0.6 + (1 - secD / 64) * 0.4;
+        
+        const colorSim = colorHistogramSimilarity(colorA, colorB);
+        const combinedScore = hashScore * 0.5 + colorSim * 0.5;
+        const thresholdScore = 0.75 - (threshold / 32) * 0.65;
+        const colorDist = (1 - colorSim) * 32;
+        const dist = Math.round(((minD * 0.6 + secD * 0.4) / 2) * 0.5 + colorDist * 0.5);
+        return {
+            distance: Math.min(32, dist),
+            score: combinedScore,
+            passed: combinedScore >= thresholdScore,
+            mode: 'multi-rotate+color'
+        };
+    }
+    
+    // 快速模式 / 数据不全时降级：基本 pHash
+    const dist = hammingDistance(hashA, hashB);
+    return {
+        distance: dist,
+        score: 1 - dist / 64,
+        passed: dist <= threshold,
+        mode: algoMode === 'precise' ? 'pHash-fallback' : 'pHash-fast'
+    };
+}
+
 function findSimilarByVisual(baseFilename, threshold) {
     const baseEntry = state.imageFeatureMap.get(baseFilename);
     if (!baseEntry) return [];
@@ -2482,79 +2561,21 @@ function findSimilarByHash(baseFilename, threshold) {
     const hash = state.imageHashMap.get(baseFilename);
     if (!hash) return [];
     const t = threshold ?? parseInt(document.getElementById('threshold').value);
-    const results = [];
     
-    // 根据算法模式决定使用快速还是精确比较
-    // algoMode: 'fast' = 仅 pHash, 'precise' = 多方向哈希 + 颜色直方图
-    const algoMode = state.algoMode || 'precise';
-    const hasMultiHash = state.imageMultiHashMap.has(baseFilename);
-    const hasColor = state.imageColorMap.has(baseFilename);
+    const pendingFiles = getFilesByStatus('pending');
+    const candidates = [];
     
-    if (algoMode === 'precise' && hasMultiHash && hasColor) {
-        const multiHash = state.imageMultiHashMap.get(baseFilename);
-        const baseColor = state.imageColorMap.get(baseFilename);
-        
-        const baseHashes = multiHash.split('_');
-        const candidates = [];
-        
-        for (const [f, h] of state.imageHashMap) {
-            if (f === baseFilename) continue;
-            if (state.statusMap.get(f) !== 'pending') continue;
-            
-            const multiHash2 = state.imageMultiHashMap.get(f);
-            const color2 = state.imageColorMap.get(f);
-            
-            if (!multiHash2 || !color2) {
-                // 没有完整数据，降级到快速模式
-                const dist = hammingDistance(hash, h);
-                if (dist <= t) results.push(f);
-                continue;
-            }
-            
-            const hashes2 = multiHash2.split('_');
-            
-            // 计算 4 个方向的所有汉明距离，取最小和次小
-            const allDists = [];
-            for (const bh of baseHashes) {
-                for (const h2 of hashes2) {
-                    allDists.push(hammingDistance(bh, h2));
-                }
-            }
-            allDists.sort((a, b) => a - b);
-            const minDist = allDists[0];
-            const secondMinDist = allDists[1] || minDist;
-            
-            // 哈希相似度：最佳方向为主，次佳方向为辅，避免单一方向误判
-            const bestHashScore = 1 - (minDist / 64);
-            const secondHashScore = 1 - (secondMinDist / 64);
-            const hashScore = bestHashScore * 0.6 + secondHashScore * 0.4;
-            
-            // 计算颜色相似度
-            const colorSim = colorHistogramSimilarity(baseColor, color2);
-            
-            // 加权融合：哈希 50% + 颜色 50%
-            const combinedScore = hashScore * 0.5 + colorSim * 0.5;
-            
-            // 阈值转换：放宽映射，t=8 时约 0.587，提高召回率
-            const thresholdScore = 0.75 - (t / 32) * 0.65;
-            
-            if (combinedScore >= thresholdScore) {
-                candidates.push({ filename: f, score: combinedScore });
-            }
-        }
-        
-        candidates.sort((a, b) => b.score - a.score);
-        return candidates.map(c => c.filename);
-    }
-    
-    // 快速模式：仅使用 pHash（数据不完整时的降级方案）
-    for (const [f, h] of state.imageHashMap) {
+    // 统一使用 computePairSimilarity，逻辑与两张图比较完全一致
+    for (const f of pendingFiles) {
         if (f === baseFilename) continue;
-        if (state.statusMap.get(f) !== 'pending') continue;
-        const dist = hammingDistance(hash, h);
-        if (dist <= t) results.push(f);
+        const cmp = computePairSimilarity(baseFilename, f, { threshold: t });
+        if (cmp.passed) {
+            candidates.push({ filename: f, score: cmp.score, distance: cmp.distance });
+        }
     }
-    return results;
+    
+    candidates.sort((a, b) => (b.score - a.score) || (a.distance - b.distance));
+    return candidates.map(c => c.filename);
 }
 
 function getFilesByStatus(status) {
@@ -4111,9 +4132,17 @@ async function handleDropOnImage(sourceFilename, targetFilename) {
         return;
     }
     
-    const dist = hammingDistance(sourceHash, targetHash);
-    if (dist <= threshold) {
-        let actionMsg = `相似度: ${dist} (阈值: ${threshold})\n\n`;
+    // ★ 统一使用 computePairSimilarity：与右键查重、findSimilarByHash 完全同一套算法
+    const algoMode = state.algoMode || 'precise';
+    const cmp = computePairSimilarity(sourceFilename, targetFilename, {
+        algoMode,
+        threshold
+    });
+    const dist = cmp.distance;
+    
+    if (cmp.passed) {
+        const modeLabel = algoMode === 'precise' ? '精确' : '快速';
+        let actionMsg = `[${modeLabel}模式] 相似度: ${dist} (阈值: ${threshold})\n\n`;
         if (targetStatus === 'base') {
             actionMsg += `「${targetFilename}」已是基准图，`;
         } else if (targetStatus === 'duplicate') {
