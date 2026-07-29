@@ -187,6 +187,16 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     background: var(--accent);
     color: #fff;
 }
+.tab.drag-target {
+    background: rgba(74, 158, 255, 0.15);
+    border-bottom-color: var(--accent);
+    color: var(--accent);
+    animation: dragTargetPulse 0.8s ease-in-out infinite;
+}
+@keyframes dragTargetPulse {
+    0%, 100% { box-shadow: inset 0 0 0 0 rgba(74, 158, 255, 0); }
+    50% { box-shadow: inset 0 -2px 12px 0 rgba(74, 158, 255, 0.3); }
+}
 .tab-actions {
     margin-left: auto;
     display: flex;
@@ -270,6 +280,34 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
 .image-card.drop-target {
     outline: 2px dashed var(--accent);
     outline-offset: -2px;
+}
+.image-card.base-drop-hover {
+    outline: 3px solid rgba(74, 158, 255, 0.9);
+    outline-offset: -3px;
+    box-shadow: 0 0 0 9999px rgba(74, 158, 255, 0.08) inset;
+    background: rgba(74, 158, 255, 0.15);
+    transform: scale(1.02);
+}
+.drop-toast {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.8);
+    background: rgba(74, 158, 255, 0.95);
+    color: #fff;
+    padding: 16px 28px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    z-index: 99999;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s, transform 0.25s;
+    box-shadow: 0 8px 32px rgba(74, 158, 255, 0.4);
+}
+.drop-toast.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
 }
 .image-card .thumb {
     width: 100%;
@@ -1191,7 +1229,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         </div>
         <div class="about-body">
             <div class="about-version">
-                <div>版本号：<span id="toolVersion">v4.2.3</span></div>
+                <div>版本号：<span id="toolVersion">v4.2.5</span></div>
                 <div>算法版本：<span id="algoVersion">v2</span></div>
             </div>
             <div class="about-section">
@@ -1362,6 +1400,7 @@ const state = {
     selectedFiles: new Set(),
     dragSource: null,
     dragSourceArea: null,
+    dragOriginalTab: null,
     dropTarget: null,
     multiSelectDragging: false,
     multiSelectDragStartX: 0,
@@ -2799,26 +2838,32 @@ function createImageCard(filename, options = {}) {
     });
     
     card.addEventListener('dragstart', (e) => {
-        // 微信式多选拖拽中不触发原生拖拽
         if (state.multiSelectDragging) { e.preventDefault(); return; }
         state.dragSource = filename;
         state.dragSourceArea = options.area || state.currentTab;
+        state.dragOriginalTab = state.currentTab;
         e.dataTransfer.effectAllowed = 'move';
         try {
             e.dataTransfer.setData('text/plain', filename);
         } catch (err) {}
         card.classList.add('dragging');
-        // 显示基准组悬浮窗
-        showBaseFloatWindow();
+        // 高亮基准组tab，提示用户可拖入
+        const baseTab = document.querySelector('.tab[data-tab="base"]');
+        if (baseTab && state.baseGroups.size > 0) {
+            baseTab.classList.add('drag-target');
+        }
     });
     
     card.addEventListener('dragend', () => {
         card.classList.remove('dragging');
         state.dragSource = null;
         state.dragSourceArea = null;
+        state.dragOriginalTab = null;
         document.querySelectorAll('.image-card.drop-target').forEach(el => el.classList.remove('drop-target'));
-        document.querySelectorAll('.base-float-item.drop-hover').forEach(el => el.classList.remove('drop-hover'));
-        hideBaseFloatWindow();
+        document.querySelectorAll('.image-card.base-drop-hover').forEach(el => el.classList.remove('base-drop-hover'));
+        document.querySelectorAll('.tab.drag-target').forEach(el => el.classList.remove('drag-target'));
+        // 清理基准组tab的拖拽状态
+        clearBaseTabAutoSwitch();
     });
     
     return card;
@@ -2972,6 +3017,11 @@ function renderContent() {
         els.contentArea.scrollTop = Math.min(savedScrollTop, Math.max(0, maxScroll));
     }
     updateBackToTopBtn();
+    
+    // 如果正在拖拽且当前在基准组tab，为图片添加拖放目标
+    if (state.currentTab === 'base' && state.dragSource) {
+        setupBaseImageDropTargets();
+    }
 }
 
 function renderSearchResults(files) {
@@ -4078,6 +4128,13 @@ function setupDragAndDrop() {
             return;
         }
         
+        // 在基准组tab时，拖放由卡片自己的drop handler处理（有stopPropagation）
+        // 这里跳过，避免触发互相查重逻辑
+        if (state.currentTab === 'base') {
+            document.querySelectorAll('.image-card.base-drop-hover').forEach(el => el.classList.remove('base-drop-hover'));
+            return;
+        }
+        
         const targetCard = e.target.closest('.image-card');
         const targetFolder = e.target.closest('.folder-group');
         
@@ -4498,6 +4555,205 @@ function setupBaseFloatScroll() {
 }
 
 /* ================================================
+ *  基准组 Tab 拖拽切换 + 图片归类（新方案）
+ *  - 拖拽时基准组tab高亮
+ *  - 鼠标停留在tab上0.5秒自动切换
+ *  - 在基准组视图内拖到图片上松开即归类
+ *  - 归类后自动返回原标签页
+ * ================================================ */
+let baseTabAutoSwitchTimer = null;
+
+function clearBaseTabAutoSwitch() {
+    if (baseTabAutoSwitchTimer) {
+        clearTimeout(baseTabAutoSwitchTimer);
+        baseTabAutoSwitchTimer = null;
+    }
+}
+
+function setupTabDragHandlers() {
+    const baseTab = document.querySelector('.tab[data-tab="base"]');
+    if (!baseTab) return;
+    
+    // 鼠标停留在基准组tab上 0.5秒 → 自动切换
+    baseTab.addEventListener('dragover', (e) => {
+        if (!state.dragSource) return;
+        e.preventDefault();
+        if (state.currentTab === 'base') { clearBaseTabAutoSwitch(); return; }
+        if (baseTabAutoSwitchTimer) return;
+        baseTabAutoSwitchTimer = setTimeout(() => {
+            clearBaseTabAutoSwitch();
+            if (state.dragSource && state.currentTab !== 'base') {
+                state.currentTab = 'base';
+                renderAll();
+            }
+        }, 500);
+    });
+    
+    baseTab.addEventListener('dragleave', () => {
+        clearBaseTabAutoSwitch();
+    });
+    
+    baseTab.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        clearBaseTabAutoSwitch();
+    });
+    
+    // 在基准组视图内的全局 dragover：处理边缘自动滚动
+    els.contentArea.addEventListener('dragover', (e) => {
+        if (!state.dragSource || state.currentTab !== 'base') return;
+        if (e.target.closest('.image-card')) return;  // 图片自己处理
+        // 边缘滚动
+        const rect = els.contentArea.getBoundingClientRect();
+        const mouseY = e.clientY;
+        const edgeThreshold = 80;
+        if (mouseY - rect.top < edgeThreshold) {
+            const speed = Math.max(4, 15 - (mouseY - rect.top) / 10);
+            els.contentArea.scrollTop -= speed;
+        } else if (rect.bottom - mouseY < edgeThreshold) {
+            const speed = Math.max(4, 15 - (rect.bottom - mouseY) / 10);
+            els.contentArea.scrollTop += speed;
+        }
+    });
+    
+    // 基准组tab内拖拽时，确保滚轮滚动可用（即使在图片上）
+    els.contentArea.addEventListener('wheel', (e) => {
+        if (!state.dragSource || state.currentTab !== 'base') return;
+        e.preventDefault();
+        els.contentArea.scrollTop += e.deltaY;
+    }, { passive: false });
+}
+
+// 在基准组图片上放置拖拽目标
+function setupBaseImageDropTargets() {
+    if (state.currentTab !== 'base' || !state.dragSource) return;
+    
+    els.contentArea.querySelectorAll('.image-card').forEach(card => {
+        const filename = card.dataset.filename;
+        if (!filename) return;
+        
+        card.addEventListener('dragover', (e) => {
+            if (!state.dragSource || state.dragSource === filename) return;
+            e.preventDefault();
+            e.stopPropagation();
+            card.classList.add('base-drop-hover');
+            // 边缘滚动
+            const rect = els.contentArea.getBoundingClientRect();
+            const mouseY = e.clientY;
+            if (mouseY - rect.top < 80) {
+                els.contentArea.scrollTop -= 10;
+            } else if (rect.bottom - mouseY < 80) {
+                els.contentArea.scrollTop += 10;
+            }
+        });
+        
+        card.addEventListener('dragleave', (e) => {
+            // 只有在离开卡片本身时才移除
+            if (!card.contains(e.relatedTarget)) {
+                card.classList.remove('base-drop-hover');
+            }
+        });
+        
+        card.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            card.classList.remove('base-drop-hover');
+            if (!state.dragSource || state.dragSource === filename) return;
+            
+            const sourceFilename = state.dragSource;
+            const targetFilename = filename;
+            
+            // 校验状态
+            const sourceStatus = state.statusMap.get(sourceFilename);
+            const targetStatus = state.statusMap.get(targetFilename);
+            if (sourceStatus === 'base' || sourceStatus === 'duplicate') {
+                showDropToast('该图片已是基准图或重复图', true);
+                return;
+            }
+            if (sourceStatus === 'ignored') {
+                showDropToast('已忽略的图片不能参与归类', true);
+                return;
+            }
+            
+            // 找到目标图片所在的分组
+            let targetGid = null;
+            for (const [gid, group] of state.baseGroups) {
+                if (group.images.includes(targetFilename)) {
+                    targetGid = gid;
+                    break;
+                }
+            }
+            if (!targetGid) {
+                showDropToast('目标不在任何基准组中', true);
+                return;
+            }
+            
+            // 将源图片标记为目标图片的重复图
+            let dupGid = null;
+            for (const [id, g] of state.duplicateGroups) {
+                if (g.base === targetFilename) { dupGid = id; break; }
+            }
+            if (!dupGid) {
+                dupGid = Date.now().toString();
+                state.duplicateGroups.set(dupGid, { base: targetFilename, duplicates: [] });
+            }
+            const dupGroup = state.duplicateGroups.get(dupGid);
+            if (!dupGroup.duplicates.includes(sourceFilename)) {
+                dupGroup.duplicates.push(sourceFilename);
+            }
+            
+            // 更新状态
+            state.statusMap.set(targetFilename, 'base');
+            state.statusMap.set(sourceFilename, 'duplicate');
+            
+            // 清理其他分组中的源文件
+            for (const [_, g] of state.baseGroups) g.images = g.images.filter(f => f !== sourceFilename);
+            for (const [_, g] of state.duplicateGroups) {
+                if (g.base !== targetFilename) {
+                    g.duplicates = g.duplicates.filter(f => f !== sourceFilename);
+                }
+            }
+            
+            const groupName = state.baseGroups.get(targetGid)?.name || '基准组';
+            showDropToast(`已将「${shortName(sourceFilename)}」移入「${groupName}」`);
+            
+            saveState();
+            state.dragSource = null;
+            
+            // 自动返回原标签页
+            const returnTab = state.dragOriginalTab || 'pending';
+            state.dragOriginalTab = null;
+            setTimeout(() => {
+                state.currentTab = returnTab;
+                renderAll();
+            }, 600);
+        });
+    });
+}
+
+function showDropToast(message, isError = false) {
+    const toast = document.createElement('div');
+    toast.className = 'drop-toast';
+    if (isError) {
+        toast.style.background = 'rgba(255, 99, 132, 0.95)';
+        toast.style.boxShadow = '0 8px 32px rgba(255, 99, 132, 0.4)';
+    }
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => {
+        toast.classList.add('show');
+    });
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 1600);
+}
+
+function shortName(fname) {
+    return fname.length > 12 ? fname.substring(0, 10) + '…' : fname;
+}
+
+/* ================================================
  *  批量操作
  * ================================================ */
 function moveBatchToBaseGroup(files, groupId) {
@@ -4704,18 +4960,40 @@ async function startPreprocessing(file) {
         
         showProgress('⏳ 预处理中（计算哈希）...', 0, `共 ${totalImagesCount} 张图片`);
         
+        // 尝试从 DB 加载已计算的哈希（避免重复计算）
         const meta = await getDBMeta();
         if (meta && meta.fileName === file.name && meta.fileSize === file.size) {
+            // ★ 在 loadState 之前保存当前已恢复的分组数据，防止 loadState 清空后丢失
+            const savedGroups = {
+                duplicateGroups: new Map(state.duplicateGroups),
+                baseGroups: new Map(state.baseGroups),
+                statusMap: new Map(state.statusMap),
+                ocrTextMap: new Map(state.ocrTextMap)
+            };
+            
             const loaded = await loadState();
             if (loaded && state.imageHashMap.size >= totalImagesCount) {
-                // 加载成功后，用 savedProgress 的分组覆盖（因为 loadState 的 algo 可能被版本验证清空）
+                // ★ loadState 成功后，用之前备份的分组覆盖（DB 中的分组可能不全或格式不一致）
                 if (canRestoreProgress) {
-                    state.duplicateGroups = savedProgress.duplicateGroups;
-                    state.baseGroups = savedProgress.baseGroups;
+                    state.duplicateGroups = savedGroups.duplicateGroups;
+                    state.baseGroups = savedGroups.baseGroups;
                 }
                 hideProgress();
                 onPreprocessingDone();
                 return;
+            }
+            // loadState 失败（版本不匹配）：恢复之前备份的数据
+            if (canRestoreProgress) {
+                state.duplicateGroups = savedGroups.duplicateGroups;
+                state.baseGroups = savedGroups.baseGroups;
+                for (const [fname, status] of savedGroups.statusMap) {
+                    if (state.entryMap.has(fname)) {
+                        state.statusMap.set(fname, status);
+                    }
+                }
+                for (const [fname, ocr] of savedGroups.ocrTextMap) {
+                    state.ocrTextMap.set(fname, ocr);
+                }
             }
         }
         
@@ -5223,6 +5501,7 @@ function bindEvents() {
     initElements();
     setupDragAndDrop();
     setupBaseFloatScroll();
+    setupTabDragHandlers();
     
     els.contentArea.addEventListener('scroll', () => {
         if (state.tabScrollPositions[state.currentTab] !== undefined) {
