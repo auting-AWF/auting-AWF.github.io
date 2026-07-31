@@ -1446,7 +1446,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         </div>
         <div class="about-body">
             <div class="about-version">
-                <div>版本号：<span id="toolVersion">v4.3.9</span></div>
+                <div>版本号：<span id="toolVersion">v4.3.10</span></div>
                 <div>算法版本：<span id="algoVersion">v2</span></div>
             </div>
             <div class="about-section">
@@ -5054,7 +5054,7 @@ function handleCustomDragTargetHighlight(elUnder) {
 }
 
 // 拖放到悬浮窗的基准图项：直接归类为重复图
-function handleDropOnFloatItem(sourceFilename, targetFilename, targetGid) {
+function handleDropOnFloatItem(sourceFilename, targetFilename, targetGidParam) {
     const sourceStatus = state.statusMap.get(sourceFilename);
     if (sourceStatus === 'base' || sourceStatus === 'duplicate') return;
     
