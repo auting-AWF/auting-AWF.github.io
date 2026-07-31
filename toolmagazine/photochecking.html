@@ -1226,6 +1226,41 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     pointer-events: none;
     box-shadow: 0 2px 10px rgba(0,0,0,0.3);
 }
+
+/* ============ 自定义拖拽指示器 ============ */
+.custom-drag-indicator {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    display: none;
+    opacity: 0.85;
+    transform: translate(-50%, -50%);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    background: #fff;
+    max-width: 120px;
+    max-height: 120px;
+}
+.custom-drag-indicator.active { display: block; }
+.custom-drag-indicator img {
+    display: block;
+    max-width: 120px;
+    max-height: 120px;
+    object-fit: contain;
+}
+.custom-drag-indicator .drag-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 10px;
+    display: none;
+}
 </style>
 </head>
 <body>
@@ -1324,7 +1359,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
 
 <!-- 批量操作栏 -->
 <div class="batch-bar" id="batchBar">
-    <div class="batch-stack-container" id="batchStackContainer" draggable="true" title="点击查看已选图片 | 拖拽到基准图可批量归类">
+    <div class="batch-stack-container" id="batchStackContainer" title="点击查看已选图片 | 拖拽到基准图可批量归类">
         <div class="batch-stack-thumbs" id="batchStackThumbs">
             <!-- 动态填充缩略图 -->
         </div>
@@ -1386,6 +1421,12 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     <div class="drag-count" id="multiDragCount">已选 0 张</div>
 </div>
 
+<!-- 自定义拖拽指示器（替代原生HTML5拖拽，以支持滚轮滚动） -->
+<div class="custom-drag-indicator" id="customDragIndicator">
+    <img id="customDragThumb" src="" alt="">
+    <span class="drag-badge" id="customDragBadge"></span>
+</div>
+
 <!-- 多选悬浮弹窗（点击堆叠缩略图弹出） -->
 <div class="batch-popup" id="batchPopup" style="display:none;">
     <div class="batch-popup-header">
@@ -1405,7 +1446,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         </div>
         <div class="about-body">
             <div class="about-version">
-                <div>版本号：<span id="toolVersion">v4.3.3</span></div>
+                <div>版本号：<span id="toolVersion">v4.3.5</span></div>
                 <div>算法版本：<span id="algoVersion">v2</span></div>
             </div>
             <div class="about-section">
@@ -1578,6 +1619,17 @@ const state = {
     dragSourceArea: null,
     dragOriginalTab: null,
     dropTarget: null,
+    // 自定义拖拽（替代原生HTML5拖拽，以支持滚轮滚动）
+    customDrag: {
+        active: false,
+        tracking: false,
+        sourceEl: null,
+        sourceFilename: '',
+        sourceArea: null,
+        startX: 0,
+        startY: 0,
+        moved: false,
+    },
     multiSelectDragging: false,
     multiSelectDragStartX: 0,
     multiSelectDragStartY: 0,
@@ -1586,8 +1638,6 @@ const state = {
     showBaseFloat: false,
     baseFloatScrollDir: 0,
     baseFloatScrollTimer: null,
-    lastDragOverY: 0,
-    lastDragOverTime: 0,
     zipFileName: '',
     zipFileSize: 0,
     isProcessing: false,
@@ -2889,6 +2939,9 @@ function initElements() {
     els.baseFloatClose = document.getElementById('baseFloatClose');
     els.multiDragIndicator = document.getElementById('multiDragIndicator');
     els.multiDragCount = document.getElementById('multiDragCount');
+    els.customDragIndicator = document.getElementById('customDragIndicator');
+    els.customDragThumb = document.getElementById('customDragThumb');
+    els.customDragBadge = document.getElementById('customDragBadge');
     
     document.getElementById('pendingCount').textContent = '0';
     document.getElementById('baseCount').textContent = '0';
@@ -2944,7 +2997,10 @@ function createImageCard(filename, options = {}) {
     card.dataset.filename = filename;
     if (state.multiSelectMode) card.classList.add('multi-mode');
     if (state.selectedFiles.has(filename)) card.classList.add('multi-selected');
-    if (options.draggable !== false) card.draggable = true;
+    if (options.draggable !== false) {
+        // 使用自定义拖拽代替原生HTML5拖拽，以支持拖拽期间滚轮滚动
+        attachCustomDrag(card, filename, options.area || state.currentTab);
+    }
     
     const cached = thumbCache.get(filename);
     const status = state.statusMap.get(filename);
@@ -2990,6 +3046,11 @@ function createImageCard(filename, options = {}) {
     
     card.addEventListener('click', (e) => {
         e.stopPropagation();
+        // 如果刚发生了拖拽操作，忽略此次单击
+        if (state.customDrag.moved) {
+            state.customDrag.moved = false;
+            return;
+        }
         if (state.multiSelectMode) {
             toggleFileSelection(filename);
         } else {
@@ -3022,37 +3083,6 @@ function createImageCard(filename, options = {}) {
             els.multiDragIndicator.classList.add('show');
             els.multiDragCount.textContent = `已选 ${state.selectedFiles.size} 张`;
         }, 200);
-    });
-    
-    card.addEventListener('dragstart', (e) => {
-        if (state.multiSelectDragging) { e.preventDefault(); return; }
-        state.dragSource = filename;
-        state.dragSourceArea = options.area || state.currentTab;
-        state.dragOriginalTab = state.currentTab;
-        e.dataTransfer.effectAllowed = 'move';
-        try {
-            e.dataTransfer.setData('text/plain', filename);
-        } catch (err) {}
-        card.classList.add('dragging');
-        // 高亮基准组tab，提示用户可拖入
-        const baseTab = document.querySelector('.tab[data-tab="base"]');
-        if (baseTab && state.baseGroups.size > 0) {
-            baseTab.classList.add('drag-target');
-        }
-    });
-    
-    card.addEventListener('dragend', () => {
-        card.classList.remove('dragging');
-        state.dragSource = null;
-        state.dragSourceArea = null;
-        state.dragOriginalTab = null;
-        state.lastDragOverY = 0;
-        state.lastDragOverTime = 0;
-        document.querySelectorAll('.image-card.drop-target').forEach(el => el.classList.remove('drop-target'));
-        document.querySelectorAll('.image-card.base-drop-hover').forEach(el => el.classList.remove('base-drop-hover'));
-        document.querySelectorAll('.tab.drag-target').forEach(el => el.classList.remove('drag-target'));
-        // 清理基准组tab的拖拽状态
-        clearBaseTabAutoSwitch();
     });
     
     return card;
@@ -4359,6 +4389,7 @@ let currentPreviewFilename = null;
 let currentZoomScale = 1;
 let panX = 0, panY = 0;
 let isPanning = false;
+let hasPanned = false;  // 区分拖动与单击：鼠标是否实际移动过
 let panStartX = 0, panStartY = 0;
 let panStartPanX = 0, panStartPanY = 0;
 
@@ -4366,6 +4397,7 @@ function resetPreviewZoom() {
     currentZoomScale = 1;
     panX = 0;
     panY = 0;
+    hasPanned = false;
     if (els.previewImg) {
         els.previewImg.style.transform = '';
         els.previewImg.classList.remove('zoomed', 'dragging');
@@ -4434,6 +4466,7 @@ function handlePreviewMouseDown(e) {
     
     e.preventDefault();
     isPanning = true;
+    hasPanned = false;
     panStartX = e.clientX;
     panStartY = e.clientY;
     panStartPanX = panX;
@@ -4445,6 +4478,9 @@ function handlePreviewMouseMove(e) {
     if (!isPanning) return;
     const dx = e.clientX - panStartX;
     const dy = e.clientY - panStartY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        hasPanned = true;
+    }
     panX = panStartPanX + dx / currentZoomScale;
     panY = panStartPanY + dy / currentZoomScale;
     applyPreviewTransform();
@@ -4686,6 +4722,278 @@ function setupDragAndDrop() {
             alert('请拖入 .zip 压缩包文件');
         }
     });
+}
+
+/* ================================================
+ *  自定义拖拽系统（替代原生HTML5拖拽，以支持roll轮滚动）
+ * ================================================ */
+let customDragTabSwitchTimer = null;
+
+function initCustomDragSupport() {
+    document.addEventListener('pointermove', handleCustomDragPointerMove);
+    document.addEventListener('pointerup', handleCustomDragPointerUp);
+}
+
+// 为卡片绑定自定义拖拽
+function attachCustomDrag(card, filename, area) {
+    card.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        if (state.multiSelectDragging) return;
+        if (state.multiSelectMode && e.target.closest('.check-overlay')) return;
+        
+        const cd = state.customDrag;
+        cd.tracking = true;
+        cd.sourceEl = card;
+        cd.sourceFilename = filename;
+        cd.sourceArea = area;
+        cd.startX = e.clientX;
+        cd.startY = e.clientY;
+        cd.moved = false;
+        cd.active = false;
+    });
+}
+
+function handleCustomDragPointerMove(e) {
+    const cd = state.customDrag;
+    
+    // 批量拖拽：仅更新指示器位置和目标高亮
+    if (state.batchDragActive) {
+        els.customDragIndicator.style.left = e.clientX + 'px';
+        els.customDragIndicator.style.top = e.clientY + 'px';
+        handleCustomDragEdgeScroll(e);
+        els.customDragIndicator.style.display = 'none';
+        const elUnder = document.elementFromPoint(e.clientX, e.clientY);
+        els.customDragIndicator.style.display = '';
+        handleCustomDragTargetHighlight(elUnder);
+        return;
+    }
+    
+    if (!cd.tracking) return;
+    
+    if (!cd.active) {
+        const dx = e.clientX - cd.startX;
+        const dy = e.clientY - cd.startY;
+        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+            cd.active = true;
+            cd.moved = true;
+            enterCustomDragMode(cd);
+        } else {
+            return;
+        }
+    }
+    
+    // 更新指示器位置
+    els.customDragIndicator.style.left = e.clientX + 'px';
+    els.customDragIndicator.style.top = e.clientY + 'px';
+    
+    // 检测鼠标下方元素（隐藏指示器以免干扰 elementFromPoint）
+    els.customDragIndicator.style.display = 'none';
+    const elUnder = document.elementFromPoint(e.clientX, e.clientY);
+    els.customDragIndicator.style.display = '';
+    
+    // 处理tab自动切换
+    handleCustomDragTabSwitch(elUnder);
+    // 处理边缘滚动
+    handleCustomDragEdgeScroll(e);
+    // 处理基准组图片高亮
+    handleCustomDragTargetHighlight(elUnder);
+}
+
+function handleCustomDragPointerUp(e) {
+    const cd = state.customDrag;
+    if (!cd.tracking && !state.batchDragActive) return;
+    
+    if (state.batchDragActive) {
+        // 批量拖拽drop
+        els.customDragIndicator.style.display = 'none';
+        const elUnder = document.elementFromPoint(e.clientX, e.clientY);
+        els.customDragIndicator.style.display = '';
+        if (elUnder && state.currentTab === 'base') {
+            const card = elUnder.closest('.image-card');
+            const floatItem = elUnder.closest('.base-float-item');
+            const target = card || floatItem;
+            if (target && target.dataset.filename) {
+                handleBatchDropOnBase(target.dataset.filename);
+            }
+        }
+        state.batchDragActive = false;
+        state.dragOriginalTab = null;
+        els.batchStackContainer.classList.remove('dragging');
+        els.customDragIndicator.classList.remove('active');
+        els.customDragBadge.style.display = 'none';
+        stopBaseFloatAutoScroll();
+        clearCustomDragTabSwitch();
+        document.querySelectorAll('.image-card.base-drop-hover, .base-float-item.drop-hover')
+            .forEach(el => el.classList.remove('base-drop-hover', 'drop-hover'));
+        document.querySelectorAll('.tab.drag-target').forEach(el => el.classList.remove('drag-target'));
+        return;
+    }
+    
+    if (cd.active) {
+        // 处理drop
+        els.customDragIndicator.style.display = 'none';
+        const elUnder = document.elementFromPoint(e.clientX, e.clientY);
+        els.customDragIndicator.style.display = '';
+        
+        if (elUnder && state.currentTab === 'base') {
+            const card = elUnder.closest('.image-card');
+            const floatItem = elUnder.closest('.base-float-item');
+            const target = card || floatItem;
+            if (target && target.dataset.filename && target.dataset.filename !== state.dragSource) {
+                if (floatItem) {
+                    // 拖放到悬浮窗的基准图项：直接归类为重复图
+                    handleDropOnFloatItem(state.dragSource, target.dataset.filename, target.dataset.groupId);
+                } else {
+                    handleDropOnImage(state.dragSource, target.dataset.filename);
+                }
+            }
+        }
+        
+        exitCustomDragMode(cd);
+    }
+    
+    // 重置tracking
+    cd.tracking = false;
+    cd.active = false;
+    cd.moved = false;
+    cd.sourceEl = null;
+    cd.sourceFilename = '';
+    cd.sourceArea = null;
+}
+
+function enterCustomDragMode(cd) {
+    state.dragSource = cd.sourceFilename;
+    state.dragSourceArea = cd.sourceArea;
+    state.dragOriginalTab = state.currentTab;
+    cd.sourceEl.classList.add('dragging');
+    
+    // 显示自定义拖拽指示器
+    const thumbImg = cd.sourceEl.querySelector('img.thumb');
+    if (thumbImg && thumbImg.src) {
+        els.customDragThumb.src = thumbImg.src;
+    }
+    els.customDragIndicator.classList.add('active');
+    
+    // 高亮基准组tab
+    const baseTab = document.querySelector('.tab[data-tab="base"]');
+    if (baseTab && state.baseGroups.size > 0) {
+        baseTab.classList.add('drag-target');
+    }
+}
+
+function exitCustomDragMode(cd) {
+    if (cd && cd.sourceEl) cd.sourceEl.classList.remove('dragging');
+    state.dragSource = null;
+    state.dragSourceArea = null;
+    state.dragOriginalTab = null;
+    els.customDragIndicator.classList.remove('active');
+    els.customDragThumb.src = '';
+    stopBaseFloatAutoScroll();
+    document.querySelectorAll('.image-card.base-drop-hover, .base-float-item.drop-hover')
+        .forEach(el => el.classList.remove('base-drop-hover', 'drop-hover'));
+    document.querySelectorAll('.tab.drag-target').forEach(el => el.classList.remove('drag-target'));
+    clearCustomDragTabSwitch();
+}
+
+function handleCustomDragEdgeScroll(e) {
+    if (state.currentTab !== 'base') return;
+    const rect = els.contentArea.getBoundingClientRect();
+    const mouseY = e.clientY;
+    const edgeThreshold = 80;
+    if (mouseY - rect.top < edgeThreshold) {
+        const speed = Math.max(4, 15 - (mouseY - rect.top) / 10);
+        els.contentArea.scrollTop -= speed;
+    } else if (rect.bottom - mouseY < edgeThreshold) {
+        const speed = Math.max(4, 15 - (rect.bottom - mouseY) / 10);
+        els.contentArea.scrollTop += speed;
+    }
+}
+
+function handleCustomDragTabSwitch(elUnder) {
+    if (!elUnder) { clearCustomDragTabSwitch(); return; }
+    const baseTab = elUnder.closest('.tab[data-tab="base"]');
+    if (!baseTab || state.currentTab === 'base') { clearCustomDragTabSwitch(); return; }
+    if (!customDragTabSwitchTimer) {
+        customDragTabSwitchTimer = setTimeout(() => {
+            clearCustomDragTabSwitch();
+            if (state.dragSource && state.currentTab !== 'base') {
+                state.currentTab = 'base';
+                renderAll();
+            }
+        }, 500);
+    }
+}
+
+function clearCustomDragTabSwitch() {
+    if (customDragTabSwitchTimer) {
+        clearTimeout(customDragTabSwitchTimer);
+        customDragTabSwitchTimer = null;
+    }
+}
+
+function handleCustomDragTargetHighlight(elUnder) {
+    document.querySelectorAll('.image-card.base-drop-hover, .base-float-item.drop-hover')
+        .forEach(el => el.classList.remove('base-drop-hover', 'drop-hover'));
+    if (state.currentTab !== 'base' || !elUnder) return;
+    
+    const card = elUnder.closest('.image-card');
+    if (card && card.dataset.filename && card.dataset.filename !== state.dragSource) {
+        card.classList.add('base-drop-hover');
+        return;
+    }
+    
+    const floatItem = elUnder.closest('.base-float-item');
+    if (floatItem && floatItem.dataset.filename) {
+        floatItem.classList.add('drop-hover');
+        // 处理悬浮窗边缘自动滚动
+        const rect = els.baseFloatList.getBoundingClientRect();
+        const mouseY = parseFloat(els.customDragIndicator.style.top) || 0;
+        if (mouseY - rect.top < 60) {
+            startBaseFloatAutoScroll(-1);
+        } else if (rect.bottom - mouseY < 60) {
+            startBaseFloatAutoScroll(1);
+        } else {
+            stopBaseFloatAutoScroll();
+        }
+    } else {
+        stopBaseFloatAutoScroll();
+    }
+}
+
+// 拖放到悬浮窗的基准图项：直接归类为重复图
+function handleDropOnFloatItem(sourceFilename, targetFilename, targetGid) {
+    const sourceStatus = state.statusMap.get(sourceFilename);
+    if (sourceStatus === 'base' || sourceStatus === 'duplicate') {
+        alert('源图片已是基准图或重复图，无法再次归类');
+        return;
+    }
+    
+    let dupGid = null;
+    for (const [id, g] of state.duplicateGroups) {
+        if (g.base === targetFilename) { dupGid = id; break; }
+    }
+    if (!dupGid) {
+        dupGid = Date.now().toString();
+        state.duplicateGroups.set(dupGid, { base: targetFilename, duplicates: [] });
+    }
+    const dupGroup = state.duplicateGroups.get(dupGid);
+    if (!dupGroup.duplicates.includes(sourceFilename)) {
+        dupGroup.duplicates.push(sourceFilename);
+    }
+    
+    state.statusMap.set(targetFilename, 'base');
+    state.statusMap.set(sourceFilename, 'duplicate');
+    
+    for (const [_, g] of state.baseGroups) g.images = g.images.filter(f => f !== sourceFilename);
+    for (const [_, g] of state.duplicateGroups) {
+        if (g.base !== targetFilename) {
+            g.duplicates = g.duplicates.filter(f => f !== sourceFilename);
+        }
+    }
+    
+    saveState();
+    renderAll();
+    hideBaseFloatWindow();
 }
 
 async function handleDropOnImage(sourceFilename, targetFilename) {
@@ -5090,69 +5398,9 @@ function clearBaseTabAutoSwitch() {
 }
 
 function setupTabDragHandlers() {
-    const baseTab = document.querySelector('.tab[data-tab="base"]');
-    if (!baseTab) return;
-    
-    // 鼠标停留在基准组tab上 0.5秒 → 自动切换
-    baseTab.addEventListener('dragover', (e) => {
-        if (!state.dragSource) return;
-        e.preventDefault();
-        if (state.currentTab === 'base') { clearBaseTabAutoSwitch(); return; }
-        if (baseTabAutoSwitchTimer) return;
-        baseTabAutoSwitchTimer = setTimeout(() => {
-            clearBaseTabAutoSwitch();
-            if (state.dragSource && state.currentTab !== 'base') {
-                state.currentTab = 'base';
-                renderAll();
-            }
-        }, 500);
-    });
-    
-    baseTab.addEventListener('dragleave', () => {
-        clearBaseTabAutoSwitch();
-    });
-    
-    baseTab.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        clearBaseTabAutoSwitch();
-    });
-    
-    // 在基准组视图内的全局 dragover：处理边缘自动滚动 + 鼠标移动追踪滚动
-    els.contentArea.addEventListener('dragover', (e) => {
+    // 基准组tab内拖拽时，滚轮滚动可用（自定义拖拽不再使用HTML5原生拖拽，wheel事件正常触发）
+    els.contentArea.addEventListener('wheel', (e) => {
         if ((!state.dragSource && !state.batchDragActive) || state.currentTab !== 'base') return;
-        if (e.target.closest('.image-card')) return;  // 图片自己处理
-        const rect = els.contentArea.getBoundingClientRect();
-        const mouseY = e.clientY;
-        const edgeThreshold = 80;
-        // 边缘滚动
-        if (mouseY - rect.top < edgeThreshold) {
-            const speed = Math.max(4, 15 - (mouseY - rect.top) / 10);
-            els.contentArea.scrollTop -= speed;
-        } else if (rect.bottom - mouseY < edgeThreshold) {
-            const speed = Math.max(4, 15 - (rect.bottom - mouseY) / 10);
-            els.contentArea.scrollTop += speed;
-        } else {
-            // 非边缘区域：根据鼠标Y轴移动方向模拟滚轮滚动
-            const now = Date.now();
-            if (state.lastDragOverY !== 0 && state.lastDragOverTime !== 0) {
-                const dy = mouseY - state.lastDragOverY;
-                const dt = now - state.lastDragOverTime;
-                // 只有移动速度足够快才触发滚动（过滤微小抖动）
-                if (dt > 0 && Math.abs(dy) > 2) {
-                    els.contentArea.scrollTop -= dy * 0.8;
-                }
-            }
-            state.lastDragOverY = mouseY;
-            state.lastDragOverTime = now;
-        }
-    });
-    
-    // 基准组tab内拖拽时，确保滚轮滚动可用（监听document级别，拖拽时wheel事件可能不冒泡到子元素）
-    document.addEventListener('wheel', (e) => {
-        if ((!state.dragSource && !state.batchDragActive) || state.currentTab !== 'base') return;
-        const rect = els.contentArea.getBoundingClientRect();
-        if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
         e.preventDefault();
         els.contentArea.scrollTop += e.deltaY;
     }, { passive: false });
@@ -5160,6 +5408,8 @@ function setupTabDragHandlers() {
 
 // 在基准组图片上放置拖拽目标
 function setupBaseImageDropTargets() {
+    // 自定义拖拽系统已接管所有拖拽目标高亮和drop操作，此函数保留为空避免内存泄漏
+    return;
     if (state.currentTab !== 'base') return;
     if (!state.dragSource && !state.batchDragActive) return;
     
@@ -5173,7 +5423,7 @@ function setupBaseImageDropTargets() {
             e.preventDefault();
             e.stopPropagation();
             card.classList.add('base-drop-hover');
-            // 边缘滚动 + 鼠标移动追踪滚动
+            // 边缘滚动
             const rect = els.contentArea.getBoundingClientRect();
             const mouseY = e.clientY;
             const edgeThreshold = 80;
@@ -5181,18 +5431,6 @@ function setupBaseImageDropTargets() {
                 els.contentArea.scrollTop -= 10;
             } else if (rect.bottom - mouseY < edgeThreshold) {
                 els.contentArea.scrollTop += 10;
-            } else {
-                // 非边缘区域：根据鼠标Y轴移动方向模拟滚轮滚动
-                const now = Date.now();
-                if (state.lastDragOverY !== 0 && state.lastDragOverTime !== 0) {
-                    const dy = mouseY - state.lastDragOverY;
-                    const dt = now - state.lastDragOverTime;
-                    if (dt > 0 && Math.abs(dy) > 2) {
-                        els.contentArea.scrollTop -= dy * 0.8;
-                    }
-                }
-                state.lastDragOverY = mouseY;
-                state.lastDragOverTime = now;
             }
         });
         
@@ -5429,7 +5667,6 @@ function renderBatchStack() {
     
     // 拖拽提示
     els.batchStackDragHint.style.display = 'block';
-    els.batchStackContainer.draggable = true;
 }
 
 // 点击堆叠 → 弹出悬浮窗
@@ -6238,6 +6475,7 @@ function renderAll() {
 function bindEvents() {
     initElements();
     setupDragAndDrop();
+    initCustomDragSupport();
     setupBaseFloatScroll();
     setupTabDragHandlers();
     
@@ -6319,38 +6557,52 @@ function bindEvents() {
     els.batchPopupClose.addEventListener('click', hideBatchPopup);
     els.batchPopupOverlay.addEventListener('click', hideBatchPopup);
     
-    // 批量拖拽：从堆叠容器拖到基准组图片
-    els.batchStackContainer.addEventListener('dragstart', (e) => {
-        if (state.selectedFiles.size === 0) {
-            e.preventDefault();
-            return;
-        }
-        state.batchDragActive = true;
-        els.batchStackContainer.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', 'batch');
-        // 记录原标签页，方便完成后返回
-        state.dragOriginalTab = state.currentTab;
-        // 高亮基准组tab
-        const baseTab = document.querySelector('.tab[data-tab="base"]');
-        if (baseTab && state.baseGroups.size > 0) {
-            baseTab.classList.add('drag-target');
-        }
-        // 自动切换到基准组tab以便拖放
-        if (state.currentTab !== 'base' && state.baseGroups.size > 0) {
-            state.currentTab = 'base';
-            renderContent();
-        }
-    });
-    
-    els.batchStackContainer.addEventListener('dragend', () => {
-        state.batchDragActive = false;
-        state.lastDragOverY = 0;
-        state.lastDragOverTime = 0;
-        els.batchStackContainer.classList.remove('dragging');
-        document.querySelectorAll('.image-card.base-drop-hover').forEach(el => el.classList.remove('base-drop-hover'));
-        const baseTab = document.querySelector('.tab[data-tab="base"]');
-        if (baseTab) baseTab.classList.remove('drag-target');
+    // 批量拖拽：从堆叠容器拖到基准组图片（自定义拖拽）
+    els.batchStackContainer.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        if (state.selectedFiles.size === 0) return;
+        
+        const startX = e.clientX;
+        const startY = e.clientY;
+        let batchActivated = false;
+        
+        const onMove = (ev) => {
+            if (batchActivated) return;
+            const dx = ev.clientX - startX;
+            const dy = ev.clientY - startY;
+            if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+                batchActivated = true;
+                document.removeEventListener('pointermove', onMove);
+                
+                state.batchDragActive = true;
+                els.batchStackContainer.classList.add('dragging');
+                state.dragOriginalTab = state.currentTab;
+                
+                const baseTab = document.querySelector('.tab[data-tab="base"]');
+                if (baseTab && state.baseGroups.size > 0) {
+                    baseTab.classList.add('drag-target');
+                }
+                
+                els.customDragBadge.textContent = state.selectedFiles.size;
+                els.customDragBadge.style.display = 'block';
+                els.customDragIndicator.classList.add('active');
+                els.customDragIndicator.style.left = ev.clientX + 'px';
+                els.customDragIndicator.style.top = ev.clientY + 'px';
+                
+                if (state.currentTab !== 'base' && state.baseGroups.size > 0) {
+                    state.currentTab = 'base';
+                    renderContent();
+                }
+            }
+        };
+        
+        const onUp = () => {
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+        };
+        
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
     });
     els.batchMoveBtn.addEventListener('click', () => {
         const selected = [...state.selectedFiles];
@@ -6448,7 +6700,8 @@ function bindEvents() {
     document.addEventListener('mouseup', handlePreviewMouseUp);
     els.previewImg.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (currentZoomScale !== 1) {
+        // 只有未拖动时（纯单击）才恢复原始比例
+        if (currentZoomScale !== 1 && !hasPanned) {
             resetPreviewZoom();
         }
     });
