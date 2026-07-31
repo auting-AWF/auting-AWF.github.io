@@ -1446,7 +1446,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         </div>
         <div class="about-body">
             <div class="about-version">
-                <div>版本号：<span id="toolVersion">v4.3.8</span></div>
+                <div>版本号：<span id="toolVersion">v4.3.9</span></div>
                 <div>算法版本：<span id="algoVersion">v2</span></div>
             </div>
             <div class="about-section">
@@ -5081,6 +5081,14 @@ function handleDropOnFloatItem(sourceFilename, targetFilename, targetGid) {
         }
     }
     
+    // 找到目标图片所在的分组，显示提示
+    let targetGid = null;
+    for (const [gid, g] of state.baseGroups) {
+        if (g.images.includes(targetFilename)) { targetGid = gid; break; }
+    }
+    const groupName = (targetGid && state.baseGroups.get(targetGid)?.name) || '基准组';
+    showDropToast(`已将「${shortName(sourceFilename)}」移入「${groupName}」`);
+    
     saveState();
     renderAll();
     hideBaseFloatWindow();
@@ -5123,6 +5131,14 @@ function directDropOnImage(sourceFilename, targetFilename) {
             g.duplicates = g.duplicates.filter(f => f !== sourceFilename);
         }
     }
+    
+    // 找到目标图片所在的分组，显示提示
+    let targetGid = null;
+    for (const [gid, g] of state.baseGroups) {
+        if (g.images.includes(targetFilename)) { targetGid = gid; break; }
+    }
+    const groupName = (targetGid && state.baseGroups.get(targetGid)?.name) || '基准组';
+    showDropToast(`已将「${shortName(sourceFilename)}」移入「${groupName}」`);
     
     saveState();
     renderAll();
@@ -5550,124 +5566,6 @@ function setupTabDragHandlers() {
 // 在基准组图片上放置拖拽目标
 function setupBaseImageDropTargets() {
     // 自定义拖拽系统已接管所有拖拽目标高亮和drop操作，此函数保留为空避免内存泄漏
-    return;
-    if (state.currentTab !== 'base') return;
-    if (!state.dragSource && !state.batchDragActive) return;
-    
-    els.contentArea.querySelectorAll('.image-card').forEach(card => {
-        const filename = card.dataset.filename;
-        if (!filename) return;
-        
-        card.addEventListener('dragover', (e) => {
-            if (!state.dragSource && !state.batchDragActive) return;
-            if (state.dragSource === filename) return;
-            e.preventDefault();
-            e.stopPropagation();
-            card.classList.add('base-drop-hover');
-            // 边缘滚动
-            const rect = els.contentArea.getBoundingClientRect();
-            const mouseY = e.clientY;
-            const edgeThreshold = 80;
-            if (mouseY - rect.top < edgeThreshold) {
-                els.contentArea.scrollTop -= 10;
-            } else if (rect.bottom - mouseY < edgeThreshold) {
-                els.contentArea.scrollTop += 10;
-            }
-        });
-        
-        card.addEventListener('dragleave', (e) => {
-            // 只有在离开卡片本身时才移除
-            if (!card.contains(e.relatedTarget)) {
-                card.classList.remove('base-drop-hover');
-            }
-        });
-        
-        card.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            card.classList.remove('base-drop-hover');
-            
-            // 批量拖拽
-            if (state.batchDragActive) {
-                handleBatchDropOnBase(filename);
-                state.batchDragActive = false;
-                state.lastDragOverY = 0;
-                state.lastDragOverTime = 0;
-                return;
-            }
-            
-            // 单张拖拽
-            if (!state.dragSource || state.dragSource === filename) return;
-            
-            const sourceFilename = state.dragSource;
-            const targetFilename = filename;
-            
-            // 校验状态
-            const sourceStatus = state.statusMap.get(sourceFilename);
-            const targetStatus = state.statusMap.get(targetFilename);
-            if (sourceStatus === 'base' || sourceStatus === 'duplicate') {
-                showDropToast('该图片已是基准图或重复图', true);
-                return;
-            }
-            if (sourceStatus === 'ignored') {
-                showDropToast('已忽略的图片不能参与归类', true);
-                return;
-            }
-            
-            // 找到目标图片所在的分组
-            let targetGid = null;
-            for (const [gid, group] of state.baseGroups) {
-                if (group.images.includes(targetFilename)) {
-                    targetGid = gid;
-                    break;
-                }
-            }
-            if (!targetGid) {
-                showDropToast('目标不在任何基准组中', true);
-                return;
-            }
-            
-            // 将源图片标记为目标图片的重复图
-            let dupGid = null;
-            for (const [id, g] of state.duplicateGroups) {
-                if (g.base === targetFilename) { dupGid = id; break; }
-            }
-            if (!dupGid) {
-                dupGid = Date.now().toString();
-                state.duplicateGroups.set(dupGid, { base: targetFilename, duplicates: [] });
-            }
-            const dupGroup = state.duplicateGroups.get(dupGid);
-            if (!dupGroup.duplicates.includes(sourceFilename)) {
-                dupGroup.duplicates.push(sourceFilename);
-            }
-            
-            // 更新状态
-            state.statusMap.set(targetFilename, 'base');
-            state.statusMap.set(sourceFilename, 'duplicate');
-            
-            // 清理其他分组中的源文件
-            for (const [_, g] of state.baseGroups) g.images = g.images.filter(f => f !== sourceFilename);
-            for (const [_, g] of state.duplicateGroups) {
-                if (g.base !== targetFilename) {
-                    g.duplicates = g.duplicates.filter(f => f !== sourceFilename);
-                }
-            }
-            
-            const groupName = state.baseGroups.get(targetGid)?.name || '基准组';
-            showDropToast(`已将「${shortName(sourceFilename)}」移入「${groupName}」`);
-            
-            saveState();
-            state.dragSource = null;
-            
-            // 自动返回原标签页
-            const returnTab = state.dragOriginalTab || 'pending';
-            state.dragOriginalTab = null;
-            setTimeout(() => {
-                state.currentTab = returnTab;
-                renderAll();
-            }, 600);
-        });
-    });
 }
 
 function showDropToast(message, isError = false) {
