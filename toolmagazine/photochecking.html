@@ -629,13 +629,16 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     border-radius: 8px;
     box-shadow: 0 0 60px rgba(0,0,0,0.6);
     transform-origin: center center;
-    transition: transform 0.1s ease-out;
-    cursor: zoom-in;
+    transition: none;
+    cursor: grab;
     user-select: none;
     -webkit-user-drag: none;
 }
 .modal-overlay img.zoomed {
-    cursor: zoom-out;
+    cursor: grab;
+}
+.modal-overlay img.dragging {
+    cursor: grabbing;
 }
 .preview-zoom-indicator {
     position: absolute;
@@ -1402,7 +1405,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         </div>
         <div class="about-body">
             <div class="about-version">
-                <div>版本号：<span id="toolVersion">v4.3.0</span></div>
+                <div>版本号：<span id="toolVersion">v4.3.1</span></div>
                 <div>算法版本：<span id="algoVersion">v2</span></div>
             </div>
             <div class="about-section">
@@ -2901,7 +2904,8 @@ function updateCounts() {
 }
 
 function updateTabActions() {
-    els.multiSelectBtn.style.display = (state.currentTab === 'pending' || state.currentTab === 'ignored' || state.currentTab === 'search') ? '' : 'none';
+    // 所有标签页都显示多选按钮
+    els.multiSelectBtn.style.display = '';
     els.addGroupBtn.style.display = state.currentTab === 'base' ? '' : 'none';
     els.multiSelectBtn.textContent = state.multiSelectMode ? '✅ 完成选择' : '☑️ 多选模式';
     els.multiSelectBtn.classList.toggle('accent', state.multiSelectMode);
@@ -4344,22 +4348,36 @@ function hideProgress() {
 }
 
 /* ================================================
- *  图片预览
+ *  图片预览（支持拖拽平移 + 向鼠标位置缩放）
  * ================================================ */
 let currentPreviewOriginalUrl = null;
 let currentPreviewFilename = null;
 let currentZoomScale = 1;
+let panX = 0, panY = 0;
+let isPanning = false;
+let panStartX = 0, panStartY = 0;
+let panStartPanX = 0, panStartPanY = 0;
 
 function resetPreviewZoom() {
     currentZoomScale = 1;
+    panX = 0;
+    panY = 0;
     if (els.previewImg) {
         els.previewImg.style.transform = '';
-        els.previewImg.classList.remove('zoomed');
+        els.previewImg.classList.remove('zoomed', 'dragging');
     }
     if (els.previewZoomIndicator) {
         els.previewZoomIndicator.textContent = '100%';
         els.previewZoomIndicator.classList.remove('show');
     }
+}
+
+function applyPreviewTransform() {
+    let transform = `scale(${currentZoomScale})`;
+    if (currentZoomScale > 1) {
+        transform += ` translate(${panX}px, ${panY}px)`;
+    }
+    els.previewImg.style.transform = transform;
 }
 
 let zoomIndicatorTimer = null;
@@ -4376,15 +4394,62 @@ function showZoomIndicator() {
 function handlePreviewWheel(e) {
     if (!els.previewModal.classList.contains('show')) return;
     e.preventDefault();
+    
     const factor = e.deltaY > 0 ? 0.9 : 1.1;
-    currentZoomScale = Math.max(0.3, Math.min(5, currentZoomScale * factor));
-    els.previewImg.style.transform = `scale(${currentZoomScale})`;
-    if (currentZoomScale > 1) {
-        els.previewImg.classList.add('zoomed');
-    } else {
+    const newScale = Math.max(0.3, Math.min(5, currentZoomScale * factor));
+    const scaleRatio = newScale / currentZoomScale;
+    
+    // 向鼠标位置缩放
+    const rect = els.previewImg.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left - rect.width / 2;
+    const mouseY = e.clientY - rect.top - rect.height / 2;
+    
+    // 在缩放后的坐标空间中调整平移
+    panX = panX - mouseX * (scaleRatio - 1) / currentZoomScale;
+    panY = panY - mouseY * (scaleRatio - 1) / currentZoomScale;
+    currentZoomScale = newScale;
+    
+    // 缩小时如果回到1，重置平移
+    if (currentZoomScale <= 1) {
+        currentZoomScale = 1;
+        panX = 0;
+        panY = 0;
         els.previewImg.classList.remove('zoomed');
+    } else {
+        els.previewImg.classList.add('zoomed');
     }
+    
+    applyPreviewTransform();
     showZoomIndicator();
+}
+
+function handlePreviewMouseDown(e) {
+    if (!els.previewModal.classList.contains('show')) return;
+    if (currentZoomScale <= 1) return; // 只有放大时才能拖拽
+    if (e.button !== 0) return; // 只响应左键
+    
+    e.preventDefault();
+    isPanning = true;
+    panStartX = e.clientX;
+    panStartY = e.clientY;
+    panStartPanX = panX;
+    panStartPanY = panY;
+    els.previewImg.classList.add('dragging');
+}
+
+function handlePreviewMouseMove(e) {
+    if (!isPanning) return;
+    const dx = e.clientX - panStartX;
+    const dy = e.clientY - panStartY;
+    panX = panStartPanX + dx / currentZoomScale;
+    panY = panStartPanY + dy / currentZoomScale;
+    applyPreviewTransform();
+}
+
+function handlePreviewMouseUp() {
+    if (!isPanning) return;
+    isPanning = false;
+    els.previewImg.classList.remove('dragging');
 }
 
 function previewImage(filename) {
@@ -4423,6 +4488,8 @@ function previewImage(filename) {
 function closePreview() {
     els.previewModal.classList.remove('show');
     els.previewImg.dataset.loading = '';
+    isPanning = false;
+    els.previewImg.classList.remove('dragging');
     resetPreviewZoom();
     if (currentPreviewOriginalUrl) {
         if (currentPreviewFilename && originalUrls.has(currentPreviewFilename)) {
@@ -5443,7 +5510,14 @@ function handleBatchDropOnBase(targetFilename) {
     
     state.selectedFiles.clear();
     saveState();
-    renderAll();
+    
+    // 自动返回原标签页（与单张拖拽行为一致）
+    const returnTab = state.dragOriginalTab || 'pending';
+    state.dragOriginalTab = null;
+    setTimeout(() => {
+        state.currentTab = returnTab;
+        renderAll();
+    }, 600);
     updateBatchBar();
 }
 
@@ -6221,6 +6295,8 @@ function bindEvents() {
         els.batchStackContainer.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', 'batch');
+        // 记录原标签页，方便完成后返回
+        state.dragOriginalTab = state.currentTab;
         // 高亮基准组tab
         const baseTab = document.querySelector('.tab[data-tab="base"]');
         if (baseTab && state.baseGroups.size > 0) {
@@ -6331,6 +6407,9 @@ function bindEvents() {
         }
     });
     els.previewImg.addEventListener('wheel', handlePreviewWheel, { passive: false });
+    els.previewImg.addEventListener('mousedown', handlePreviewMouseDown);
+    document.addEventListener('mousemove', handlePreviewMouseMove);
+    document.addEventListener('mouseup', handlePreviewMouseUp);
     els.previewImg.addEventListener('click', (e) => {
         e.stopPropagation();
         if (currentZoomScale !== 1) {
