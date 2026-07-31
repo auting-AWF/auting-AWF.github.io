@@ -615,7 +615,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     display: none;
     align-items: center;
     justify-content: center;
-    z-index: 1500;
+    z-index: 10001;
     animation: fadeIn 0.2s;
 }
 .modal-overlay.show { display: flex; }
@@ -651,7 +651,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     opacity: 0;
     transition: opacity 0.2s;
     pointer-events: none;
-    z-index: 1600;
+    z-index: 10002;
 }
 .preview-zoom-indicator.show {
     opacity: 1;
@@ -1402,7 +1402,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         </div>
         <div class="about-body">
             <div class="about-version">
-                <div>版本号：<span id="toolVersion">v4.2.7</span></div>
+                <div>版本号：<span id="toolVersion">v4.3.0</span></div>
                 <div>算法版本：<span id="algoVersion">v2</span></div>
             </div>
             <div class="about-section">
@@ -4391,9 +4391,14 @@ function previewImage(filename) {
     els.previewModal.classList.add('show');
     resetPreviewZoom();
     
+    const prevFilename = currentPreviewFilename;
     currentPreviewFilename = filename;
     
     if (currentPreviewOriginalUrl) {
+        // 同步清除 originalUrls 缓存，避免 loadOriginal 返回已 revoke 的 URL
+        if (prevFilename && originalUrls.get(prevFilename) === currentPreviewOriginalUrl) {
+            originalUrls.delete(prevFilename);
+        }
         URL.revokeObjectURL(currentPreviewOriginalUrl);
         currentPreviewOriginalUrl = null;
     }
