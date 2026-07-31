@@ -1446,7 +1446,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         </div>
         <div class="about-body">
             <div class="about-version">
-                <div>版本号：<span id="toolVersion">v4.3.6</span></div>
+                <div>版本号：<span id="toolVersion">v4.3.7</span></div>
                 <div>算法版本：<span id="algoVersion">v2</span></div>
             </div>
             <div class="about-section">
@@ -4759,7 +4759,7 @@ function attachCustomDrag(card, filename, area) {
 function handleCustomDragPointerMove(e) {
     const cd = state.customDrag;
     
-    // ============ 安全自检：左键已松开 → 隐藏指示器，但不取消状态，让 pointerup 处理 drop ============
+    // ============ 安全自检：左键已松开 → 隐藏指示器并清理状态 ============
     function suspendIndicator() {
         if (cd.active) {
             els.customDragIndicator.classList.remove('active');
@@ -4772,10 +4772,25 @@ function handleCustomDragPointerMove(e) {
             stopBaseFloatAutoScroll();
             clearCustomDragTabSwitch();
         }
+        // pointerup 已错过，彻底清理以避免轮滚误拦截
+        if (cd.sourceEl) cd.sourceEl.classList.remove('dragging');
+        state.dragSource = null;
+        state.dragSourceArea = null;
+        state.dragOriginalTab = null;
+        cd.tracking = false;
+        cd.moved = false;
+        cd.sourceEl = null;
+        cd.sourceFilename = '';
+        cd.sourceArea = null;
     }
     function suspendBatchIndicator() {
         els.customDragIndicator.classList.remove('active');
         els.customDragBadge.style.display = 'none';
+        state.batchDragActive = false;
+        state.dragSource = null;
+        state.dragSourceArea = null;
+        state.dragOriginalTab = null;
+        els.batchStackContainer.classList.remove('dragging');
         stopBaseFloatAutoScroll();
         clearCustomDragTabSwitch();
         document.querySelectorAll('.image-card.base-drop-hover, .base-float-item.drop-hover')
@@ -4876,7 +4891,8 @@ function handleCustomDragPointerUp(e) {
                     // 拖放到悬浮窗的基准图项：直接归类为重复图
                     handleDropOnFloatItem(state.dragSource, target.dataset.filename, target.dataset.groupId);
                 } else {
-                    handleDropOnImage(state.dragSource, target.dataset.filename);
+                    // 直接归类，无弹窗无查重
+                    directDropOnImage(state.dragSource, target.dataset.filename);
                 }
             }
         }
@@ -4893,10 +4909,13 @@ function handleCustomDragPointerUp(e) {
         }
     }
     
-    // 重置tracking
+    // 重置tracking；注意保留 cd.moved = true，防止 pointerup 后
+    // 浏览器紧接着触发的 click 事件打开预览（由 card 的 click 处理器自行清理）
     cd.tracking = false;
     cd.active = false;
-    cd.moved = false;
+    // cd.moved 不重置 —— card click 处理器吃到后自行归零
+    // 加短超时兜底：防止未触发 card click 时误伤后续正常点击
+    setTimeout(() => { cd.moved = false; }, 100);
     cd.sourceEl = null;
     cd.sourceFilename = '';
     cd.sourceArea = null;
@@ -5037,10 +5056,7 @@ function handleCustomDragTargetHighlight(elUnder) {
 // 拖放到悬浮窗的基准图项：直接归类为重复图
 function handleDropOnFloatItem(sourceFilename, targetFilename, targetGid) {
     const sourceStatus = state.statusMap.get(sourceFilename);
-    if (sourceStatus === 'base' || sourceStatus === 'duplicate') {
-        alert('源图片已是基准图或重复图，无法再次归类');
-        return;
-    }
+    if (sourceStatus === 'base' || sourceStatus === 'duplicate') return;
     
     let dupGid = null;
     for (const [id, g] of state.duplicateGroups) {
@@ -5058,6 +5074,41 @@ function handleDropOnFloatItem(sourceFilename, targetFilename, targetGid) {
     state.statusMap.set(targetFilename, 'base');
     state.statusMap.set(sourceFilename, 'duplicate');
     
+    for (const [_, g] of state.baseGroups) g.images = g.images.filter(f => f !== sourceFilename);
+    for (const [_, g] of state.duplicateGroups) {
+        if (g.base !== targetFilename) {
+            g.duplicates = g.duplicates.filter(f => f !== sourceFilename);
+        }
+    }
+    
+    saveState();
+    renderAll();
+    hideBaseFloatWindow();
+}
+
+// 直接拖拽归类（无弹窗、无查重，用户确认自己的操作）
+function directDropOnImage(sourceFilename, targetFilename) {
+    const sourceStatus = state.statusMap.get(sourceFilename);
+    if (sourceStatus === 'base' || sourceStatus === 'duplicate') return;
+    
+    state.statusMap.set(targetFilename, 'base');
+    state.statusMap.set(sourceFilename, 'duplicate');
+    
+    // 查找或创建目标图片的重复组
+    let dupGid = null;
+    for (const [id, g] of state.duplicateGroups) {
+        if (g.base === targetFilename) { dupGid = id; break; }
+    }
+    if (!dupGid) {
+        dupGid = Date.now().toString();
+        state.duplicateGroups.set(dupGid, { base: targetFilename, duplicates: [] });
+    }
+    const dupGroup = state.duplicateGroups.get(dupGid);
+    if (!dupGroup.duplicates.includes(sourceFilename)) {
+        dupGroup.duplicates.push(sourceFilename);
+    }
+    
+    // 从其他分组中移除
     for (const [_, g] of state.baseGroups) g.images = g.images.filter(f => f !== sourceFilename);
     for (const [_, g] of state.duplicateGroups) {
         if (g.base !== targetFilename) {
@@ -5850,9 +5901,6 @@ function handleBatchDropOnBase(targetFilename) {
         addedCount++;
     }
     
-    const groupName = state.baseGroups.get(targetGid)?.name || '基准组';
-    showDropToast(`已添加 ${addedCount} 张重复图到「${groupName}」`);
-    
     state.selectedFiles.clear();
     saveState();
     
@@ -6632,9 +6680,13 @@ function bindEvents() {
     els.batchPopupOverlay.addEventListener('click', hideBatchPopup);
     
     // 批量拖拽：从堆叠容器拖到基准组图片（自定义拖拽）
+    els.batchStackContainer.addEventListener('dragstart', (e) => e.preventDefault());
     els.batchStackContainer.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return;
         if (state.selectedFiles.size === 0) return;
+        
+        // 阻止浏览器默认的图片拖拽（容器内缩略图会触发原生拖拽）
+        e.preventDefault();
         
         const startX = e.clientX;
         const startY = e.clientY;
