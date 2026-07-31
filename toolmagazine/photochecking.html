@@ -350,22 +350,23 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     position: absolute;
     top: 6px;
     left: 6px;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     border: 2px solid var(--accent);
     border-radius: 50%;
     background: rgba(0,0,0,0.7);
     display: none;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: 11px;
+    font-weight: 700;
     color: #fff;
     transition: all 0.15s;
 }
 .image-card.multi-mode .check-overlay { display: flex; }
 .image-card.multi-selected .check-overlay {
-    background: var(--success);
-    border-color: var(--success);
+    background: var(--accent);
+    border-color: var(--accent);
 }
 .image-card .base-thumb {
     position: absolute;
@@ -920,6 +921,167 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     color: var(--text);
 }
 
+/* ============ 多选缩略图堆叠 ============ */
+.batch-stack-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    user-select: none;
+}
+.batch-stack-thumbs {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.batch-stack-thumbs:active { cursor: grabbing; }
+.batch-stack-thumb {
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 2px solid var(--surface);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    transition: transform 0.2s;
+    background: var(--surface-light);
+}
+.batch-stack-thumb:nth-child(1) {
+    top: 0; left: 0;
+    z-index: 3;
+}
+.batch-stack-thumb:nth-child(2) {
+    top: 4px; left: 4px;
+    transform: rotate(10deg) scale(0.95);
+    z-index: 2;
+}
+.batch-stack-thumb:nth-child(3) {
+    top: 8px; left: 8px;
+    transform: rotate(20deg) scale(0.90);
+    z-index: 1;
+}
+.batch-count-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: var(--accent);
+    color: #fff;
+    min-width: 22px;
+    height: 22px;
+    border-radius: 11px;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+    z-index: 10;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    pointer-events: none;
+}
+.batch-stack-drag {
+    font-size: 12px;
+    color: var(--text-secondary);
+    pointer-events: none;
+}
+/* 堆叠容器可拖拽状态 */
+.batch-stack-container.dragging {
+    opacity: 0.6;
+}
+
+/* ============ 多选悬浮弹窗 ============ */
+.batch-popup-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 9998;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+.batch-popup {
+    position: fixed;
+    bottom: 110px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    max-width: 640px;
+    width: 90vw;
+    max-height: 50vh;
+    overflow-y: auto;
+    z-index: 9999;
+    box-shadow: 0 -4px 30px rgba(0,0,0,0.5);
+    animation: batchPopupIn 0.2s ease-out;
+}
+@keyframes batchPopupIn {
+    from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+.batch-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+}
+.batch-popup-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+}
+.batch-popup-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+.batch-popup-close:hover {
+    background: var(--border);
+    color: var(--text);
+}
+.batch-popup-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.batch-popup-item {
+    width: 72px;
+    cursor: pointer;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 2px solid transparent;
+    transition: border-color 0.15s;
+    position: relative;
+}
+.batch-popup-item:hover {
+    border-color: var(--accent);
+}
+.batch-popup-item img {
+    width: 72px;
+    height: 54px;
+    object-fit: cover;
+    display: block;
+}
+.batch-popup-item .popup-item-index {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
 /* ============ 动画 ============ */
 @keyframes fadeInUp {
     from { opacity: 0; transform: translateY(10px); }
@@ -1159,10 +1321,11 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
 
 <!-- 批量操作栏 -->
 <div class="batch-bar" id="batchBar">
-    <div class="batch-info">
-        <span>已选</span>
-        <span class="batch-count" id="batchCount">0</span>
-        <span>张</span>
+    <div class="batch-stack-container" id="batchStackContainer" draggable="true" title="点击查看已选图片 | 拖拽到基准图可批量归类">
+        <div class="batch-stack-thumbs" id="batchStackThumbs">
+            <!-- 动态填充缩略图 -->
+        </div>
+        <span class="batch-stack-drag" id="batchStackDragHint">拖拽到基准图</span>
     </div>
     <select id="batchGroupSelect" class="batch-group-select">
         <option value="">选择基准组...</option>
@@ -1219,6 +1382,16 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
 <div class="multi-drag-indicator" id="multiDragIndicator">
     <div class="drag-count" id="multiDragCount">已选 0 张</div>
 </div>
+
+<!-- 多选悬浮弹窗（点击堆叠缩略图弹出） -->
+<div class="batch-popup" id="batchPopup" style="display:none;">
+    <div class="batch-popup-header">
+        <span class="batch-popup-title" id="batchPopupTitle">已选 0 张</span>
+        <button class="batch-popup-close" id="batchPopupClose">✕</button>
+    </div>
+    <div class="batch-popup-grid" id="batchPopupGrid"></div>
+</div>
+<div class="batch-popup-overlay" id="batchPopupOverlay" style="display:none;"></div>
 
 ---------<!-- 关于弹窗 -->
 <div class="about-modal" id="aboutModal">
@@ -1406,6 +1579,7 @@ const state = {
     multiSelectDragStartX: 0,
     multiSelectDragStartY: 0,
     multiSelectDragTimer: null,
+    batchDragActive: false,
     showBaseFloat: false,
     baseFloatScrollDir: 0,
     baseFloatScrollTimer: null,
@@ -2692,12 +2866,19 @@ function initElements() {
     els.addGroupBtn = document.getElementById('addGroupBtn');
     els.backToTopBtn = document.getElementById('backToTopBtn');
     els.batchBar = document.getElementById('batchBar');
-    els.batchCount = document.getElementById('batchCount');
+    els.batchStackThumbs = document.getElementById('batchStackThumbs');
+    els.batchStackContainer = document.getElementById('batchStackContainer');
+    els.batchStackDragHint = document.getElementById('batchStackDragHint');
     els.batchGroupSelect = document.getElementById('batchGroupSelect');
     els.batchMoveBtn = document.getElementById('batchMoveBtn');
     els.batchIgnoreBtn = document.getElementById('batchIgnoreBtn');
     els.batchRestoreBtn = document.getElementById('batchRestoreBtn');
     els.batchCancelBtn = document.getElementById('batchCancelBtn');
+    els.batchPopup = document.getElementById('batchPopup');
+    els.batchPopupOverlay = document.getElementById('batchPopupOverlay');
+    els.batchPopupTitle = document.getElementById('batchPopupTitle');
+    els.batchPopupGrid = document.getElementById('batchPopupGrid');
+    els.batchPopupClose = document.getElementById('batchPopupClose');
     els.baseFloatWindow = document.getElementById('baseFloatWindow');
     els.baseFloatList = document.getElementById('baseFloatList');
     els.baseFloatClose = document.getElementById('baseFloatClose');
@@ -2764,7 +2945,7 @@ function createImageCard(filename, options = {}) {
     
     const imgSrcAttr = cached ? `src="${cached}"` : '';
     card.innerHTML = `
-        <div class="check-overlay">✓</div>
+        <div class="check-overlay"></div>
         <img class="thumb" data-filename="${filename}" ${imgSrcAttr} alt="${filename}">
         ${getStatusBadge(status)}
         <div class="filename" title="${filename}">${filename}</div>
@@ -3019,8 +3200,13 @@ function renderContent() {
     updateBackToTopBtn();
     
     // 如果正在拖拽且当前在基准组tab，为图片添加拖放目标
-    if (state.currentTab === 'base' && state.dragSource) {
+    if (state.currentTab === 'base' && (state.dragSource || state.batchDragActive)) {
         setupBaseImageDropTargets();
+    }
+    
+    // 更新多选序号
+    if (state.multiSelectMode && state.selectedFiles.size > 0) {
+        updateAllCheckOverlays();
     }
 }
 
@@ -4883,14 +5069,16 @@ function setupTabDragHandlers() {
 
 // 在基准组图片上放置拖拽目标
 function setupBaseImageDropTargets() {
-    if (state.currentTab !== 'base' || !state.dragSource) return;
+    if (state.currentTab !== 'base') return;
+    if (!state.dragSource && !state.batchDragActive) return;
     
     els.contentArea.querySelectorAll('.image-card').forEach(card => {
         const filename = card.dataset.filename;
         if (!filename) return;
         
         card.addEventListener('dragover', (e) => {
-            if (!state.dragSource || state.dragSource === filename) return;
+            if (!state.dragSource && !state.batchDragActive) return;
+            if (state.dragSource === filename) return;
             e.preventDefault();
             e.stopPropagation();
             card.classList.add('base-drop-hover');
@@ -4915,6 +5103,15 @@ function setupBaseImageDropTargets() {
             e.preventDefault();
             e.stopPropagation();
             card.classList.remove('base-drop-hover');
+            
+            // 批量拖拽
+            if (state.batchDragActive) {
+                handleBatchDropOnBase(filename);
+                state.batchDragActive = false;
+                return;
+            }
+            
+            // 单张拖拽
             if (!state.dragSource || state.dragSource === filename) return;
             
             const sourceFilename = state.dragSource;
@@ -5047,7 +5244,21 @@ function toggleFileSelection(filename) {
     cards.forEach(card => {
         card.classList.toggle('multi-selected');
     });
+    updateAllCheckOverlays();
     updateBatchBar();
+}
+
+function updateAllCheckOverlays() {
+    const selected = [...state.selectedFiles];
+    // 清除所有已选卡片的序号
+    document.querySelectorAll('.check-overlay').forEach(el => el.textContent = '');
+    // 按选择顺序标注序号
+    selected.forEach((filename, idx) => {
+        const overlays = document.querySelectorAll(`.image-card[data-filename="${filename}"] .check-overlay`);
+        overlays.forEach(el => {
+            el.textContent = idx + 1;
+        });
+    });
 }
 
 function toggleMultiSelect() {
@@ -5059,7 +5270,6 @@ function toggleMultiSelect() {
 
 function updateBatchBar() {
     const count = state.selectedFiles.size;
-    els.batchCount.textContent = count;
     if (count > 0) {
         els.batchBar.classList.add('show');
         
@@ -5069,9 +5279,167 @@ function updateBatchBar() {
         
         updateBatchGroupSelect();
         els.batchMoveBtn.textContent = `📥 移入基准组 (${count}张)`;
+        
+        // 渲染缩略图堆叠
+        renderBatchStack();
     } else {
         els.batchBar.classList.remove('show');
+        hideBatchPopup();
     }
+}
+
+function renderBatchStack() {
+    const selected = [...state.selectedFiles]; // Set 保持插入顺序
+    const container = els.batchStackThumbs;
+    container.innerHTML = '';
+    
+    // 最多显示 3 张缩略图
+    const showCount = Math.min(selected.length, 3);
+    for (let i = 0; i < showCount; i++) {
+        const img = document.createElement('img');
+        img.className = 'batch-stack-thumb';
+        const cached = thumbCache.get(selected[i]);
+        if (cached) {
+            img.src = cached;
+        } else {
+            // 异步加载缩略图
+            loadThumbnail(selected[i]).then(url => {
+                if (url) img.src = url;
+            });
+        }
+        container.appendChild(img);
+    }
+    
+    // 数量气泡
+    if (selected.length > 0) {
+        let badge = container.querySelector('.batch-count-badge');
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'batch-count-badge';
+            container.appendChild(badge);
+        }
+        badge.textContent = selected.length;
+    }
+    
+    // 拖拽提示
+    els.batchStackDragHint.style.display = 'block';
+    els.batchStackContainer.draggable = true;
+}
+
+// 点击堆叠 → 弹出悬浮窗
+function showBatchPopup() {
+    const selected = [...state.selectedFiles];
+    if (selected.length === 0) return;
+    
+    els.batchPopupTitle.textContent = `已选 ${selected.length} 张（按选择顺序）`;
+    els.batchPopupGrid.innerHTML = '';
+    
+    selected.forEach((filename, idx) => {
+        const item = document.createElement('div');
+        item.className = 'batch-popup-item';
+        item.title = filename;
+        item.innerHTML = `
+            <span class="popup-item-index">${idx + 1}</span>
+            <img data-filename="${filename}" alt="${filename}">
+        `;
+        
+        const cached = thumbCache.get(filename);
+        const imgEl = item.querySelector('img');
+        if (cached) {
+            imgEl.src = cached;
+        } else {
+            loadThumbnail(filename).then(url => {
+                if (url) imgEl.src = url;
+            });
+        }
+        
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            previewImage(filename);
+        });
+        
+        els.batchPopupGrid.appendChild(item);
+    });
+    
+    els.batchPopup.style.display = 'block';
+    els.batchPopupOverlay.style.display = 'block';
+}
+
+function hideBatchPopup() {
+    els.batchPopup.style.display = 'none';
+    els.batchPopupOverlay.style.display = 'none';
+}
+
+// 批量拖拽到基准图：按选择顺序填入重复组
+function handleBatchDropOnBase(targetFilename) {
+    const selected = [...state.selectedFiles]; // 有序
+    if (selected.length === 0) return;
+    
+    // 检查目标状态
+    const targetStatus = state.statusMap.get(targetFilename);
+    if (targetStatus === 'ignored') {
+        showDropToast('目标图片已被忽略', true);
+        return;
+    }
+    
+    // 过滤掉目标自身
+    const sources = selected.filter(f => f !== targetFilename);
+    if (sources.length === 0) return;
+    
+    // 确保目标在某个基准组中（先验证再修改状态）
+    let targetGid = null;
+    for (const [gid, group] of state.baseGroups) {
+        if (group.images.includes(targetFilename)) {
+            targetGid = gid;
+            break;
+        }
+    }
+    if (!targetGid) {
+        showDropToast('目标图片不在任何基准组中', true);
+        return;
+    }
+    
+    // 确保目标为 base 状态
+    state.statusMap.set(targetFilename, 'base');
+    
+    // 查找或创建重复组
+    let dupGid = null;
+    for (const [id, g] of state.duplicateGroups) {
+        if (g.base === targetFilename) { dupGid = id; break; }
+    }
+    if (!dupGid) {
+        dupGid = Date.now().toString();
+        state.duplicateGroups.set(dupGid, { base: targetFilename, duplicates: [] });
+    }
+    
+    const dupGroup = state.duplicateGroups.get(dupGid);
+    
+    // 按选择顺序逐一添加
+    let addedCount = 0;
+    for (const filename of sources) {
+        const status = state.statusMap.get(filename);
+        if (status === 'ignored') continue;
+        
+        // 清理其他分组中的该文件
+        for (const [_, g] of state.baseGroups) g.images = g.images.filter(f => f !== filename);
+        for (const [_, g] of state.duplicateGroups) {
+            g.duplicates = g.duplicates.filter(f => f !== filename);
+        }
+        
+        if (!dupGroup.duplicates.includes(filename)) {
+            dupGroup.duplicates.push(filename);
+        }
+        state.statusMap.set(filename, 'duplicate');
+        addedCount++;
+    }
+    
+    const groupName = state.baseGroups.get(targetGid)?.name || '基准组';
+    showDropToast(`已添加 ${addedCount} 张重复图到「${groupName}」`);
+    
+    state.selectedFiles.clear();
+    saveState();
+    renderAll();
+    updateBatchBar();
 }
 
 function updateBatchGroupSelect() {
@@ -5826,6 +6194,46 @@ function bindEvents() {
         cards.forEach(card => card.classList.remove('multi-selected'));
         state.selectedFiles.clear();
         updateBatchBar();
+    });
+    
+    // 点击堆叠缩略图 → 弹出悬浮窗
+    els.batchStackThumbs.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (state.selectedFiles.size > 0) showBatchPopup();
+    });
+    
+    // 关闭悬浮窗
+    els.batchPopupClose.addEventListener('click', hideBatchPopup);
+    els.batchPopupOverlay.addEventListener('click', hideBatchPopup);
+    
+    // 批量拖拽：从堆叠容器拖到基准组图片
+    els.batchStackContainer.addEventListener('dragstart', (e) => {
+        if (state.selectedFiles.size === 0) {
+            e.preventDefault();
+            return;
+        }
+        state.batchDragActive = true;
+        els.batchStackContainer.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', 'batch');
+        // 高亮基准组tab
+        const baseTab = document.querySelector('.tab[data-tab="base"]');
+        if (baseTab && state.baseGroups.size > 0) {
+            baseTab.classList.add('drag-target');
+        }
+        // 自动切换到基准组tab以便拖放
+        if (state.currentTab !== 'base' && state.baseGroups.size > 0) {
+            state.currentTab = 'base';
+            renderContent();
+        }
+    });
+    
+    els.batchStackContainer.addEventListener('dragend', () => {
+        state.batchDragActive = false;
+        els.batchStackContainer.classList.remove('dragging');
+        document.querySelectorAll('.image-card.base-drop-hover').forEach(el => el.classList.remove('base-drop-hover'));
+        const baseTab = document.querySelector('.tab[data-tab="base"]');
+        if (baseTab) baseTab.classList.remove('drag-target');
     });
     els.batchMoveBtn.addEventListener('click', () => {
         const selected = [...state.selectedFiles];
