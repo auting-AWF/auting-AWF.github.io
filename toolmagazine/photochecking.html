@@ -1446,7 +1446,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         </div>
         <div class="about-body">
             <div class="about-version">
-                <div>版本号：<span id="toolVersion">v4.3.5</span></div>
+                <div>版本号：<span id="toolVersion">v4.3.6</span></div>
                 <div>算法版本：<span id="algoVersion">v2</span></div>
             </div>
             <div class="about-section">
@@ -3000,6 +3000,8 @@ function createImageCard(filename, options = {}) {
     if (options.draggable !== false) {
         // 使用自定义拖拽代替原生HTML5拖拽，以支持拖拽期间滚轮滚动
         attachCustomDrag(card, filename, options.area || state.currentTab);
+        // 阻止浏览器默认的图片拖拽行为（不阻止则浏览器幽灵图会抢占指针事件）
+        card.addEventListener('dragstart', (e) => e.preventDefault());
     }
     
     const cached = thumbCache.get(filename);
@@ -4732,6 +4734,7 @@ let customDragTabSwitchTimer = null;
 function initCustomDragSupport() {
     document.addEventListener('pointermove', handleCustomDragPointerMove);
     document.addEventListener('pointerup', handleCustomDragPointerUp);
+    document.addEventListener('pointercancel', handleCustomDragPointerCancel);
 }
 
 // 为卡片绑定自定义拖拽
@@ -4756,8 +4759,33 @@ function attachCustomDrag(card, filename, area) {
 function handleCustomDragPointerMove(e) {
     const cd = state.customDrag;
     
-    // 批量拖拽：仅更新指示器位置和目标高亮
+    // ============ 安全自检：左键已松开 → 隐藏指示器，但不取消状态，让 pointerup 处理 drop ============
+    function suspendIndicator() {
+        if (cd.active) {
+            els.customDragIndicator.classList.remove('active');
+            els.customDragThumb.src = '';
+            cd.active = false;
+            // 清除所有高亮
+            document.querySelectorAll('.image-card.base-drop-hover, .base-float-item.drop-hover')
+                .forEach(el => el.classList.remove('base-drop-hover', 'drop-hover'));
+            document.querySelectorAll('.tab.drag-target').forEach(el => el.classList.remove('drag-target'));
+            stopBaseFloatAutoScroll();
+            clearCustomDragTabSwitch();
+        }
+    }
+    function suspendBatchIndicator() {
+        els.customDragIndicator.classList.remove('active');
+        els.customDragBadge.style.display = 'none';
+        stopBaseFloatAutoScroll();
+        clearCustomDragTabSwitch();
+        document.querySelectorAll('.image-card.base-drop-hover, .base-float-item.drop-hover')
+            .forEach(el => el.classList.remove('base-drop-hover', 'drop-hover'));
+        document.querySelectorAll('.tab.drag-target').forEach(el => el.classList.remove('drag-target'));
+    }
+    
     if (state.batchDragActive) {
+        if (!(e.buttons & 1)) { suspendBatchIndicator(); return; }
+        // 批量拖拽：仅更新指示器位置和目标高亮
         els.customDragIndicator.style.left = e.clientX + 'px';
         els.customDragIndicator.style.top = e.clientY + 'px';
         handleCustomDragEdgeScroll(e);
@@ -4766,6 +4794,10 @@ function handleCustomDragPointerMove(e) {
         els.customDragIndicator.style.display = '';
         handleCustomDragTargetHighlight(elUnder);
         return;
+    }
+    
+    if (cd.tracking || cd.active) {
+        if (!(e.buttons & 1)) { suspendIndicator(); return; }
     }
     
     if (!cd.tracking) return;
@@ -4829,8 +4861,8 @@ function handleCustomDragPointerUp(e) {
         return;
     }
     
-    if (cd.active) {
-        // 处理drop
+    if (cd.tracking && state.dragSource) {
+        // 处理drop（即使cd.active已被pointermove置为false，drop仍有效）
         els.customDragIndicator.style.display = 'none';
         const elUnder = document.elementFromPoint(e.clientX, e.clientY);
         els.customDragIndicator.style.display = '';
@@ -4849,7 +4881,16 @@ function handleCustomDragPointerUp(e) {
             }
         }
         
-        exitCustomDragMode(cd);
+        // 清理（即使cd.active为false，exitCustomDragMode也能安全执行）
+        if (cd.active) {
+            exitCustomDragMode(cd);
+        } else {
+            // 最小清理：cd.active为false时，指示器和高亮已由suspendIndicator清理
+            state.dragSource = null;
+            state.dragSourceArea = null;
+            state.dragOriginalTab = null;
+            if (cd.sourceEl) cd.sourceEl.classList.remove('dragging');
+        }
     }
     
     // 重置tracking
@@ -4859,6 +4900,39 @@ function handleCustomDragPointerUp(e) {
     cd.sourceEl = null;
     cd.sourceFilename = '';
     cd.sourceArea = null;
+}
+
+function handleCustomDragPointerCancel(e) {
+    const cd = state.customDrag;
+    if (cd.active) {
+        exitCustomDragMode(cd);
+    } else if (cd.tracking) {
+        if (cd.sourceEl) cd.sourceEl.classList.remove('dragging');
+        state.dragSource = null;
+        state.dragSourceArea = null;
+        state.dragOriginalTab = null;
+    }
+    cd.tracking = false;
+    cd.active = false;
+    cd.moved = false;
+    cd.sourceEl = null;
+    cd.sourceFilename = '';
+    cd.sourceArea = null;
+    
+    if (state.batchDragActive) {
+        state.batchDragActive = false;
+        state.dragOriginalTab = null;
+        state.dragSource = null;
+        state.dragSourceArea = null;
+        els.batchStackContainer.classList.remove('dragging');
+        els.customDragIndicator.classList.remove('active');
+        els.customDragBadge.style.display = 'none';
+        stopBaseFloatAutoScroll();
+        clearCustomDragTabSwitch();
+        document.querySelectorAll('.image-card.base-drop-hover, .base-float-item.drop-hover')
+            .forEach(el => el.classList.remove('base-drop-hover', 'drop-hover'));
+        document.querySelectorAll('.tab.drag-target').forEach(el => el.classList.remove('drag-target'));
+    }
 }
 
 function enterCustomDragMode(cd) {
