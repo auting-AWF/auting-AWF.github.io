@@ -1446,7 +1446,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         </div>
         <div class="about-body">
             <div class="about-version">
-                <div>版本号：<span id="toolVersion">v4.3.7</span></div>
+                <div>版本号：<span id="toolVersion">v4.3.8</span></div>
                 <div>算法版本：<span id="algoVersion">v2</span></div>
             </div>
             <div class="about-section">
@@ -5084,6 +5084,14 @@ function handleDropOnFloatItem(sourceFilename, targetFilename, targetGid) {
     saveState();
     renderAll();
     hideBaseFloatWindow();
+    
+    // 自动返回原标签页
+    const returnTab = state.dragOriginalTab || 'pending';
+    state.dragOriginalTab = null;
+    setTimeout(() => {
+        state.currentTab = returnTab;
+        renderAll();
+    }, 600);
 }
 
 // 直接拖拽归类（无弹窗、无查重，用户确认自己的操作）
@@ -5119,6 +5127,14 @@ function directDropOnImage(sourceFilename, targetFilename) {
     saveState();
     renderAll();
     hideBaseFloatWindow();
+    
+    // 自动返回原标签页
+    const returnTab = state.dragOriginalTab || 'pending';
+    state.dragOriginalTab = null;
+    setTimeout(() => {
+        state.currentTab = returnTab;
+        renderAll();
+    }, 600);
 }
 
 async function handleDropOnImage(sourceFilename, targetFilename) {
@@ -5900,6 +5916,8 @@ function handleBatchDropOnBase(targetFilename) {
         state.statusMap.set(filename, 'duplicate');
         addedCount++;
     }
+    
+    showDropToast(`已添加 ${addedCount} 张到重复组`);
     
     state.selectedFiles.clear();
     saveState();
@@ -6711,6 +6729,10 @@ function bindEvents() {
                 
                 els.customDragBadge.textContent = state.selectedFiles.size;
                 els.customDragBadge.style.display = 'block';
+                // 取第一张选中图片的缩略图作为拖拽视觉
+                const firstSelected = [...state.selectedFiles][0];
+                const firstThumb = thumbCache.get(firstSelected);
+                if (firstThumb) { els.customDragThumb.src = firstThumb; }
                 els.customDragIndicator.classList.add('active');
                 els.customDragIndicator.style.left = ev.clientX + 'px';
                 els.customDragIndicator.style.top = ev.clientY + 'px';
