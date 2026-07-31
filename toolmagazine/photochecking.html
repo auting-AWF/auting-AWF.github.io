@@ -5133,7 +5133,7 @@ function setupTabDragHandlers() {
     
     // 基准组tab内拖拽时，确保滚轮滚动可用（即使在图片上）
     els.contentArea.addEventListener('wheel', (e) => {
-        if (!state.dragSource || state.currentTab !== 'base') return;
+        if ((!state.dragSource && !state.batchDragActive) || state.currentTab !== 'base') return;
         e.preventDefault();
         els.contentArea.scrollTop += e.deltaY;
     }, { passive: false });
