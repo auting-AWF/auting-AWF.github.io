@@ -1446,7 +1446,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         </div>
         <div class="about-body">
             <div class="about-version">
-                <div>版本号：<span id="toolVersion">v4.3.10</span></div>
+                <div>版本号：<span id="toolVersion">v4.4.0</span></div>
                 <div>算法版本：<span id="algoVersion">v2</span></div>
             </div>
             <div class="about-section">
@@ -4882,17 +4882,26 @@ function handleCustomDragPointerUp(e) {
         const elUnder = document.elementFromPoint(e.clientX, e.clientY);
         els.customDragIndicator.style.display = '';
         
-        if (elUnder && state.currentTab === 'base') {
-            const card = elUnder.closest('.image-card');
-            const floatItem = elUnder.closest('.base-float-item');
-            const target = card || floatItem;
-            if (target && target.dataset.filename && target.dataset.filename !== state.dragSource) {
-                if (floatItem) {
-                    // 拖放到悬浮窗的基准图项：直接归类为重复图
-                    handleDropOnFloatItem(state.dragSource, target.dataset.filename, target.dataset.groupId);
-                } else {
-                    // 直接归类，无弹窗无查重
-                    directDropOnImage(state.dragSource, target.dataset.filename);
+        if (elUnder && state.dragSource) {
+            if (state.currentTab === 'base') {
+                // 基准组：拖到图片直接归类（无弹窗无查重）
+                const card = elUnder.closest('.image-card');
+                const floatItem = elUnder.closest('.base-float-item');
+                const target = card || floatItem;
+                if (target && target.dataset.filename && target.dataset.filename !== state.dragSource) {
+                    if (floatItem) {
+                        // 拖放到悬浮窗的基准图项：直接归类为重复图
+                        handleDropOnFloatItem(state.dragSource, target.dataset.filename, target.dataset.groupId);
+                    } else {
+                        // 直接归类，无弹窗无查重
+                        directDropOnImage(state.dragSource, target.dataset.filename);
+                    }
+                }
+            } else if (!state.batchDragActive) {
+                // 待处理/重复组：单张拖拽到另一张图，触发互相查重（带弹窗）
+                const card = elUnder.closest('.image-card');
+                if (card && card.dataset.filename && card.dataset.filename !== state.dragSource) {
+                    handleDropOnImage(state.dragSource, card.dataset.filename);
                 }
             }
         }
