@@ -1458,7 +1458,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         </div>
         <div class="about-body">
             <div class="about-version">
-                <div>版本号：<span id="toolVersion">v4.5.0</span></div>
+                <div>版本号：<span id="toolVersion">v4.5.1</span></div>
                 <div>算法版本：<span id="algoVersion">v2</span></div>
             </div>
             <div class="about-section">
@@ -4356,6 +4356,10 @@ function showCandidatePanelStep2() {
     steps[0].classList.remove('active');
     steps[1].classList.add('active');
     steps[1].classList.remove('done');
+    
+    // 清理 step1 注入的分支按钮，恢复原始按钮
+    footerCleanup();
+    els.candidateConfirm.style.display = '';
     
     const groupSelect = document.getElementById('baseGroupSelect');
     if (groupSelect) groupSelect.style.display = 'none';
