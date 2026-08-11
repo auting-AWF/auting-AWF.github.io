@@ -1437,6 +1437,18 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
 </div>
 <div class="batch-popup-overlay" id="batchPopupOverlay" style="display:none;"></div>
 
+<!-- 查重双分支弹窗（拖拽触发两张图匹配） -->
+<div class="dropmatch-modal" id="dropMatchModal">
+    <div class="dropmatch-content">
+        <div class="dropmatch-header">
+            <span id="dropMatchTitle">🔍 查重结果</span>
+            <span class="close" id="dropMatchClose">✕</span>
+        </div>
+        <div class="dropmatch-body" id="dropMatchBody"></div>
+        <div class="dropmatch-footer" id="dropMatchFooter"></div>
+    </div>
+</div>
+
 ---------<!-- 关于弹窗 -->
 <div class="about-modal" id="aboutModal">
     <div class="about-content">
@@ -1446,7 +1458,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
         </div>
         <div class="about-body">
             <div class="about-version">
-                <div>版本号：<span id="toolVersion">v4.4.0</span></div>
+                <div>版本号：<span id="toolVersion">v4.5.0</span></div>
                 <div>算法版本：<span id="algoVersion">v2</span></div>
             </div>
             <div class="about-section">
@@ -1483,7 +1495,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
                 </ul>
             </div>
             <div class="about-footer">
-                <p>Copyright © 2025 Auting · 开源工具</p>
+                <p>Copyright © 2026 Auting · 开源工具</p>
                 <p>由DeepSeek × Trae AI 提供支持</p>
             </div>
         </div>
@@ -1491,6 +1503,310 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
 </div>
 
 <style>
+/* ============ 查重双分支弹窗 ============ */
+.dropmatch-modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.6);
+    z-index: 10000;
+    justify-content: center;
+    align-items: center;
+}
+.dropmatch-modal.show {
+    display: flex;
+}
+.dropmatch-content {
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 560px;
+    max-height: 86vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+}
+.dropmatch-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--surface-light);
+}
+.dropmatch-header > span:first-child {
+    font-size: 15px;
+    font-weight: 600;
+}
+.dropmatch-header .close {
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 18px;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+.dropmatch-header .close:hover { background: var(--danger); color: #fff; }
+.dropmatch-body {
+    padding: 14px 18px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+.dropmatch-body::-webkit-scrollbar { width: 6px; }
+.dropmatch-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.dropmatch-sim {
+    text-align: center;
+    padding: 8px 10px 14px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+.dropmatch-sim strong {
+    color: var(--accent);
+    font-size: 15px;
+}
+
+.dropmatch-pair {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 0 14px;
+}
+.dropmatch-pair .pcard {
+    width: 44%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+.dropmatch-pair .pcard img {
+    width: 100%;
+    height: 110px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: #111;
+}
+.dropmatch-pair .pcard .label {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.dropmatch-pair .pcard .fname {
+    font-size: 11px;
+    word-break: break-all;
+    text-align: center;
+    max-height: 32px;
+    overflow: hidden;
+    line-height: 1.4;
+}
+.dropmatch-pair .arrow {
+    color: var(--text-muted);
+    font-size: 22px;
+    font-weight: 700;
+}
+
+.dropmatch-actions {
+    display: flex;
+    gap: 10px;
+    padding: 4px 0 0;
+}
+.dropmatch-actions .dm-branch {
+    flex: 1;
+    padding: 14px 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+}
+.dropmatch-actions .dm-branch:hover {
+    background: var(--surface-light);
+    transform: translateY(-1px);
+}
+.dropmatch-actions .dm-branch.primary {
+    border-color: var(--accent);
+    background: rgba(74,158,255,0.1);
+}
+.dropmatch-actions .dm-branch.primary:hover { background: rgba(74,158,255,0.2); }
+.dropmatch-actions .dm-branch .dm-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+.dropmatch-actions .dm-branch .dm-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.dropmatch-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 6px 0 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.dropmatch-section-title .dm-select-all {
+    font-size: 11px;
+    color: var(--accent);
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.dropmatch-imglist {
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    padding: 6px;
+    margin-bottom: 12px;
+}
+.dropmatch-imglist::-webkit-scrollbar { width: 6px; }
+.dropmatch-imglist::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.dm-img-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+}
+.dm-img-row:hover { background: var(--border); }
+.dm-img-row input { accent-color: var(--accent); }
+.dm-img-row img {
+    width: 36px; height: 28px;
+    object-fit: cover;
+    border-radius: 4px;
+    background: #111;
+    flex-shrink: 0;
+}
+.dm-img-row .dm-fname {
+    flex: 1;
+    word-break: break-all;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.dm-img-row .dm-tag {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--accent);
+    color: #fff;
+    flex-shrink: 0;
+}
+.dm-img-row .dm-tag.target { background: #f59e0b; }
+
+.dropmatch-baselist {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    padding: 6px;
+}
+.dropmatch-baselist::-webkit-scrollbar { width: 6px; }
+.dropmatch-baselist::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.dm-base-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    border: 1px solid transparent;
+    margin-bottom: 4px;
+}
+.dm-base-row:last-child { margin-bottom: 0; }
+.dm-base-row:hover { background: var(--border); }
+.dm-base-row.active {
+    border-color: var(--accent);
+    background: rgba(74,158,255,0.1);
+}
+.dm-base-row img {
+    width: 42px; height: 32px;
+    object-fit: cover;
+    border-radius: 4px;
+    background: #111;
+    flex-shrink: 0;
+}
+.dm-base-row .dm-base-info {
+    flex: 1; min-width: 0;
+}
+.dm-base-row .dm-base-info .dm-bname {
+    font-weight: 500;
+    word-break: break-all;
+    line-height: 1.3;
+}
+.dm-base-row .dm-base-info .dm-bmeta {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+.dm-base-row input { accent-color: var(--accent); }
+
+.dropmatch-empty {
+    padding: 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.dropmatch-footer {
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    background: var(--surface-light);
+}
+.dropmatch-footer button {
+    padding: 8px 18px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+}
+.dropmatch-footer .cancel {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+.dropmatch-footer .cancel:hover { background: var(--border-light); }
+.dropmatch-footer .confirm {
+    background: var(--accent);
+    color: #fff;
+}
+.dropmatch-footer .confirm:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.dropmatch-footer .confirm:not(:disabled):hover { background: var(--accent-hover); }
+.dropmatch-footer .back {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    margin-right: auto;
+}
+.dropmatch-footer .back:hover { background: var(--border-light); }
+
 .about-modal {
     display: none;
     position: fixed;
@@ -2942,6 +3258,11 @@ function initElements() {
     els.customDragIndicator = document.getElementById('customDragIndicator');
     els.customDragThumb = document.getElementById('customDragThumb');
     els.customDragBadge = document.getElementById('customDragBadge');
+    els.dropMatchModal = document.getElementById('dropMatchModal');
+    els.dropMatchTitle = document.getElementById('dropMatchTitle');
+    els.dropMatchBody = document.getElementById('dropMatchBody');
+    els.dropMatchFooter = document.getElementById('dropMatchFooter');
+    els.dropMatchClose = document.getElementById('dropMatchClose');
     
     document.getElementById('pendingCount').textContent = '0';
     document.getElementById('baseCount').textContent = '0';
@@ -5192,16 +5513,16 @@ async function handleDropOnImage(sourceFilename, targetFilename) {
     
     if (cmp.passed) {
         const modeLabel = algoMode === 'precise' ? '精确' : '快速';
-        let actionMsg = `[${modeLabel}模式] 相似度: ${dist} (阈值: ${threshold})\n\n`;
-        if (targetStatus === 'base') {
-            actionMsg += `「${targetFilename}」已是基准图，`;
-        } else if (targetStatus === 'duplicate') {
-            actionMsg += `「${targetFilename}」已是重复图，`;
-        }
-        actionMsg += `是否将「${sourceFilename}」标记为「${targetFilename}」的重复图片？\n\n确定后可在重复组查看。`;
+        // ★ 新双分支弹窗：并列提供"设为重复图" / "移入现有基准图"两个分支
+        const result = await showDropMatchDualBranch({
+            sourceFilename, targetFilename,
+            distance: dist, threshold, modeLabel,
+            sourceStatus, targetStatus
+        });
+        if (!result) return; // 用户取消
         
-        const action = confirm(actionMsg);
-        if (action) {
+        if (result.action === 'markAsDup') {
+            // ===== 分支A：标记 source 为 target 的重复图（原 confirm 确认逻辑） =====
             state.statusMap.set(targetFilename, 'base');
             state.statusMap.set(sourceFilename, 'duplicate');
             
@@ -5248,10 +5569,317 @@ async function handleDropOnImage(sourceFilename, targetFilename) {
             }
             saveState();
             renderAll();
+        } else if (result.action === 'moveToBase') {
+            // ===== 分支B：将选中的多张图（至少含source和target）一起移入指定基准图（targetBaseFilename）的重复组 =====
+            const { selectedFnames, targetBaseFilename } = result;
+            if (!targetBaseFilename || selectedFnames.length === 0) return;
+            
+            // 找到/创建目标基准图的重复组
+            let dupGid = null;
+            for (const [id, g] of state.duplicateGroups) {
+                if (g.base === targetBaseFilename) { dupGid = id; break; }
+            }
+            if (!dupGid) {
+                dupGid = Date.now().toString() + '_dup';
+                state.duplicateGroups.set(dupGid, { base: targetBaseFilename, duplicates: [] });
+            }
+            const dupGroup = state.duplicateGroups.get(dupGid);
+            
+            // 确保基准图 status 为 base（理论上已经是）
+            state.statusMap.set(targetBaseFilename, 'base');
+            
+            // 把选中的每张图片做 duplicate 归类（排除等于基准图的异常情况）
+            for (const fname of selectedFnames) {
+                if (fname === targetBaseFilename) continue;
+                // 从其他分组中移除
+                for (const [_, g] of state.baseGroups) g.images = g.images.filter(f => f !== fname);
+                for (const [_, g] of state.duplicateGroups) {
+                    if (g.base !== targetBaseFilename) {
+                        g.duplicates = g.duplicates.filter(f => f !== fname);
+                    }
+                }
+                state.statusMap.set(fname, 'duplicate');
+                if (!dupGroup.duplicates.includes(fname)) {
+                    dupGroup.duplicates.push(fname);
+                }
+            }
+            showDropToast(`已将 ${selectedFnames.filter(f => f !== targetBaseFilename).length} 张图片移入「${shortName(targetBaseFilename)}」的重复组`);
+            saveState();
+            renderAll();
         }
     } else {
         alert(`相似度: ${dist} (阈值: ${threshold})\n\n这两张图片可能不相似，建议使用右键"查重图片"功能进行确认。`);
     }
+}
+
+/**
+ * 查重双分支弹窗（拖拽待处理图相互触发）
+ * 分支A：标记 source 为 target 的重复图（原 confirm 确认逻辑）
+ * 分支B：多选图片（默认勾选 source+target）+ 单选现有基准图，一起归入该基准图的重复组
+ *
+ * @returns Promise<{action:'markAsDup'}|{action:'moveToBase', selectedFnames:[], targetBaseFilename:string}|null>
+ */
+function showDropMatchDualBranch(opts) {
+    return new Promise((resolve) => {
+        const { sourceFilename, targetFilename, distance, threshold, modeLabel, sourceStatus, targetStatus } = opts;
+        const modal = els.dropMatchModal;
+        const title = els.dropMatchTitle;
+        const body = els.dropMatchBody;
+        const footer = els.dropMatchFooter;
+
+        // 缩略图 src 获取（懒加载缓存中读取，或 fallback 为空）
+        const getThumbSrc = (fn) => {
+            const t = thumbCache.get(fn);
+            if (t) return t;
+            const el = document.querySelector(`img.thumb[data-filename="${CSS.escape ? CSS.escape(fn) : fn}"]`);
+            return el ? el.src : '';
+        };
+
+        const cleanup = () => {
+            modal.classList.remove('show');
+            body.innerHTML = '';
+            footer.innerHTML = '';
+        };
+
+        const closeBtn = els.dropMatchClose;
+        const closeHandler = () => { resolve(null); cleanup(); };
+        const oldClose = closeBtn.onclick;
+        closeBtn.onclick = closeHandler;
+        // 点击遮罩关闭（模态层）
+        modal.onclick = (e) => { if (e.target === modal) closeHandler(); };
+
+        // ========================================================
+        // 步骤1：双分支选择
+        // ========================================================
+        const renderStep1 = () => {
+            title.textContent = '🔍 查重结果 · 选择处理方式';
+            const sShort = shortName(sourceFilename);
+            const tShort = shortName(targetFilename);
+            const sThumb = getThumbSrc(sourceFilename);
+            const tThumb = getThumbSrc(targetFilename);
+
+            let tHint = '';
+            if (targetStatus === 'base') tHint = '（已是基准图）';
+            else if (targetStatus === 'duplicate') tHint = '（已是重复图）';
+
+            body.innerHTML = `
+                <div class="dropmatch-sim">
+                    [${modeLabel}模式] 相似度 <strong>${distance}</strong> &nbsp;·&nbsp; 阈值 ${threshold}
+                </div>
+                <div class="dropmatch-pair">
+                    <div class="pcard">
+                        <div class="label">被拖图（源）</div>
+                        <img src="${sThumb}" alt="">
+                        <div class="fname">${sShort}</div>
+                    </div>
+                    <div class="arrow">→</div>
+                    <div class="pcard">
+                        <div class="label">拖到的图（目标） ${tHint}</div>
+                        <img src="${tThumb}" alt="">
+                        <div class="fname">${tShort}</div>
+                    </div>
+                </div>
+                <div class="dropmatch-actions">
+                    <button class="dm-branch primary" data-branch="A">
+                        <div class="dm-title">🖇️ 设为重复图</div>
+                        <div class="dm-desc">将「${sShort}」标记为「${tShort}」的重复图，<br>${targetStatus !== 'base' && targetStatus !== 'duplicate' ? '并将「' + tShort + '」设为基准图（可选择分组）。' : '归入现有基准组。'}</div>
+                    </button>
+                    <button class="dm-branch" data-branch="B">
+                        <div class="dm-title">📥 移入现有基准图下</div>
+                        <div class="dm-desc">可勾选多张图（默认含这两张），<br>一起移入基准组中某张现有基准图的重复组。</div>
+                    </button>
+                </div>
+            `;
+            footer.innerHTML = `
+                <button class="cancel" id="dmCancel1">取消</button>
+            `;
+            footer.querySelector('#dmCancel1').onclick = closeHandler;
+
+            body.querySelector('[data-branch="A"]').onclick = () => {
+                resolve({ action: 'markAsDup' });
+                cleanup();
+                closeBtn.onclick = oldClose;
+            };
+            body.querySelector('[data-branch="B"]').onclick = () => {
+                const hasBase = state.baseGroups.size > 0 && [...state.baseGroups.values()].some(g => g.images.length > 0);
+                if (!hasBase) {
+                    alert('基准组为空，无法移入。请先在"基准组"中创建分组并添加基准图。');
+                    return;
+                }
+                renderStep2();
+            };
+        };
+
+        // ========================================================
+        // 步骤2：选要移入的图 + 选接收的基准图
+        // ========================================================
+        const renderStep2 = () => {
+            title.textContent = '📥 选择要移入的图片与目标基准图';
+
+            // ---- 候选待移入图片：所有 pending（默认勾选 source/target） + 两张拖拽的图（无论状态） ----
+            const candidatePool = [];
+            // 先加两张拖拽图（保证存在），去重 tag 标记
+            const addedSet = new Set();
+            const pushCand = (fn, tag, tagClass) => {
+                if (addedSet.has(fn)) return;
+                addedSet.add(fn);
+                candidatePool.push({ fn, tag, tagClass });
+            };
+            pushCand(sourceFilename, '源图', '');
+            pushCand(targetFilename, '目标图', 'target');
+            // 再加所有其他 pending 图（可让用户多选一起归）
+            const pendingAll = getFilesByStatus('pending');
+            for (const fn of pendingAll) {
+                pushCand(fn, '', '');
+            }
+            // 再加处于 duplicate 状态但未在所选基准里的？ 简单起见只处理 pending + 两张图。
+
+            const selectedSet = new Set([sourceFilename, targetFilename]);
+            let chosenBase = null;
+
+            const render = () => {
+                // 可移入图片列表
+                let imgListHtml = '';
+                if (candidatePool.length === 0) {
+                    imgListHtml = '<div class="dropmatch-empty">没有可移入的图片</div>';
+                } else {
+                    imgListHtml = candidatePool.map(c => {
+                        const checked = selectedSet.has(c.fn) ? 'checked' : '';
+                        const tagHtml = c.tag ? `<span class="dm-tag ${c.tagClass}">${c.tag}</span>` : '';
+                        const thumb = getThumbSrc(c.fn);
+                        return `<div class="dm-img-row" data-fn="${c.fn}">
+                            <input type="checkbox" ${checked}>
+                            <img src="${thumb}" alt="">
+                            <div class="dm-fname">${c.fn}</div>
+                            ${tagHtml}
+                        </div>`;
+                    }).join('');
+                }
+
+                // 基准图单选项列表：遍历所有 baseGroups -> images
+                let baseListHtml = '';
+                const baseList = [];
+                for (const [gid, g] of state.baseGroups) {
+                    for (const bf of g.images) {
+                        baseList.push({ fn: bf, groupName: g.name, gid });
+                    }
+                }
+                if (baseList.length === 0) {
+                    baseListHtml = '<div class="dropmatch-empty">基准组还没有图片，请先添加基准图</div>';
+                } else {
+                    baseListHtml = baseList.map(b => {
+                        const isChosen = chosenBase === b.fn;
+                        const dupG = [...state.duplicateGroups.values()].find(x => x.base === b.fn);
+                        const dupCount = dupG ? dupG.duplicates.length : 0;
+                        const thumb = getThumbSrc(b.fn);
+                        return `<div class="dm-base-row ${isChosen ? 'active' : ''}" data-fn="${b.fn}">
+                            <input type="radio" name="dm_base_radio" ${isChosen ? 'checked' : ''}>
+                            <img src="${thumb}" alt="">
+                            <div class="dm-base-info">
+                                <div class="dm-bname">${b.fn}</div>
+                                <div class="dm-bmeta">📁 ${b.groupName} &nbsp;·&nbsp; 重复图 ${dupCount} 张</div>
+                            </div>
+                        </div>`;
+                    }).join('');
+                }
+
+                body.innerHTML = `
+                    <div class="dropmatch-section-title">
+                        <span>1. 勾选要移入基准图下的图片</span>
+                        <span class="dm-select-all" id="dmSelAll">全选/全不选</span>
+                    </div>
+                    <div class="dropmatch-imglist" id="dmImgList">${imgListHtml}</div>
+                    <div class="dropmatch-section-title">
+                        <span>2. 选择要归入的目标基准图（单选）</span>
+                    </div>
+                    <div class="dropmatch-baselist" id="dmBaseList">${baseListHtml}</div>
+                `;
+
+                // 绑定图片勾选
+                const imgRows = body.querySelectorAll('.dm-img-row');
+                imgRows.forEach(row => {
+                    const fn = row.dataset.fn;
+                    const input = row.querySelector('input');
+                    const toggle = (v) => {
+                        if (v === undefined) v = !input.checked;
+                        input.checked = v;
+                        if (v) selectedSet.add(fn); else selectedSet.delete(fn);
+                    };
+                    input.onchange = () => toggle(input.checked);
+                    row.onclick = (e) => {
+                        if (e.target.tagName === 'INPUT') return;
+                        toggle();
+                    };
+                });
+                const selAllBtn = body.querySelector('#dmSelAll');
+                if (selAllBtn) {
+                    selAllBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        // 全选/反选：如果已全部选中则全部取消，否则全选
+                        const allSelected = candidatePool.every(c => selectedSet.has(c.fn));
+                        candidatePool.forEach(c => allSelected ? selectedSet.delete(c.fn) : selectedSet.add(c.fn));
+                        render();
+                    };
+                }
+
+                // 绑定基准图单选
+                const baseRows = body.querySelectorAll('.dm-base-row');
+                baseRows.forEach(row => {
+                    const fn = row.dataset.fn;
+                    const input = row.querySelector('input');
+                    const pick = () => {
+                        chosenBase = fn;
+                        baseRows.forEach(r => {
+                            r.classList.toggle('active', r.dataset.fn === chosenBase);
+                            const ri = r.querySelector('input');
+                            if (ri) ri.checked = r.dataset.fn === chosenBase;
+                        });
+                        updateConfirmBtn();
+                    };
+                    input.onchange = pick;
+                    row.onclick = (e) => {
+                        if (e.target.tagName === 'INPUT') return;
+                        pick();
+                    };
+                });
+                updateConfirmBtn();
+            };
+
+            const updateConfirmBtn = () => {
+                const btn = footer.querySelector('#dmConfirm2');
+                if (!btn) return;
+                const hasImg = selectedSet.size > 0;
+                const hasBase = !!chosenBase;
+                // 如果所选图包含 chosenBase 自己也允许，但会在执行时跳过
+                btn.disabled = !(hasImg && hasBase);
+            };
+
+            footer.innerHTML = `
+                <button class="back" id="dmBack1">← 返回</button>
+                <button class="cancel" id="dmCancel2">取消</button>
+                <button class="confirm" id="dmConfirm2" disabled>确认移入</button>
+            `;
+            footer.querySelector('#dmCancel2').onclick = closeHandler;
+            footer.querySelector('#dmBack1').onclick = renderStep1;
+            footer.querySelector('#dmConfirm2').onclick = () => {
+                if (selectedSet.size === 0 || !chosenBase) return;
+                const selectedFnames = [...selectedSet];
+                // 安全校验：基准图不能把自己"加入自己重复图"——用户如果勾了，在执行端自动过滤即可
+                resolve({
+                    action: 'moveToBase',
+                    selectedFnames,
+                    targetBaseFilename: chosenBase
+                });
+                cleanup();
+                closeBtn.onclick = oldClose;
+            };
+
+            render();
+        };
+
+        renderStep1();
+        modal.classList.add('show');
+    });
 }
 
 // 分组选择弹窗
@@ -6231,22 +6859,60 @@ async function exportGroupsAsZip() {
         let totalFiles = 0;
         let processedFiles = 0;
         
+        // 构建 baseFilename -> dupGid 映射，便于查找基准图对应的重复组（记录了加入顺序）
+        const baseToDupGroup = new Map();
+        for (const [dupGid, dupGroup] of state.duplicateGroups) {
+            baseToDupGroup.set(dupGroup.base, dupGid);
+        }
+        
+        // allGroups 结构：按基准组文件夹一级，再按每张基准图二级子文件夹
+        // 二级子文件夹内：基准图 0_xxx.jpg，重复图按加入顺序 1_/2_/3_...
+        // 即使没有重复图（duplicates为空）也建子文件夹，保证基准图被重命名为 0_ 前缀
         const allGroups = [];
         
         for (const [gid, group] of state.baseGroups) {
             if (group.images.length === 0) continue;
-            allGroups.push({ prefix: '基准组', name: group.name, images: group.images });
-            totalFiles += group.images.length;
-        }
-        
-        for (const [gid, dupGroup] of state.duplicateGroups) {
-            if (dupGroup.duplicates.length === 0) continue;
-            allGroups.push({ 
-                prefix: '重复组', 
-                name: `基准_${dupGroup.base}`, 
-                images: dupGroup.duplicates 
+            let safeGroupName = group.name.replace(/[\\/:*?"<>|\s]/g, '_');
+            if (!safeGroupName.trim()) safeGroupName = 'unnamed';
+            
+            allGroups.push({
+                baseGroupGid: gid,
+                safeGroupPath: `基准组/${safeGroupName}`,
+                subFolders: []
             });
-            totalFiles += dupGroup.duplicates.length;
+            const currentBG = allGroups[allGroups.length - 1];
+            
+            // 同基准组内若基准图去非法字符后重名，加后缀避免 zip 内路径冲突
+            const folderNameUsed = new Map();
+            for (const baseFilename of group.images) {
+                totalFiles += 1;
+                
+                let subFolderName = baseFilename.replace(/[\\/:*?"<>|\s]/g, '_');
+                if (!subFolderName.trim()) subFolderName = 'unnamed';
+                const fk = subFolderName;
+                if (folderNameUsed.has(fk)) {
+                    const c = folderNameUsed.get(fk) + 1;
+                    folderNameUsed.set(fk, c);
+                    subFolderName = `${subFolderName}_${c}`;
+                } else {
+                    folderNameUsed.set(fk, 1);
+                }
+                
+                const dupGid = baseToDupGroup.get(baseFilename);
+                const dupGroup = dupGid ? state.duplicateGroups.get(dupGid) : null;
+                const duplicates = dupGroup ? dupGroup.duplicates : [];
+                
+                const images = [];
+                // 基准图：0_ 前缀
+                images.push({ fname: baseFilename, prefix: '0_' });
+                // 重复图：按 duplicates 数组索引顺序（index + 1） 加 1_/2_/... 前缀
+                for (let i = 0; i < duplicates.length; i++) {
+                    images.push({ fname: duplicates[i], prefix: `${i + 1}_` });
+                    totalFiles += 1;
+                }
+                
+                currentBG.subFolders.push({ folderName: subFolderName, images });
+            }
         }
         
         if (totalFiles === 0) {
@@ -6256,45 +6922,45 @@ async function exportGroupsAsZip() {
             return;
         }
         
-        const usedNames = new Map();
-        
-        for (const group of allGroups) {
-            let safeName = group.name.replace(/[\\/:*?"<>|\s]/g, '_');
-            if (!safeName.trim()) safeName = 'unnamed';
-            
-            const key = `${group.prefix}/${safeName}`;
-            if (usedNames.has(key)) {
+        // 一级基准组名防冲突（用户可能创建了多个同名基准组）
+        const groupKeyUsed = new Map();
+        for (const bg of allGroups) {
+            const orig = bg.safeGroupPath;
+            if (groupKeyUsed.has(orig)) {
                 let counter = 1;
-                let uniqueKey = `${key}_${counter}`;
-                while (usedNames.has(uniqueKey)) {
+                let unique = `${orig}_${counter}`;
+                while (groupKeyUsed.has(unique)) {
                     counter++;
-                    uniqueKey = `${key}_${counter}`;
+                    unique = `${orig}_${counter}`;
                 }
-                safeName = `${safeName}_${counter}`;
+                bg.safeGroupPath = unique;
             }
-            usedNames.set(key, true);
-            group.safePath = `${group.prefix}/${safeName}`;
+            groupKeyUsed.set(bg.safeGroupPath, true);
         }
         
-        for (const group of allGroups) {
-            for (const fname of group.images) {
-                const entry = state.entryMap.get(fname);
-                if (!entry) {
-                    console.warn(`跳过找不到的文件: ${fname}`);
-                    continue;
-                }
-                try {
-                    const blob = await entry.getData(new BlobWriter());
-                    if (!blob || blob.size === 0) {
-                        console.warn(`跳过空文件: ${fname}`);
+        for (const bg of allGroups) {
+            for (const sf of bg.subFolders) {
+                const folderPath = `${bg.safeGroupPath}/${sf.folderName}`;
+                for (const imgItem of sf.images) {
+                    const entry = state.entryMap.get(imgItem.fname);
+                    if (!entry) {
+                        console.warn(`跳过找不到的文件: ${imgItem.fname}`);
                         continue;
                     }
-                    const safeFname = fname.replace(/[\\/:*?"<>|]/g, '_');
-                    const path = `${group.safePath}/${safeFname}`;
-                    await zipWriter.add(path, new BlobReader(blob));
-                    processedFiles++;
-                } catch (err) {
-                    console.error(`导出文件失败 ${fname}:`, err.message);
+                    try {
+                        const blob = await entry.getData(new BlobWriter());
+                        if (!blob || blob.size === 0) {
+                            console.warn(`跳过空文件: ${imgItem.fname}`);
+                            continue;
+                        }
+                        const safeFname = imgItem.fname.replace(/[\\/:*?"<>|]/g, '_');
+                        const prefixedName = `${imgItem.prefix}${safeFname}`;
+                        const path = `${folderPath}/${prefixedName}`;
+                        await zipWriter.add(path, new BlobReader(blob));
+                        processedFiles++;
+                    } catch (err) {
+                        console.error(`导出文件失败 ${imgItem.fname}:`, err.message);
+                    }
                 }
             }
         }
