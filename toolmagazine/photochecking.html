@@ -780,7 +780,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     padding: 4px 8px;
     font-size: 11px;
     border-radius: 4px;
-    background: var(--bg-secondary);
+    background: var(--surface);
     color: var(--text-muted);
     transition: all 0.2s;
 }
@@ -816,7 +816,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
 .base-group-select .btn-new-group {
     width: 100%;
     padding: 8px;
-    background: var(--bg-secondary);
+    background: var(--surface);
     color: var(--text);
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -1518,7 +1518,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     display: flex;
 }
 .dropmatch-content {
-    background: var(--bg-secondary);
+    background: var(--surface);
     border-radius: 12px;
     width: 90%;
     max-width: 560px;
@@ -1821,7 +1821,7 @@ input[type="file"] { position: absolute; left: -9999px; opacity: 0; pointer-even
     display: flex;
 }
 .about-content {
-    background: var(--bg-secondary);
+    background: var(--surface);
     border-radius: 12px;
     width: 90%;
     max-width: 500px;
@@ -1929,6 +1929,9 @@ const state = {
     candidateStep: 1,
     candidateSelectedBase: null,
     candidateSelectedGroup: null,
+    candidateMode: null,
+    candidateMoveSelected: null,
+    candidateMoveTargetBase: null,
     multiSelectMode: false,
     selectedFiles: new Set(),
     dragSource: null,
@@ -4173,7 +4176,7 @@ async function startCandidateCheck(filename) {
 
 function showCandidatePanelStep1() {
     const title = document.getElementById('candidateTitle');
-    title.textContent = '🔍 第1步：选择基准图片和分组';
+    title.textContent = '🔍 第1步：选择处理方式';
     
     const steps = document.querySelectorAll('#candidateSteps .step');
     steps[0].classList.add('active');
@@ -4269,8 +4272,55 @@ function showCandidatePanelStep1() {
         els.candidateList.appendChild(item);
     }
     
-    els.candidateConfirm.textContent = '下一步：选择重复图';
-    els.candidateConfirm.disabled = false;
+    // ★ 改造：底部显示两个并列按钮（双分支）
+    els.candidateConfirm.style.display = 'none'; // 隐藏原来的单按钮
+    const footer = els.candidateConfirm.parentNode;
+    // 移除旧的分支按钮（如果有）
+    footer.querySelectorAll('.cand-branch-btn').forEach(el => el.remove());
+    
+    const branchA = document.createElement('button');
+    branchA.className = 'cand-branch-btn accent';
+    branchA.style.cssText = 'padding:8px 12px;border:none;border-radius:6px;background:var(--accent);color:#fff;cursor:pointer;font-size:13px;font-family:inherit;';
+    branchA.innerHTML = '🖇️ 设为基准图 →';
+    branchA.title = '走原流程：把选中的图设为基准图，下一步选重复图';
+    branchA.addEventListener('click', () => {
+        if (!state.candidateSelectedBase) {
+            alert('请先在上方列表选择一张作为基准图');
+            return;
+        }
+        const dropdown = document.getElementById('baseGroupDropdown');
+        state.candidateSelectedGroup = dropdown.value || null;
+        state.candidateMode = 'setBase';
+        state.candidateStep = 2;
+        showCandidatePanelStep2();
+    });
+    
+    const branchB = document.createElement('button');
+    branchB.className = 'cand-branch-btn';
+    branchB.style.cssText = 'padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;font-size:13px;font-family:inherit;';
+    branchB.innerHTML = '📥 移入现有基准图下';
+    branchB.title = '把选中的图和其他勾选的图一起，归入基准组中某张现有基准图的重复组';
+    branchB.addEventListener('click', () => {
+        if (!state.candidateSelectedBase) {
+            alert('请先在上方列表选择一张作为要移入的图');
+            return;
+        }
+        const hasBase = state.baseGroups.size > 0 && [...state.baseGroups.values()].some(g => g.images.length > 0);
+        if (!hasBase) {
+            alert('基准组为空，无法移入。请先在"基准组"中创建分组并添加基准图。');
+            return;
+        }
+        state.candidateMode = 'moveToBase';
+        state.candidateStep = 2;
+        showCandidatePanelStep2MoveToBase();
+    });
+    
+    // 先放 branchA 作为 confirm 旁边的追加按钮，再放 branchB
+    // 布局：取消 | 分支A | 分支B
+    const cancelBtn = document.getElementById('candidateCancel');
+    footer.insertBefore(branchB, cancelBtn);
+    footer.insertBefore(branchA, branchB);
+    
     els.candidatePanel.classList.add('show');
 }
 
@@ -4370,11 +4420,138 @@ function showCandidatePanelStep2() {
     els.candidateConfirm.disabled = false;
 }
 
+/**
+ * 右键查重流程 · 分支B步骤2：勾选要移入的图片
+ * 确认后把选中图放入 state.selectedFiles，切到基准组 tab，显示折叠堆叠
+ * 用户拖动堆叠到目标基准图即可归类（复用 handleBatchDropOnBase），完成后自动返回原 tab
+ */
+function showCandidatePanelStep2MoveToBase() {
+    const title = document.getElementById('candidateTitle');
+    title.textContent = '📥 勾选要移入的图片';
+    
+    const steps = document.querySelectorAll('#candidateSteps .step');
+    steps[0].classList.add('done');
+    steps[0].classList.remove('active');
+    steps[1].classList.add('active');
+    steps[1].classList.remove('done');
+    
+    // 隐藏分组选择下拉
+    const groupSelect = document.getElementById('baseGroupSelect');
+    if (groupSelect) groupSelect.style.display = 'none';
+    
+    els.candidateConfirm.style.display = '';
+    footerCleanup();
+    
+    const baseFilename = state.candidateSelectedBase;
+    const selectedSet = new Set([baseFilename]);
+    if (state.candidateMoveSelected && state.candidateMoveSelected.size > 0) {
+        state.candidateMoveSelected.forEach(f => selectedSet.add(f));
+    }
+    
+    // 候选池：当前选的图 + 相似候选 + 所有 pending
+    const candidatePool = [];
+    const addedSet = new Set();
+    const pushCand = (fn, tag) => {
+        if (addedSet.has(fn)) return;
+        addedSet.add(fn);
+        candidatePool.push({ fn, tag });
+    };
+    pushCand(baseFilename, '你选的');
+    for (const fn of state.candidateList) {
+        if (fn !== baseFilename) pushCand(fn, '');
+    }
+    for (const fn of getFilesByStatus('pending')) {
+        pushCand(fn, '');
+    }
+    
+    const render = () => {
+        const imgListHtml = candidatePool.length === 0
+            ? '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:12px;">没有可移入的图片</div>'
+            : candidatePool.map(c => {
+                const checked = selectedSet.has(c.fn) ? 'checked' : '';
+                const tagHtml = c.tag ? `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:var(--accent);color:#fff;flex-shrink:0;">${c.tag}</span>` : '';
+                const thumb = thumbCache.get(c.fn);
+                return `<div class="candidate-item" data-fn="${c.fn}" style="cursor:pointer;">
+                    <input type="checkbox" ${checked} style="accent-color:var(--accent);width:16px;height:16px;cursor:pointer;flex-shrink:0;">
+                    <img class="thumb" data-filename="${c.fn}" ${thumb ? `src="${thumb}"` : ''} alt="" style="width:36px;height:28px;object-fit:cover;border-radius:4px;background:#111;flex-shrink:0;">
+                    <div class="fname" style="flex:1;font-size:12px;word-break:break-all;line-height:1.4;">${c.fn}</div>
+                    ${tagHtml}
+                </div>`;
+            }).join('');
+        
+        els.candidateList.innerHTML = `
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;padding:8px 10px;background:rgba(74,158,255,0.08);border-radius:6px;border-left:3px solid var(--accent);">
+                💡 勾选要移入的图片，确认后会切到基准组并显示折叠堆叠，<strong>拖动堆叠到目标基准图</strong>即可完成归类，完成后自动返回。
+            </div>
+            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin:6px 0 4px;display:flex;justify-content:space-between;align-items:center;">
+                <span>勾选要移入的图片（默认含你选的图）</span>
+                <span id="dmSelAll" style="font-size:11px;color:var(--accent);cursor:pointer;font-weight:500;">全选/全不选</span>
+            </div>
+            <div style="border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:6px;">${imgListHtml}</div>
+        `;
+        
+        // 绑定勾选
+        els.candidateList.querySelectorAll('[data-fn]').forEach(row => {
+            const fn = row.dataset.fn;
+            const input = row.querySelector('input[type="checkbox"]');
+            if (!input) return;
+            const toggle = (v) => {
+                if (v === undefined) v = !input.checked;
+                input.checked = v;
+                if (v) selectedSet.add(fn); else selectedSet.delete(fn);
+                state.candidateMoveSelected = new Set(selectedSet);
+                updateConfirmBtn();
+            };
+            input.onchange = () => toggle(input.checked);
+            row.onclick = (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'IMG') return;
+                toggle();
+            };
+            const thumbEl = row.querySelector('img.thumb');
+            if (thumbEl && !thumbEl.src) lazyObserver.observe(thumbEl);
+        });
+        
+        const selAllBtn = els.candidateList.querySelector('#dmSelAll');
+        if (selAllBtn) {
+            selAllBtn.onclick = (e) => {
+                e.stopPropagation();
+                const allSelected = candidatePool.every(c => selectedSet.has(c.fn));
+                candidatePool.forEach(c => allSelected ? selectedSet.delete(c.fn) : selectedSet.add(c.fn));
+                state.candidateMoveSelected = new Set(selectedSet);
+                render();
+            };
+        }
+    };
+    
+    const updateConfirmBtn = () => {
+        els.candidateConfirm.disabled = selectedSet.size === 0;
+    };
+    
+    els.candidateConfirm.style.display = '';
+    els.candidateCancel.textContent = '取消';
+    els.candidateConfirm.textContent = '确认 → 切到基准组拖拽';
+    els.candidateConfirm.onclick = null;
+    updateConfirmBtn();
+    render();
+}
+
+// helper: 清理 step1 注入的分支按钮
+function footerCleanup() {
+    const footer = els.candidateConfirm.parentNode;
+    footer.querySelectorAll('.cand-branch-btn').forEach(el => el.remove());
+}
+
 function hideCandidatePanel() {
     els.candidatePanel.classList.remove('show');
     
     const groupSelect = document.getElementById('baseGroupSelect');
     if (groupSelect) groupSelect.style.display = 'flex';
+    
+    // 恢复 confirm 按钮
+    els.candidateConfirm.style.display = '';
+    els.candidateConfirm.textContent = '下一步：选择重复图';
+    els.candidateConfirm.disabled = false;
+    footerCleanup();
     
     state.currentCandidateBase = null;
     state.candidateList = [];
@@ -4382,6 +4559,9 @@ function hideCandidatePanel() {
     state.candidateStep = 1;
     state.candidateSelectedBase = null;
     state.candidateSelectedGroup = null;
+    state.candidateMode = null;
+    state.candidateMoveSelected = null;
+    state.candidateMoveTargetBase = null;
 }
 
 function confirmCandidate() {
@@ -4400,6 +4580,46 @@ function confirmCandidate() {
     }
     
     if (state.candidateStep === 2) {
+        // 分支B：勾选完图片 → 切到基准组 + 显示折叠堆叠，用户拖到目标基准图
+        if (state.candidateMode === 'moveToBase') {
+            const selectedFnames = state.candidateMoveSelected ? [...state.candidateMoveSelected] : [];
+            if (selectedFnames.length === 0) {
+                alert('请至少勾选一张图片');
+                return;
+            }
+            
+            // 记住原 tab（用于拖完后自动返回）
+            const returnTab = state.currentTab;
+            
+            // 把选中图放入 state.selectedFiles（复用 batchStack 机制）
+            state.selectedFiles.clear();
+            selectedFnames.forEach(fn => state.selectedFiles.add(fn));
+            state.multiSelectMode = true;
+            
+            // 清理候选面板状态
+            state.selectedCandidate.clear();
+            state.candidateList = [];
+            state.candidateStep = 1;
+            state.candidateSelectedGroup = null;
+            state.candidateMode = null;
+            state.candidateMoveSelected = null;
+            state.candidateMoveTargetBase = null;
+            
+            hideCandidatePanel();
+            
+            // 切到基准组 tab
+            state.currentTab = 'base';
+            state.dragOriginalTab = returnTab; // 让 batchStackContainer 拖拽完后返回原 tab
+            renderAll();
+            
+            // 显示折叠堆叠 + 提示
+            updateBatchBar();
+            renderBatchStack();
+            showDropToast(`已选 ${selectedFnames.length} 张，拖动右下角堆叠到目标基准图即可`);
+            return;
+        }
+        
+        // 分支A（默认）：设为基准图
         const baseFile = state.candidateSelectedBase;
         const groupGid = state.candidateSelectedGroup;
         const dupFiles = [...state.selectedCandidate];
@@ -4431,6 +4651,9 @@ function confirmCandidate() {
         state.candidateList = [];
         state.candidateStep = 1;
         state.candidateSelectedGroup = null;
+        state.candidateMode = null;
+        state.candidateMoveSelected = null;
+        state.candidateMoveTargetBase = null;
         
         hideCandidatePanel();
         saveState();
@@ -5513,16 +5736,16 @@ async function handleDropOnImage(sourceFilename, targetFilename) {
     
     if (cmp.passed) {
         const modeLabel = algoMode === 'precise' ? '精确' : '快速';
-        // ★ 新双分支弹窗：并列提供"设为重复图" / "移入现有基准图"两个分支
-        const result = await showDropMatchDualBranch({
-            sourceFilename, targetFilename,
-            distance: dist, threshold, modeLabel,
-            sourceStatus, targetStatus
-        });
-        if (!result) return; // 用户取消
+        let actionMsg = `[${modeLabel}模式] 相似度: ${dist} (阈值: ${threshold})\n\n`;
+        if (targetStatus === 'base') {
+            actionMsg += `「${targetFilename}」已是基准图，`;
+        } else if (targetStatus === 'duplicate') {
+            actionMsg += `「${targetFilename}」已是重复图，`;
+        }
+        actionMsg += `是否将「${sourceFilename}」标记为「${targetFilename}」的重复图片？\n\n确定后可在重复组查看。`;
         
-        if (result.action === 'markAsDup') {
-            // ===== 分支A：标记 source 为 target 的重复图（原 confirm 确认逻辑） =====
+        const action = confirm(actionMsg);
+        if (action) {
             state.statusMap.set(targetFilename, 'base');
             state.statusMap.set(sourceFilename, 'duplicate');
             
@@ -5567,43 +5790,6 @@ async function handleDropOnImage(sourceFilename, targetFilename) {
             if (!state.duplicateGroups.get(dupGid).duplicates.includes(sourceFilename)) {
                 state.duplicateGroups.get(dupGid).duplicates.push(sourceFilename);
             }
-            saveState();
-            renderAll();
-        } else if (result.action === 'moveToBase') {
-            // ===== 分支B：将选中的多张图（至少含source和target）一起移入指定基准图（targetBaseFilename）的重复组 =====
-            const { selectedFnames, targetBaseFilename } = result;
-            if (!targetBaseFilename || selectedFnames.length === 0) return;
-            
-            // 找到/创建目标基准图的重复组
-            let dupGid = null;
-            for (const [id, g] of state.duplicateGroups) {
-                if (g.base === targetBaseFilename) { dupGid = id; break; }
-            }
-            if (!dupGid) {
-                dupGid = Date.now().toString() + '_dup';
-                state.duplicateGroups.set(dupGid, { base: targetBaseFilename, duplicates: [] });
-            }
-            const dupGroup = state.duplicateGroups.get(dupGid);
-            
-            // 确保基准图 status 为 base（理论上已经是）
-            state.statusMap.set(targetBaseFilename, 'base');
-            
-            // 把选中的每张图片做 duplicate 归类（排除等于基准图的异常情况）
-            for (const fname of selectedFnames) {
-                if (fname === targetBaseFilename) continue;
-                // 从其他分组中移除
-                for (const [_, g] of state.baseGroups) g.images = g.images.filter(f => f !== fname);
-                for (const [_, g] of state.duplicateGroups) {
-                    if (g.base !== targetBaseFilename) {
-                        g.duplicates = g.duplicates.filter(f => f !== fname);
-                    }
-                }
-                state.statusMap.set(fname, 'duplicate');
-                if (!dupGroup.duplicates.includes(fname)) {
-                    dupGroup.duplicates.push(fname);
-                }
-            }
-            showDropToast(`已将 ${selectedFnames.filter(f => f !== targetBaseFilename).length} 张图片移入「${shortName(targetBaseFilename)}」的重复组`);
             saveState();
             renderAll();
         }
@@ -7293,7 +7479,8 @@ function bindEvents() {
                 
                 state.batchDragActive = true;
                 els.batchStackContainer.classList.add('dragging');
-                state.dragOriginalTab = state.currentTab;
+                // 只在未设置时才记录当前 tab（分支B从候选面板切来时已预设返回 tab）
+                if (!state.dragOriginalTab) state.dragOriginalTab = state.currentTab;
                 
                 const baseTab = document.querySelector('.tab[data-tab="base"]');
                 if (baseTab && state.baseGroups.size > 0) {
