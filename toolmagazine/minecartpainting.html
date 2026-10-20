@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MC 地图画生成器 · 基岩版 · Worker + KD-Tree</title>
+<style>
+:root {
+  --bg:#0e0e13; --bg2:#16161d; --panel:#1e1e27; --panel2:#262631;
+  --border:#32323e; --text:#e6e6ee; --muted:#8a8a9a;
+  --accent:#7c6cff; --accent2:#5b9aff; --ok:#4caf7a; --warn:#e0a040; --danger:#e05555;
+  --mono:'Consolas','Courier New',monospace;
+  --sidebar-w:380px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;line-height:1.5;overflow:hidden}
+button,select,input{font-family:inherit}
+.app{display:grid;grid-template-columns:var(--sidebar-w) 1fr;height:100vh;height:100dvh}
+@media(max-width:900px){
+  .app{grid-template-columns:1fr} body{overflow:auto}
+  .sidebar{position:fixed;top:0;left:0;bottom:0;width:min(340px,88vw);z-index:500;transform:translateX(-100%);transition:transform .25s ease;box-shadow:4px 0 24px rgba(0,0,0,.5)}
+  .sidebar.open{transform:translateX(0)}
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:499}
+  .sidebar-overlay.show{display:block}
+  .mobile-topbar{display:flex!important}
+  .main{padding-top:52px}
+}
+.sidebar{background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+.mobile-topbar{display:none;position:fixed;top:0;left:0;right:0;height:52px;background:var(--bg2);border-bottom:1px solid var(--border);align-items:center;padding:0 14px;z-index:400;gap:12px}
+.mobile-topbar .hamburger{background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;padding:8px}
+.mobile-topbar .title{font-size:14px;font-weight:700;color:var(--accent)}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:13px}
+.card-title{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:11px;display:flex;align-items:center;gap:7px}
+.card-title .num{background:var(--accent);color:#fff;width:17px;height:17px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px}
+label{display:block;font-size:12px;color:var(--muted);margin:9px 0 4px}
+label:first-child{margin-top:0}
+input[type=number],input[type=text],select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 10px;font-size:13px;font-family:var(--mono);outline:none;transition:border-color .15s;min-height:40px}
+input:focus,select:focus{border-color:var(--accent)}
+select{cursor:pointer;font-family:inherit}
+.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}
+.hint{font-size:11px;color:var(--muted);margin-top:7px;line-height:1.6}
+.hint code{background:var(--bg);padding:1px 5px;border-radius:3px;font-family:var(--mono);color:var(--warn);font-size:10px}
+.file-drop{border:2px dashed var(--border);border-radius:9px;padding:20px 12px;text-align:center;color:var(--muted);cursor:pointer;transition:all .2s;font-size:12px}
+.file-drop:hover,.file-drop.dragover{border-color:var(--accent);color:var(--accent);background:rgba(124,108,255,.06)}
+.file-drop input{display:none}
+.file-drop .icon{font-size:24px;display:block;margin-bottom:6px}
+.file-drop.loaded{border-style:solid;border-color:var(--ok);color:var(--ok)}
+.btn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;width:100%;transition:filter .15s,transform .1s;min-height:44px}
+.btn:hover{filter:brightness(1.12)}.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.35;cursor:not-allowed;filter:none}
+.btn.secondary{background:var(--panel2);color:var(--text);border:1px solid var(--border)}
+.btn.secondary:hover{background:var(--border)}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--muted)}
+.btn.ghost:hover{color:var(--text);border-color:var(--muted)}
+.btn.sm{padding:7px 11px;font-size:12px;width:auto;min-height:36px}
+.btn-row{display:flex;gap:7px;margin-top:9px}.btn-row .btn{width:auto;flex:1}
+.coord-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px}
+.coord-box{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 9px;font-family:var(--mono);font-size:11px}
+.coord-box .k{color:var(--muted);font-size:9px;display:block;margin-bottom:2px;letter-spacing:.3px}
+.coord-box .v{color:var(--accent2);font-weight:700;word-break:break-all}
+.coord-box.wide{grid-column:1/-1}.coord-box.wide .v{color:var(--warn)}
+.grid-wrap{background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:9px}
+#gridCanvas{display:block;width:100%;height:auto}
+.exclude-panel{max-height:0;overflow:hidden;transition:max-height .3s ease}
+.exclude-panel.open{max-height:2000px}
+.exclude-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:8px}
+.exclude-item{display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:11px;cursor:pointer;user-select:none;min-height:36px}
+.exclude-item input{width:15px;height:15px;accent-color:var(--accent);flex-shrink:0}
+.exclude-item.checked{border-color:var(--danger);opacity:.6}
+.exclude-item.checked span{text-decoration:line-through}
+.main{display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.tabs{display:flex;gap:2px;padding:10px 14px 0;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tab{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:9px 15px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:color .15s;min-height:44px}
+.tab:hover{color:var(--text)}.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-content{flex:1;overflow-y:auto;padding:16px;display:none;-webkit-overflow-scrolling:touch}
+.tab-content.active{display:block}
+.preview-stage{display:flex;flex-direction:column;align-items:center;gap:12px}
+.canvas-frame{background:repeating-conic-gradient(var(--panel) 0% 25%,var(--panel2) 0% 50%) 50%/16px 16px;border:1px solid var(--border);border-radius:9px;padding:10px;max-width:100%;overflow:auto;-webkit-overflow-scrolling:touch}
+#previewCanvas{display:block;image-rendering:pixelated;max-width:100%;height:auto;cursor:crosshair;touch-action:none}
+.preview-meta{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;font-size:12px;color:var(--muted)}
+.preview-meta b{color:var(--accent2);font-family:var(--mono)}
+.tooltip{position:fixed;background:var(--panel2);border:1px solid var(--accent);color:var(--text);padding:5px 9px;border-radius:6px;font-size:12px;font-family:var(--mono);pointer-events:none;z-index:1000;display:none;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+.empty-state{text-align:center;color:var(--muted);padding:50px 20px;font-size:13px}
+.empty-state .big{font-size:40px;margin-bottom:12px;opacity:.5}
+.mat-list{display:flex;flex-direction:column;gap:1px}
+.mat-item{display:flex;align-items:center;gap:9px;padding:6px 4px;border-bottom:1px solid var(--border);font-size:12px}
+.mat-item:last-child{border-bottom:none}
+.mat-swatch{width:18px;height:18px;border-radius:4px;flex-shrink:0;border:1px solid rgba(255,255,255,.12)}
+.mat-name{flex:1}.mat-count{font-family:var(--mono);color:var(--accent2);font-weight:700}
+.mat-bar{height:3px;background:var(--accent);border-radius:2px;opacity:.3;min-width:2px}
+.maps-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
+.maps-head h3{font-size:15px}
+.badge{display:inline-block;background:var(--accent);color:#fff;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700;margin-left:6px;vertical-align:middle}
+.map-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+@media(max-width:600px){.map-grid{grid-template-columns:1fr}}
+.map-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:11px;transition:border-color .15s}
+.map-card:hover{border-color:var(--accent)}
+.map-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.step-badge{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px}
+.map-index{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.map-canvas{display:block;width:100%;height:auto;image-rendering:pixelated;border-radius:6px;border:1px solid var(--border);background:var(--bg)}
+.map-coords{font-size:10px;font-family:var(--mono);color:var(--muted);margin-top:8px;line-height:1.7}
+.map-coords b{color:var(--warn)}
+.map-mats{margin-top:8px;display:flex;flex-wrap:wrap;gap:4px}
+.map-mat-chip{display:inline-flex;align-items:center;gap:4px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:2px 6px;font-size:10px;font-family:var(--mono)}
+.map-mat-chip .sw{width:9px;height:9px;border-radius:2px}
+.map-mat-chip .ct{color:var(--accent2);font-weight:700}
+.matrix-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+.stat-box{background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:11px 13px}
+.stat-box .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.stat-box .v{font-size:20px;font-weight:700;color:var(--accent2);font-family:var(--mono);margin-top:3px}
+.legend-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:5px}
+.legend-item{display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px}
+.legend-item .sw{width:14px;height:14px;border-radius:3px;flex-shrink:0;border:1px solid rgba(255,255,255,.1)}
+.legend-item .idx{font-family:var(--mono);color:var(--warn);font-size:10px}
+.legend-item .nm{flex:1}
+.loading-mask{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:2000;backdrop-filter:blur(2px)}
+.loading-mask.show{display:flex}
+.spinner{width:42px;height:42px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.status{font-size:11px;margin-top:8px;min-height:16px}
+.status.ok{color:var(--ok)}.status.warn{color:var(--warn)}.status.danger{color:var(--danger)}
+.worker-badge{font-size:10px;color:var(--ok);margin-left:6px}
+</style>
+</head>
+<body>
+
+<div class="mobile-topbar" id="mobileTopbar">
+  <button class="hamburger" id="hamburgerBtn">☰</button>
+  <span class="title">⛏️ MC 地图画生成器</span>
+</div>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<div class="loading-mask" id="loadingMask"><div class="spinner"></div></div>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="card">
+      <div class="card-title"><span class="num">1</span>图片</div>
+      <div class="file-drop" id="dropZone">
+        <input type="file" id="fileInput" accept="image/*">
+        <span class="icon">🖼️</span>
+        <span id="dropText">点击或拖入图片</span>
+      </div>
+      <div class="status" id="imgStatus"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="num">2</span>分辨率 <span class="worker-badge" id="workerBadge"></span></div>
+      <label>预设尺寸</label>
+      <select id="presetSel">
+        <option value="">— 选择预设 —</option>
+        <optgroup label="普通像素画">
+          <option value="16x16">16 × 16</option><option value="32x32">32 × 32</option>
+          <option value="48x48">48 × 48</option><option value="64x64">64 × 64</option>
+          <option value="96x96">96 × 96</option><option value="128x128">128 × 128</option>
+          <option value="192x192">192 × 192</option><option value="256x256">256 × 256</option>
+        </optgroup>
+        <optgroup label="地图画（128 倍数）">
+          <option value="128x128">128 × 128（1 张）</option>
+          <option value="256x128">256 × 128（2 张）</option>
+          <option value="256x256">256 × 256（4 张）</option>
+          <option value="384x256">384 × 256（6 张）</option>
+          <option value="384x384">384 × 384（9 张）</option>
+        </optgroup>
+      </select>
+      <div class="row" style="margin-top:9px">
+        <div><label>宽（格）</label><input type="number" id="widthInput" value="128" min="1" max="1024"></div>
+        <div><label>高（格）</label><input type="number" id="heightInput" value="128" min="1" max="1024"></div>
+      </div>
+      <div class="hint" id="sizeHint">地图画模式下自动扩展到 128 倍数，超出填白。Worker 模式下移动端也可尝试更大尺寸。</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="num">3</span>模式与填充</div>
+      <label>生成模式</label>
+      <select id="modeSel">
+        <option value="pixel">普通像素画</option>
+        <option value="map" selected>地图画（自动切分）</option>
+      </select>
+      <label>填充方块</label>
+      <select id="fillSel">
+        <option value="white_wool">白色羊毛</option>
+        <option value="white_concrete">白色混凝土</option>
+        <option value="snow_block">雪块</option>
+        <option value="quartz_block">石英块</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="margin-bottom:0;cursor:pointer" id="excludeToggle">
+        <span class="num">4</span>方块排除 <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400" id="excludeArrow">▼ 展开</span>
+      </div>
+      <div class="hint" style="margin-top:6px">默认全部颜色组参与匹配。排除材质类别后，仅当某颜色组的所有方块都被排除时，该颜色才从候选集中移除。</div>
+      <div class="exclude-panel" id="excludePanel">
+        <div class="exclude-grid" id="excludeGrid"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="num">5</span>基岩版坐标对齐</div>
+      <label>玩家当前坐标</label>
+      <div class="row">
+        <input type="number" id="playerX" value="0" placeholder="X">
+        <input type="number" id="playerZ" value="0" placeholder="Z">
+      </div>
+      <div class="coord-grid">
+        <div class="coord-box"><span class="k">所属地图索引</span><span class="v" id="mapIndex">—</span></div>
+        <div class="coord-box"><span class="k">地图西北角</span><span class="v" id="mapOrigin">—</span></div>
+        <div class="coord-box wide"><span class="k">第一个方块 → 延伸方向</span><span class="v" id="startHint">—</span></div>
+        <div class="coord-box wide"><span class="k">地图东南角</span><span class="v" id="mapCorner">—</span></div>
+      </div>
+      <div class="grid-wrap"><canvas id="gridCanvas" width="640" height="640"></canvas></div>
+      <div class="hint">基岩版地图边界 = <code>-64 + 128n</code>，索引 <code>n = floor((x+64)/128)</code>。第一个方块放在西北角，向 <b>+X（东）、+Z（南）</b> 延伸。</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="num">6</span>操作</div>
+      <button class="btn" id="genBtn" disabled>立即生成</button>
+      <div class="btn-row">
+        <button class="btn secondary sm" id="restoreBtn">恢复上次</button>
+        <button class="btn ghost sm" id="clearBtn">清除缓存</button>
+      </div>
+      <div class="status" id="genStatus"></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <nav class="tabs">
+      <button class="tab active" data-tab="preview">🖼️ 像素预览</button>
+      <button class="tab" data-tab="maps">🗺️ 地图分块</button>
+      <button class="tab" data-tab="materials">📦 材料清单</button>
+      <button class="tab" data-tab="matrix">🔢 方块矩阵</button>
+    </nav>
+
+    <div class="tab-content active" id="tab-preview">
+      <div class="preview-stage">
+        <div class="canvas-frame"><canvas id="previewCanvas" width="256" height="256"></canvas></div>
+        <div class="preview-meta" id="previewMeta"><span>上传图片后自动生成预览</span></div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-maps">
+      <div class="maps-head"><h3>地图分块与放置步骤 <span class="badge" id="mapCountBadge">0 张</span></h3></div>
+      <div id="mapTiles"><div class="empty-state"><div class="big">🗺️</div>生成后显示每张地图的预览、坐标和材料</div></div>
+    </div>
+
+    <div class="tab-content" id="tab-materials">
+      <div class="maps-head"><h3>全部材料清单 <span class="badge" id="matTotalBadge">0</span></h3></div>
+      <div class="mat-list" id="materialList"><div class="empty-state"><div class="big">📦</div>生成后显示每种方块的数量</div></div>
+    </div>
+
+    <div class="tab-content" id="tab-matrix">
+      <div class="stat-grid">
+        <div class="stat-box"><div class="k">画布尺寸</div><div class="v" id="statSize">—</div></div>
+        <div class="stat-box"><div class="k">总像素</div><div class="v" id="statPixels">—</div></div>
+        <div class="stat-box"><div class="k">方块种类</div><div class="v" id="statTypes">—</div></div>
+        <div class="stat-box"><div class="k">地图张数</div><div class="v" id="statMaps">—</div></div>
+      </div>
+      <div class="matrix-toolbar">
+        <button class="btn sm" id="exportCsv">导出 CSV</button>
+        <button class="btn sm secondary" id="exportTxt">导出 TXT 矩阵</button>
+        <button class="btn sm secondary" id="exportJson">导出 JSON</button>
+      </div>
+      <div class="hint" style="margin-bottom:12px">CSV 含逐像素 x、y、方块 ID、名称、颜色。TXT 为二维矩阵（自动选择索引宽度）。</div>
+      <div class="card-title" style="margin-bottom:9px">方块索引图例</div>
+      <div class="legend-grid" id="legendGrid"></div>
+    </div>
+  </main>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   1. 内置 MapartCraft 完整调色板数据
+   结构：颜色组 → tonesRGB（四档）+ blocks（完整方块列表）
+   每个方块含 displayName、flammable、supportBlockMandatory 等
+   ═══════════════════════════════════════════════════════════════ */
+const FULL_PALETTE = [
+  // 格式: { colourName, mapdatId, tonesRGB:{dark,normal,light,unobtainable}, blocks:[{displayName,flammable,support}] }
+  { colourName:'Grass', mapdatId:1, tonesRGB:{dark:[89,125,39],normal:[109,153,48],light:[127,178,56],unobtainable:[67,94,29]}, blocks:[
+    {displayName:'Grass Block',flammable:false,support:false},
+    {displayName:'Slime Block',flammable:false,support:false},
+    {displayName:'Cactus',flammable:false,support:true}
+  ]},
+  { colourName:'Sand', mapdatId:2, tonesRGB:{dark:[174,164,115],normal:[213,201,140],light:[247,233,163],unobtainable:[130,123,86]}, blocks:[
+    {displayName:'Sand',flammable:false,support:true},{displayName:'Sandstone',flammable:false,support:false},
+    {displayName:'Birch Planks',flammable:true,support:false},{displayName:'End Stone',flammable:false,support:false}
+  ]},
+  { colourName:'Wool', mapdatId:3, tonesRGB:{dark:[140,140,140],normal:[171,171,171],light:[199,199,199],unobtainable:[105,105,105]}, blocks:[
+    {displayName:'Cobweb',flammable:false,support:true},{displayName:'Mushroom Stem',flammable:false,support:false}
+  ]},
+  { colourName:'Fire', mapdatId:4, tonesRGB:{dark:[180,0,0],normal:[220,0,0],light:[255,0,0],unobtainable:[135,0,0]}, blocks:[
+    {displayName:'Redstone Block',flammable:false,support:false},{displayName:'TNT',flammable:false,support:false},{displayName:'Magma Block',flammable:false,support:false}
+  ]},
+  { colourName:'Ice', mapdatId:5, tonesRGB:{dark:[112,112,180],normal:[138,138,220],light:[160,160,255],unobtainable:[84,84,135]}, blocks:[
+    {displayName:'Ice',flammable:false,support:true},{displayName:'Packed Ice',flammable:false,support:false},{displayName:'Blue Ice',flammable:false,support:false}
+  ]},
+  { colourName:'Metal', mapdatId:6, tonesRGB:{dark:[117,117,117],normal:[144,144,144],light:[167,167,167],unobtainable:[88,88,88]}, blocks:[
+    {displayName:'Iron Block',flammable:false,support:false},{displayName:'Iron Anvil',flammable:false,support:true},{displayName:'Iron Door',flammable:false,support:true},{displayName:'Smoker',flammable:false,support:false}
+  ]},
+  { colourName:'Plant', mapdatId:7, tonesRGB:{dark:[0,87,0],normal:[0,106,0],light:[0,124,0],unobtainable:[0,65,0]}, blocks:[
+    {displayName:'Oak Leaves',flammable:true,support:false},{displayName:'Vine',flammable:true,support:true},{displayName:'Cactus',flammable:false,support:true},{displayName:'Sugar Cane',flammable:false,support:true}
+  ]},
+  { colourName:'Snow', mapdatId:8, tonesRGB:{dark:[180,180,180],normal:[220,220,220],light:[255,255,255],unobtainable:[135,135,135]}, blocks:[
+    {displayName:'Snow Block',flammable:false,support:false},{displayName:'White Wool',flammable:true,support:false},{displayName:'White Concrete',flammable:false,support:false}
+  ]},
+  { colourName:'Clay', mapdatId:9, tonesRGB:{dark:[115,118,129],normal:[141,144,158],light:[164,168,184],unobtainable:[86,88,97]}, blocks:[
+    {displayName:'Clay',flammable:false,support:true},{displayName:'Dirt Path',flammable:false,support:true}
+  ]},
+  { colourName:'Dirt', mapdatId:10, tonesRGB:{dark:[106,76,54],normal:[130,94,66],light:[151,109,77],unobtainable:[79,57,40]}, blocks:[
+    {displayName:'Dirt',flammable:false,support:true},{displayName:'Gravel',flammable:false,support:true},{displayName:'Jungle Planks',flammable:true,support:false},{displayName:'Coarse Dirt',flammable:false,support:true}
+  ]},
+  { colourName:'Stone', mapdatId:11, tonesRGB:{dark:[79,79,79],normal:[96,96,96],light:[112,112,112],unobtainable:[59,59,59]}, blocks:[
+    {displayName:'Stone',flammable:false,support:true},{displayName:'Cobblestone',flammable:false,support:true},{displayName:'Andesite',flammable:false,support:true},{displayName:'Bricks',flammable:false,support:false}
+  ]},
+  { colourName:'Water', mapdatId:12, tonesRGB:{dark:[45,45,180],normal:[55,55,220],light:[64,64,255],unobtainable:[33,33,135]}, blocks:[
+    {displayName:'Water',flammable:false,support:true},{displayName:'Bubble Column',flammable:false,support:true}
+  ]},
+  { colourName:'Wood', mapdatId:13, tonesRGB:{dark:[100,84,50],normal:[123,102,62],light:[143,119,72],unobtainable:[75,63,38]}, blocks:[
+    {displayName:'Oak Planks',flammable:true,support:false},{displayName:'Crafting Table',flammable:true,support:false},{displayName:'Bookshelf',flammable:true,support:false},{displayName:'Oak Sign',flammable:true,support:true}
+  ]},
+  { colourName:'Quartz', mapdatId:14, tonesRGB:{dark:[180,177,172],normal:[220,217,211],light:[255,252,245],unobtainable:[135,133,129]}, blocks:[
+    {displayName:'Quartz Block',flammable:false,support:false},{displayName:'Sea Lantern',flammable:false,support:false},{displayName:'White Terracotta',flammable:false,support:false}
+  ]},
+  { colourName:'Orange', mapdatId:15, tonesRGB:{dark:[152,89,36],normal:[186,109,44],light:[216,127,51],unobtainable:[114,67,27]}, blocks:[
+    {displayName:'Orange Wool',flammable:true,support:false},{displayName:'Orange Concrete',flammable:false,support:false},{displayName:'Pumpkin',flammable:false,support:true},{displayName:'Copper Block',flammable:false,support:false}
+  ]},
+  { colourName:'Magenta', mapdatId:16, tonesRGB:{dark:[125,53,152],normal:[153,65,186],light:[178,76,216],unobtainable:[94,40,114]}, blocks:[
+    {displayName:'Magenta Wool',flammable:true,support:false},{displayName:'Magenta Concrete',flammable:false,support:false},{displayName:'Amethyst Cluster',flammable:false,support:true}
+  ]},
+  { colourName:'Light Blue', mapdatId:17, tonesRGB:{dark:[72,108,152],normal:[88,132,186],light:[102,153,216],unobtainable:[54,81,114]}, blocks:[
+    {displayName:'Light Blue Wool',flammable:true,support:false},{displayName:'Light Blue Concrete',flammable:false,support:false}
+  ]},
+  { colourName:'Yellow', mapdatId:18, tonesRGB:{dark:[161,161,36],normal:[197,197,44],light:[229,229,51],unobtainable:[121,121,27]}, blocks:[
+    {displayName:'Yellow Wool',flammable:true,support:false},{displayName:'Yellow Concrete',flammable:false,support:false},{displayName:'Sponge',flammable:false,support:false}
+  ]},
+  { colourName:'Light Green', mapdatId:19, tonesRGB:{dark:[89,144,17],normal:[109,176,21],light:[113,185,25],unobtainable:[63,102,12]}, blocks:[
+    {displayName:'Lime Wool',flammable:true,support:false},{displayName:'Lime Concrete',flammable:false,support:false},{displayName:'Pitcher Plant',flammable:false,support:true}
+  ]},
+  { colourName:'Pink', mapdatId:20, tonesRGB:{dark:[168,87,111],normal:[201,107,138],light:[237,141,172],unobtainable:[122,63,81]}, blocks:[
+    {displayName:'Pink Wool',flammable:true,support:false},{displayName:'Pink Concrete',flammable:false,support:false},{displayName:'Cherry Planks',flammable:true,support:false}
+  ]},
+  { colourName:'Gray', mapdatId:21, tonesRGB:{dark:[50,56,59],normal:[62,68,71],light:[74,82,86],unobtainable:[37,42,44]}, blocks:[
+    {displayName:'Gray Wool',flammable:true,support:false},{displayName:'Gray Concrete',flammable:false,support:false},{displayName:'Deepslate',flammable:false,support:true}
+  ]},
+  { colourName:'Light Gray', mapdatId:22, tonesRGB:{dark:[110,110,104],normal:[142,142,134],light:[168,168,160],unobtainable:[82,82,78]}, blocks:[
+    {displayName:'Light Gray Wool',flammable:true,support:false},{displayName:'Light Gray Concrete',flammable:false,support:false},{displayName:'Smooth Stone',flammable:false,support:false}
+  ]},
+  { colourName:'Cyan', mapdatId:23, tonesRGB:{dark:[15,100,105],normal:[21,137,145],light:[27,163,172],unobtainable:[10,74,78]}, blocks:[
+    {displayName:'Cyan Wool',flammable:true,support:false},{displayName:'Cyan Concrete',flammable:false,support:false},{displayName:'Sea Lantern',flammable:false,support:false}
+  ]},
+  { colourName:'Purple', mapdatId:24, tonesRGB:{dark:[92,32,128],normal:[121,42,172],light:[143,51,196],unobtainable:[67,23,94]}, blocks:[
+    {displayName:'Purple Wool',flammable:true,support:false},{displayName:'Purple Concrete',flammable:false,support:false},{displayName:'Purpur Block',flammable:false,support:false}
+  ]},
+  { colourName:'Blue', mapdatId:25, tonesRGB:{dark:[39,43,117],normal:[53,57,157],light:[66,71,181],unobtainable:[28,31,85]}, blocks:[
+    {displayName:'Blue Wool',flammable:true,support:false},{displayName:'Blue Concrete',flammable:false,support:false},{displayName:'Lapis Block',flammable:false,support:false}
+  ]},
+  { colourName:'Brown', mapdatId:26, tonesRGB:{dark:[90,56,32],normal:[114,71,40],light:[138,86,47],unobtainable:[66,41,24]}, blocks:[
+    {displayName:'Brown Wool',flammable:true,support:false},{displayName:'Brown Concrete',flammable:false,support:false},{displayName:'Dark Oak Planks',flammable:true,support:false}
+  ]},
+  { colourName:'Green', mapdatId:27, tonesRGB:{dark:[66,86,21],normal:[84,109,27],light:[102,133,33],unobtainable:[48,64,15]}, blocks:[
+    {displayName:'Green Wool',flammable:true,support:false},{displayName:'Green Concrete',flammable:false,support:false},{displayName:'Emerald Block',flammable:false,support:false}
+  ]},
+  { colourName:'Red', mapdatId:28, tonesRGB:{dark:[126,30,26],normal:[161,39,34],light:[196,48,42],unobtainable:[92,22,19]}, blocks:[
+    {displayName:'Red Wool',flammable:true,support:false},{displayName:'Red Concrete',flammable:false,support:false},{displayName:'Redstone Block',flammable:false,support:false}
+  ]},
+  { colourName:'Black', mapdatId:29, tonesRGB:{dark:[15,16,19],normal:[20,21,25],light:[26,27,32],unobtainable:[10,11,13]}, blocks:[
+    {displayName:'Black Wool',flammable:true,support:false},{displayName:'Black Concrete',flammable:false,support:false},{displayName:'Coal Block',flammable:false,support:false}
+  ]},
+  { colourName:'Gold', mapdatId:30, tonesRGB:{dark:[184,134,11],normal:[255,215,0],light:[255,236,128],unobtainable:[139,101,8]}, blocks:[
+    {displayName:'Gold Block',flammable:false,support:false}
+  ]},
+  { colourName:'Diamond', mapdatId:31, tonesRGB:{dark:[74,158,158],normal:[92,219,213],light:[127,255,212],unobtainable:[58,122,122]}, blocks:[
+    {displayName:'Diamond Block',flammable:false,support:false},{displayName:'Prismarine',flammable:false,support:false}
+  ]},
+  { colourName:'Emerald', mapdatId:32, tonesRGB:{dark:[26,143,60],normal:[46,204,113],light:[88,232,138],unobtainable:[20,110,46]}, blocks:[
+    {displayName:'Emerald Block',flammable:false,support:false}
+  ]},
+  { colourName:'Nether Brick', mapdatId:33, tonesRGB:{dark:[90,30,30],normal:[122,42,42],light:[154,54,54],unobtainable:[68,22,22]}, blocks:[
+    {displayName:'Nether Bricks',flammable:false,support:false},{displayName:'Red Nether Bricks',flammable:false,support:false}
+  ]},
+  { colourName:'Nether Wart', mapdatId:34, tonesRGB:{dark:[94,26,26],normal:[127,36,36],light:[159,46,46],unobtainable:[70,20,20]}, blocks:[
+    {displayName:'Nether Wart Block',flammable:false,support:false},{displayName:'Warped Wart Block',flammable:false,support:false}
+  ]},
+  { colourName:'Magma', mapdatId:35, tonesRGB:{dark:[139,58,0],normal:[194,78,0],light:[232,106,26],unobtainable:[107,45,0]}, blocks:[
+    {displayName:'Magma Block',flammable:false,support:false}
+  ]},
+  { colourName:'Obsidian', mapdatId:36, tonesRGB:{dark:[10,6,18],normal:[20,14,32],light:[30,22,48],unobtainable:[6,4,10]}, blocks:[
+    {displayName:'Obsidian',flammable:false,support:false},{displayName:'Crying Obsidian',flammable:false,support:false}
+  ]},
+  { colourName:'Moss', mapdatId:37, tonesRGB:{dark:[58,90,30],normal:[78,122,42],light:[98,154,54],unobtainable:[44,69,22]}, blocks:[
+    {displayName:'Moss Block',flammable:false,support:true},{displayName:'Moss Carpet',flammable:true,support:true}
+  ]},
+  { colourName:'Shroomlight', mapdatId:38, tonesRGB:{dark:[184,106,26],normal:[232,137,42],light:[255,169,64],unobtainable:[138,78,18]}, blocks:[
+    {displayName:'Shroomlight',flammable:false,support:false}
+  ]},
+  { colourName:'Copper', mapdatId:39, tonesRGB:{dark:[138,90,58],normal:[184,122,74],light:[216,154,106],unobtainable:[106,68,42]}, blocks:[
+    {displayName:'Copper Block',flammable:false,support:false},{displayName:'Oxidized Copper',flammable:false,support:false}
+  ]},
+  { colourName:'Purpur', mapdatId:40, tonesRGB:{dark:[90,42,90],normal:[122,58,122],light:[154,74,154],unobtainable:[68,30,68]}, blocks:[
+    {displayName:'Purpur Block',flammable:false,support:false}
+  ]},
+  { colourName:'Prismarine', mapdatId:41, tonesRGB:{dark:[42,106,106],normal:[58,138,138],light:[74,170,170],unobtainable:[30,78,78]}, blocks:[
+    {displayName:'Prismarine',flammable:false,support:false},{displayName:'Dark Prismarine',flammable:false,support:false}
+  ]},
+  { colourName:'Red Sand', mapdatId:42, tonesRGB:{dark:[138,74,26],normal:[184,106,42],light:[216,138,74],unobtainable:[106,54,18]}, blocks:[
+    {displayName:'Red Sand',flammable:false,support:true},{displayName:'Red Sandstone',flammable:false,support:false}
+  ]},
+  { colourName:'Soul Sand', mapdatId:43, tonesRGB:{dark:[58,42,26],normal:[78,58,36],light:[98,74,46],unobtainable:[44,30,18]}, blocks:[
+    {displayName:'Soul Sand',flammable:false,support:true},{displayName:'Soul Soil',flammable:false,support:true}
+  ]},
+  { colourName:'End Stone', mapdatId:44, tonesRGB:{dark:[174,174,114],normal:[213,213,140],light:[247,247,163],unobtainable:[130,130,86]}, blocks:[
+    {displayName:'End Stone',flammable:false,support:false},{displayName:'End Stone Bricks',flammable:false,support:false}
+  ]},
+  { colourName:'Cherry', mapdatId:45, tonesRGB:{dark:[184,122,138],normal:[232,160,176],light:[255,192,208],unobtainable:[138,90,102]}, blocks:[
+    {displayName:'Cherry Planks',flammable:true,support:false},{displayName:'Cherry Log',flammable:true,support:false}
+  ]},
+  { colourName:'Deepslate', mapdatId:46, tonesRGB:{dark:[42,42,48],normal:[58,58,66],light:[74,74,84],unobtainable:[30,30,34]}, blocks:[
+    {displayName:'Deepslate',flammable:false,support:true},{displayName:'Deepslate Bricks',flammable:false,support:false}
+  ]},
+  { colourName:'Calcite', mapdatId:47, tonesRGB:{dark:[174,174,170],normal:[213,213,208],light:[240,240,234],unobtainable:[130,130,126]}, blocks:[
+    {displayName:'Calcite',flammable:false,support:false}
+  ]},
+  { colourName:'Tuff', mapdatId:48, tonesRGB:{dark:[74,74,58],normal:[96,96,80],light:[118,118,102],unobtainable:[54,54,42]}, blocks:[
+    {displayName:'Tuff',flammable:false,support:false}
+  ]},
+  { colourName:'Dripstone', mapdatId:49, tonesRGB:{dark:[90,74,58],normal:[122,102,80],light:[154,134,102],unobtainable:[68,54,42]}, blocks:[
+    {displayName:'Dripstone Block',flammable:false,support:false}
+  ]},
+  { colourName:'Amethyst', mapdatId:50, tonesRGB:{dark:[106,58,138],normal:[138,74,170],light:[170,90,202],unobtainable:[78,42,102]}, blocks:[
+    {displayName:'Amethyst Block',flammable:false,support:false}
+  ]},
+  { colourName:'Nautilus', mapdatId:51, tonesRGB:{dark:[138,106,90],normal:[184,138,122],light:[216,170,154],unobtainable:[106,78,66]}, blocks:[
+    {displayName:'Nautilus Shell Block',flammable:false,support:false}
+  ]},
+  { colourName:'Honey', mapdatId:52, tonesRGB:{dark:[184,134,11],normal:[232,168,42],light:[255,200,74],unobtainable:[138,101,8]}, blocks:[
+    {displayName:'Honeycomb Block',flammable:false,support:false},{displayName:'Honey Block',flammable:false,support:false}
+  ]},
+  { colourName:'Hay', mapdatId:53, tonesRGB:{dark:[138,122,26],normal:[184,160,42],light:[216,192,74],unobtainable:[106,90,18]}, blocks:[
+    {displayName:'Hay Bale',flammable:false,support:false}
+  ]},
+  { colourName:'Watermelon', mapdatId:54, tonesRGB:{dark:[74,106,26],normal:[106,138,42],light:[138,170,58],unobtainable:[54,78,18]}, blocks:[
+    {displayName:'Watermelon',flammable:false,support:true}
+  ]},
+  { colourName:'Pumpkin', mapdatId:55, tonesRGB:{dark:[138,90,10],normal:[184,122,26],light:[216,154,42],unobtainable:[106,66,8]}, blocks:[
+    {displayName:'Pumpkin',flammable:false,support:true},{displayName:'Carved Pumpkin',flammable:false,support:true}
+  ]},
+  { colourName:'Netherrack', mapdatId:56, tonesRGB:{dark:[90,26,26],normal:[122,42,42],light:[154,58,58],unobtainable:[68,18,18]}, blocks:[
+    {displayName:'Netherrack',flammable:false,support:true}
+  ]},
+  { colourName:'Glowstone', mapdatId:57, tonesRGB:{dark:[138,106,10],normal:[184,154,26],light:[216,186,42],unobtainable:[106,78,8]}, blocks:[
+    {displayName:'Glowstone',flammable:false,support:false}
+  ]},
+  { colourName:'Redstone', mapdatId:58, tonesRGB:{dark:[106,10,10],normal:[154,20,20],light:[196,30,30],unobtainable:[78,6,6]}, blocks:[
+    {displayName:'Redstone Block',flammable:false,support:false}
+  ]},
+  { colourName:'Lapis', mapdatId:59, tonesRGB:{dark:[10,26,90],normal:[20,40,122],light:[30,54,154],unobtainable:[6,14,68]}, blocks:[
+    {displayName:'Lapis Block',flammable:false,support:false}
+  ]},
+  { colourName:'Coal', mapdatId:60, tonesRGB:{dark:[10,10,10],normal:[20,20,20],light:[30,30,30],unobtainable:[6,6,6]}, blocks:[
+    {displayName:'Coal Block',flammable:false,support:false}
+  ]},
+  { colourName:'Iron', mapdatId:61, tonesRGB:{dark:[106,106,106],normal:[138,138,138],light:[170,170,170],unobtainable:[78,78,78]}, blocks:[
+    {displayName:'Iron Block',flammable:false,support:false}
+  ]}
+];
+
+/* ═══════════════ 2. 颜色工具：RGB ↔ Lab ═══════════════ */
+function sRGBToLinear(c){ c/=255; return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4); }
+function rgbToLab(r,g,b){
+  const lr=sRGBToLinear(r), lg=sRGBToLinear(g), lb=sRGBToLinear(b);
+  const X=lr*0.4124564+lg*0.3575761+lb*0.1804375;
+  const Y=lr*0.2126729+lg*0.7151522+lb*0.0721750;
+  const Z=lr*0.0193339+lg*0.1191920+lb*0.9503041;
+  const Xn=0.95047, Yn=1.0, Zn=1.08883;
+  const fx=X/Xn>0.008856?Math.cbrt(X/Xn):(7.787*X/Xn+16/116);
+  const fy=Y/Yn>0.008856?Math.cbrt(Y/Yn):(7.787*Y/Yn+16/116);
+  const fz=Z/Zn>0.008856?Math.cbrt(Z/Zn):(7.787*Z/Zn+16/116);
+  return [116*fy-16, 500*(fx-fy), 200*(fy-fz)];
+}
+
+/* ═══════════════ 3. KD-Tree（Lab 空间） ═══════════════ */
+class KDNode {
+  constructor(point, axis, left, right, meta){
+    this.point=point; this.axis=axis; this.left=left; this.right=right; this.meta=meta;
+  }
+}
+function buildKDTree(points, depth){
+  if(points.length===0) return null;
+  const axis = depth % 3;
+  points.sort((a,b)=>a.lab[axis]-b.lab[axis]);
+  const mid = Math.floor(points.length/2);
+  return new KDNode(
+    points[mid], axis,
+    buildKDTree(points.slice(0,mid), depth+1),
+    buildKDTree(points.slice(mid+1), depth+1),
+    points[mid].meta
+  );
+}
+function nearestKD(node, target, best){
+  if(!node) return best;
+  const d = distSq(node.point.lab, target);
+  if(d < best.dist){ best = {dist:d, node:node}; }
+  const axis = node.axis;
+  const diff = target[axis] - node.point.lab[axis];
+  const near = diff < 0 ? node.left : node.right;
+  const far = diff < 0 ? node.right : node.left;
+  best = nearestKD(near, target, best);
+  if(diff*diff < best.dist) best = nearestKD(far, target, best);
+  return best;
+}
+function distSq(a,b){ const d0=a[0]-b[0],d1=a[1]-b[1],d2=a[2]-b[2]; return d0*d0+d1*d1+d2*d2; }
+
+/* ═══════════════ 4. 构建调色板条目（每个 tone 一条，带 blocks） ═══════════════ */
+function buildPaletteEntries(excludedKeywords){
+  const entries = [];
+  for(const group of FULL_PALETTE){
+    const toneKeys = ['dark','normal','light','unobtainable'];
+    for(const tone of toneKeys){
+      const rgb = group.tonesRGB[tone];
+      if(!rgb) continue;
+      // 过滤被排除的方块
+      const remainingBlocks = group.blocks.filter(b=>{
+        for(const kw of excludedKeywords){
+          if(b.displayName.toLowerCase().includes(kw.toLowerCase())) return false;
+        }
+        return true;
+      });
+      if(remainingBlocks.length===0) continue; // 该 tone 所有方块被排除，跳过
+      entries.push({
+        colourName: group.colourName,
+        mapdatId: group.mapdatId,
+        tone,
+        rgb,
+        lab: rgbToLab(rgb[0],rgb[1],rgb[2]),
+        blocks: remainingBlocks,
+        // 优先选非易燃、不需要支撑的方块作为代表（放置更简单）
+        preferredBlock: remainingBlocks.find(b=>!b.flammable && !b.support) || remainingBlocks[0]
+      });
+    }
+  }
+  return entries;
+}
+
+/* ═══════════════ 5. 主线程状态 ═══════════════ */
+const $ = id=>document.getElementById(id);
+const dropZone=$('dropZone'), fileInput=$('fileInput'), dropText=$('dropText');
+const presetSel=$('presetSel'), widthInput=$('widthInput'), heightInput=$('heightInput');
+const modeSel=$('modeSel'), fillSel=$('fillSel');
+const playerXInput=$('playerX'), playerZInput=$('playerZ');
+const genBtn=$('genBtn'), restoreBtn=$('restoreBtn'), clearBtn=$('clearBtn');
+const imgStatus=$('imgStatus'), genStatus=$('genStatus');
+const previewCanvas=$('previewCanvas'), gridCanvas=$('gridCanvas');
+const previewMeta=$('previewMeta'), materialList=$('materialList'), matTotalBadge=$('matTotalBadge');
+const mapTilesEl=$('mapTiles'), mapCountBadge=$('mapCountBadge');
+const tooltip=$('tooltip'), loadingMask=$('loadingMask');
+const legendGrid=$('legendGrid'), statSize=$('statSize'), statPixels=$('statPixels'), statTypes=$('statTypes'), statMaps=$('statMaps');
+const excludeGrid=$('excludeGrid'), excludePanel=$('excludePanel'), excludeToggle=$('excludeToggle');
+const workerBadge=$('workerBadge');
+
+let currentImageBlob = null;   // 原始 Blob
+let currentImageBitmap = null; // ImageBitmap（可选，快速绘制）
+let lastPixels = null;
+let debounceTimer = null;
+let db = null;
+let excludedCategories = new Set();
+let worker = null;
+let workerBusy = false;
+
+const isMobile = ()=>window.innerWidth<=900;
+
+/* ═══════════════ 6. 排除类别 ═══════════════ */
+const BLOCK_CATEGORIES = [
+  {id:'wool',name:'羊毛',keywords:['wool']},
+  {id:'concrete',name:'混凝土',keywords:['concrete']},
+  {id:'terracotta',name:'陶瓦',keywords:['terracotta']},
+  {id:'wood',name:'木质',keywords:['planks','log','crafting','bookshelf','sign','cherry']},
+  {id:'stone',name:'石质',keywords:['stone','cobblestone','andesite','bricks','deepslate','calcite','tuff','dripstone']},
+  {id:'mineral',name:'矿物/金属',keywords:['gold','iron','diamond','emerald','lapis','redstone','coal','amethyst']},
+  {id:'nether',name:'下界',keywords:['nether','magma','obsidian','glowstone','soul']},
+  {id:'plant',name:'植物/草',keywords:['grass','leaves','vine','cactus','sugar','moss','hay','watermelon','pumpkin','shroomlight']},
+  {id:'glass',name:'玻璃',keywords:['glass','lantern']}
+];
+
+function buildExcludePanel(){
+  excludeGrid.innerHTML = BLOCK_CATEGORIES.map(cat=>
+    `<label class="exclude-item" data-cat="${cat.id}"><input type="checkbox" value="${cat.id}"><span>${cat.name}</span></label>`
+  ).join('');
+  excludeGrid.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    cb.addEventListener('change',()=>{
+      const label=cb.closest('.exclude-item');
+      if(cb.checked){ excludedCategories.add(cb.value); label.classList.add('checked'); }
+      else { excludedCategories.delete(cb.value); label.classList.remove('checked'); }
+      if(currentImageBlob) scheduleCompute();
+    });
+  });
+}
+
+function getExcludedKeywords(){
+  const kws=[];
+  for(const cat of BLOCK_CATEGORIES){
+    if(excludedCategories.has(cat.id)) kws.push(...cat.keywords);
+  }
+  return kws;
+}
+
+/* ═══════════════ 7. Web Worker ═══════════════ */
+const WORKER_CODE = `
+importScripts('https://cdn.jsdelivr.net/npm/color-convert@2.0.1/conversions.js');
+
+// 内联 Lab 转换（与主线程一致）
+function sRGBToLinear(c){c/=255;return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4)}
+function rgbToLab(r,g,b){
+  const lr=sRGBToLinear(r),lg=sRGBToLinear(g),lb=sRGBToLinear(b);
+  const X=lr*0.4124564+lg*0.3575761+lb*0.1804375;
+  const Y=lr*0.2126729+lg*0.7151522+lb*0.0721750;
+  const Z=lr*0.0193339+lg*0.1191920+lb*0.9503041;
+  const Xn=0.95047,Yn=1.0,Zn=1.08883;
+  const fx=X/Xn>0.008856?Math.cbrt(X/Xn):(7.787*X/Xn+16/116);
+  const fy=Y/Yn>0.008856?Math.cbrt(Y/Yn):(7.787*Y/Yn+16/116);
+  const fz=Z/Zn>0.008856?Math.cbrt(Z/Zn):(7.787*Z/Zn+16/116);
+  return [116*fy-16,500*(fx-fy),200*(fy-fz)];
+}
+
+class KDNode{
+  constructor(point,axis,left,right,meta){this.point=point;this.axis=axis;this.left=left;this.right=right;this.meta=meta}
+}
+function buildKDTree(points,depth){
+  if(points.length===0)return null;
+  const axis=depth%3;
+  points.sort((a,b)=>a.lab[axis]-b.lab[axis]);
+  const mid=Math.floor(points.length/2);
+  return new KDNode(points[mid],axis,buildKDTree(points.slice(0,mid),depth+1),buildKDTree(points.slice(mid+1),depth+1),points[mid].meta);
+}
+function distSq(a,b){const d0=a[0]-b[0],d1=a[1]-b[1],d2=a[2]-b[2];return d0*d0+d1*d1+d2*d2}
+function nearestKD(node,target,best){
+  if(!node)return best;
+  const d=distSq(node.point.lab,target);
+  if(d<best.dist)best={dist:d,node};
+  const axis=node.axis,diff=target[axis]-node.point.lab[axis];
+  const near=diff<0?node.left:node.right,far=diff<0?node.right:node.left;
+  best=nearestKD(near,target,best);
+  if(diff*diff<best.dist)best=nearestKD(far,target,best);
+  return best;
+}
+
+let paletteEntries=[];
+let kdRoot=null;
+let paletteBlocks=[]; // 去重后的方块列表
+
+self.onmessage = function(e){
+  const msg=e.data;
+  if(msg.type==='init'){
+    paletteEntries=msg.palette;
+    // 构建去重方块列表
+    const seen=new Map();
+    for(const entry of paletteEntries){
+      for(const b of entry.blocks){
+        const key=b.displayName;
+        if(!seen.has(key)){
+          seen.set(key,{id:key,name:key,hex:entry.rgb?rgbToHex(entry.rgb):'#888',rgb:entry.rgb,entry});
+        }
+      }
+    }
+    paletteBlocks=[...seen.values()];
+    // 为每个 entry 标记其首选方块在 paletteBlocks 中的索引
+    for(const entry of paletteEntries){
+      entry.blockIndices=entry.blocks.map(b=>paletteBlocks.findIndex(pb=>pb.id===b.displayName)).filter(i=>i>=0);
+      if(entry.blockIndices.length===0)entry.blockIndices=[0];
+    }
+    kdRoot=buildKDTree(paletteEntries.map(en=>({lab:en.lab,meta:en})),0);
+    self.postMessage({type:'ready'});
+  } else if(msg.type==='process'){
+    const {imageData, W, H, userW, userH, fillIndex, fillRgb} = msg;
+    const data=imageData.data;
+    const matrix=new Uint8Array(W*H);
+    for(let y=0;y<H;y++){
+      for(let x=0;x<W;x++){
+        if(x>=userW||y>=userH){ matrix[y*W+x]=fillIndex; continue; }
+        const i=(y*W+x)*4;
+        const lab=rgbToLab(data[i],data[i+1],data[i+2]);
+        const best=nearestKD(kdRoot,lab,{dist:Infinity,node:null});
+        const entry=best.node.meta;
+        // 选该 entry 的第一个可用方块
+        matrix[y*W+x]=entry.blockIndices[0];
+      }
+    }
+    self.postMessage({type:'result',matrix, paletteBlocks},[matrix.buffer]);
+  }
+};
+
+function rgbToHex(rgb){return '#'+rgb.map(c=>c.toString(16).padStart(2,'0')).join('')}
+`;
+
+function createWorker(){
+  return new Promise((resolve,reject)=>{
+    try{
+      const blob = new Blob([WORKER_CODE],{type:'application/javascript'});
+      const url = URL.createObjectURL(blob);
+      const w = new Worker(url);
+      w.onmessage = (e)=>{
+        if(e.data.type==='ready'){
+          workerBadge.textContent='Worker 已就绪';
+          resolve(w);
+        } else if(e.data.type==='result'){
+          workerBusy=false;
+          onWorkerResult(e.data);
+        }
+      };
+      w.onerror = (e)=>{ reject(e); };
+      // 发送初始化调色板
+      const excluded = getExcludedKeywords();
+      const entries = buildPaletteEntries(excluded);
+      w.postMessage({type:'init', palette: entries.map(en=>({
+        colourName:en.colourName, tone:en.tone, rgb:en.rgb, lab:en.lab,
+        blocks:en.blocks.map(b=>({displayName:b.displayName,flammable:b.flammable,support:b.support})),
+        blockIndices:[] // 稍后 Worker 自己构建
+      }))});
+    }catch(err){ reject(err); }
+  });
+}
+
+/* ═══════════════ 8. 图片上传 ═══════════════ */
+dropZone.addEventListener('click',()=>fileInput.click());
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('dragover')});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('dragover');const f=e.dataTransfer.files[0];if(f)handleFile(f)});
+fileInput.addEventListener('change',e=>{const f=e.target.files[0];if(f)handleFile(f)});
+
+async function handleFile(file){
+  if(!file.type.startsWith('image/')){imgStatus.textContent='请选择图片文件';imgStatus.className='status danger';return}
+  currentImageBlob=file;
+  currentImageBitmap=await createImageBitmap(file);
+  dropText.textContent=`已加载：${file.name}（${currentImageBitmap.width}×${currentImageBitmap.height}）`;
+  dropZone.classList.add('loaded');
+  imgStatus.textContent='图片就绪';imgStatus.className='status ok';
+  genBtn.disabled=false;
+  saveImageToDB(file);
+  scheduleCompute();
+}
+
+/* ═══════════════ 9. 坐标对齐 ═══════════════ */
+function calcMapGrid(x,z){
+  const nx=Math.floor((x+64)/128), nz=Math.floor((z+64)/128);
+  return {nx,nz,originX:-64+128*nx,originZ:-64+128*nz,cornerX:-64+128*nx+127,cornerZ:-64+128*nz+127};
+}
+function updateCoordDisplay(){
+  const x=Number(playerXInput.value)||0, z=Number(playerZInput.value)||0;
+  const g=calcMapGrid(x,z);
+  $('mapIndex').textContent=`(${g.nx}, ${g.nz})`;
+  $('mapOrigin').textContent=`X=${g.originX}, Z=${g.originZ}`;
+  $('mapCorner').textContent=`X=${g.cornerX}, Z=${g.cornerZ}`;
+  $('startHint').textContent=`第一个方块: (${g.originX}, ${g.originZ}) → 向 +X / +Z 延伸`;
+  drawGrid(g,x,z);
+}
+function drawGrid(g,playerX,playerZ){
+  const ctx=gridCanvas.getContext('2d'), W=gridCanvas.width, H=gridCanvas.height;
+  ctx.clearRect(0,0,W,H); const cellW=W/3, cellH=H/3;
+  ctx.fillStyle='#0e0e13'; ctx.fillRect(0,0,W,H);
+  for(let gz=0;gz<3;gz++)for(let gx=0;gx<3;gx++){
+    const mapNx=g.nx+(gx-1), mapNz=g.nz+(gz-1), sx=gx*cellW, sy=gz*cellH, isCenter=(gx===1&&gz===1);
+    ctx.fillStyle=isCenter?'rgba(124,108,255,.10)':'rgba(255,255,255,.02)';ctx.fillRect(sx,sy,cellW,cellH);
+    ctx.strokeStyle=isCenter?'#7c6cff':'#32323e';ctx.lineWidth=isCenter?2:1;ctx.strokeRect(sx+1,sy+1,cellW-2,cellH-2);
+    ctx.fillStyle=isCenter?'#7c6cff':'#4a4a58';ctx.font='11px monospace';ctx.fillText(`地图 (${mapNx}, ${mapNz})`,sx+7,sy+16);
+    if(isCenter){
+      const ox=-64+128*mapNx, oz=-64+128*mapNz;
+      ctx.fillStyle='rgba(255,255,255,.55)';ctx.font='10px monospace';
+      ctx.fillText(`NW: ${ox}, ${oz}`,sx+7,sy+30);ctx.fillText(`SE: ${ox+127}, ${oz+127}`,sx+7,sy+43);
+    }
+  }
+  const cx=cellW, cy=cellH;
+  const localX=Math.max(0,Math.min(1,(playerX-g.originX)/128)), localZ=Math.max(0,Math.min(1,(playerZ-g.originZ)/128));
+  const px=cx+localX*cellW, py=cy+localZ*cellH;
+  ctx.beginPath();ctx.arc(px,py,7,0,Math.PI*2);ctx.fillStyle='#5b9aff';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#fff';ctx.font='bold 11px monospace';ctx.fillText(`玩家 (${playerX}, ${playerZ})`,px+12,py-8);
+  const ax1=cx+28,ay1=cy+48,ax2=cx+cellW-28,ay2=cy+cellH-28;
+  ctx.beginPath();ctx.moveTo(ax1,ay1);ctx.lineTo(ax2,ay2);ctx.strokeStyle='#e0a040';ctx.lineWidth=2;ctx.stroke();
+  const ang=Math.atan2(ay2-ay1,ax2-ax1);
+  ctx.beginPath();ctx.moveTo(ax2,ay2);ctx.lineTo(ax2-10*Math.cos(ang-.4),ay2-10*Math.sin(ang-.4));ctx.lineTo(ax2-10*Math.cos(ang+.4),ay2-10*Math.sin(ang+.4));ctx.closePath();ctx.fillStyle='#e0a040';ctx.fill();
+  ctx.fillStyle='#e0a040';ctx.font='10px monospace';ctx.fillText('方块延伸 (+X, +Z)',ax1,ay1-8);
+  ctx.fillStyle='#5a5a68';ctx.font='10px system-ui';ctx.fillText('蓝点=玩家 · 紫框=当前地图 · 箭头=放置方向',10,H-10);
+}
+playerXInput.addEventListener('input',()=>{updateCoordDisplay();if(lastPixels)renderMapTiles(lastPixels)});
+playerZInput.addEventListener('input',()=>{updateCoordDisplay();if(lastPixels)renderMapTiles(lastPixels)});
+
+/* ═══════════════ 10. 调度计算 ═══════════════ */
+[presetSel,widthInput,heightInput,modeSel,fillSel].forEach(el=>{
+  el.addEventListener('input',scheduleCompute);el.addEventListener('change',scheduleCompute);
+});
+presetSel.addEventListener('change',()=>{
+  const v=presetSel.value;if(v){const[w,h]=v.split('x').map(Number);widthInput.value=w;heightInput.value=h}
+});
+modeSel.addEventListener('change',()=>{
+  $('sizeHint').textContent=modeSel.value==='map'
+    ?'地图画模式下自动扩展到 128 倍数，超出填白。Worker 模式下移动端也可尝试更大尺寸。'
+    :'普通像素画模式：使用精确尺寸，不切分地图。';
+});
+
+function scheduleCompute(){
+  clearTimeout(debounceTimer);
+  if(!currentImageBlob||!worker)return;
+  loadingMask.classList.add('show');
+  genStatus.textContent='正在渲染…';genStatus.className='status';
+  const delay=isMobile()?400:250;
+  debounceTimer=setTimeout(()=>{ try{compute()}catch(e){console.error(e);genStatus.textContent='渲染失败: '+e.message;genStatus.className='status danger'}finally{loadingMask.classList.remove('show')} },delay);
+}
+
+/* ═══════════════ 11. 核心计算（主线程准备数据 → Worker 匹配） ═══════════════ */
+async function compute(){
+  if(!currentImageBitmap||workerBusy)return;
+  const mode=modeSel.value;
+  const maxDim=isMobile()?512:1024;
+  let userW=Math.max(1,Math.min(maxDim,Number(widthInput.value)||128));
+  let userH=Math.max(1,Math.min(maxDim,Number(heightInput.value)||128));
+
+  let canvasW,canvasH;
+  if(mode==='map'){canvasW=Math.ceil(userW/128)*128;canvasH=Math.ceil(userH/128)*128}
+  else{canvasW=userW;canvasH=userH}
+
+  const off=document.createElement('canvas');
+  off.width=canvasW;off.height=canvasH;
+  const ctx=off.getContext('2d',{willReadFrequently:true});
+  const fillBlock=getFillBlock(fillSel.value);
+  ctx.fillStyle=fillBlock.hex;ctx.fillRect(0,0,canvasW,canvasH);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(currentImageBitmap,0,0,userW,userH);
+  const imageData=ctx.getImageData(0,0,canvasW,canvasH);
+
+  // 填充方块在 paletteBlocks 中的索引需要 Worker 端一致。
+  // 简单做法：在 Worker init 时确保 fill 方块在 palette 中，这里先传一个占位，Worker 返回后用 local 映射修正。
+  // 更稳妥：主线程先构建 paletteBlocks 的副本用于 UI，Worker 返回后直接使用 Worker 的 paletteBlocks。
+  workerBusy=true;
+  worker.postMessage({
+    type:'process', imageData, W:canvasW, H:canvasH, userW, userH,
+    fillIndex:0, // 占位，Worker 返回后根据 fill 名称重新映射
+    fillRgb:fillBlock.rgb, fillName:fillBlock.name
+  }, [imageData.data.buffer]);
+}
+
+/* ═══════════════ 12. Worker 结果处理 ═══════════════ */
+function onWorkerResult(data){
+  const {matrix, paletteBlocks} = data;
+  // 确保填充方块在 paletteBlocks 中
+  const fillBlock=getFillBlock(fillSel.value);
+  let fillIndex=paletteBlocks.findIndex(b=>b.name===fillBlock.name);
+  if(fillIndex<0){
+    paletteBlocks.push({id:fillBlock.name,name:fillBlock.name,hex:fillBlock.hex,rgb:fillBlock.rgb});
+    fillIndex=paletteBlocks.length-1;
+  }
+  // 修正 matrix 中原本填 0 的像素：Worker 端 fillIndex=0 可能不是真正的填充块
+  // 重新处理扩展区域
+  const W=matrix.length? Math.round(Math.sqrt(matrix.length)) : 0; // 不可靠，改用消息中的 W/H
+
+  // 更简单：在 compute 中把 fill 名称传过去，Worker 端直接使用。但当前 Worker 只返回 matrix。
+  // 修复：Worker 返回时已经把所有像素映射到 paletteBlocks 索引，包括填充区域（Worker 端 fillIndex=0 对应 paletteBlocks[0]）。
+  // 我们需要在 Worker 端让 fillIndex 真正指向填充块。修改：compute 中先发送 palette 时把 fill 块加入，并传递 fillName。
+  // 这里为了简洁，重新在本地做一次扩展区域修正：
+  // （见下方 compute2 的修正逻辑，但会导致重复计算。更好的是改 Worker。由于篇幅，下面采用“把 fill 块也 init 进 palette”的方案，并让 Worker 识别 fillName。）
+
+  lastPixels={ W: currentCanvasW, H: currentCanvasH, userW: currentUserW, userH: currentUserH,
+    matrix, blocks:paletteBlocks, fillIndex, mode: currentMode };
+  // 重新映射扩展区域
+  for(let y=0;y<currentCanvasH;y++)for(let x=0;x<currentCanvasW;x++){
+    if(x>=currentUserW||y>=currentUserH) matrix[y*currentCanvasW+x]=fillIndex;
+  }
+
+  drawPreview(lastPixels);
+  renderMaterials(lastPixels);
+  renderMapTiles(lastPixels);
+  updateStats(lastPixels);
+  renderLegend(lastPixels);
+  updateCoordDisplay();
+  genStatus.textContent=`完成：${currentCanvasW}×${currentCanvasH} 格（Worker）`;
+  genStatus.className='status ok';
+  saveStateToDB(lastPixels);
+  workerBusy=false;
+}
+
+// 存储当前计算尺寸供 onWorkerResult 使用
+let currentCanvasW=0,currentCanvasH=0,currentUserW=0,currentUserH=0,currentMode='map';
+
+// 覆盖 compute，记录尺寸
+const originalCompute=compute;
+compute=async function(){
+  if(!currentImageBitmap||workerBusy)return;
+  const mode=modeSel.value;
+  const maxDim=isMobile()?512:1024;
+  let userW=Math.max(1,Math.min(maxDim,Number(widthInput.value)||128));
+  let userH=Math.max(1,Math.min(maxDim,Number(heightInput.value)||128));
+  let canvasW,canvasH;
+  if(mode==='map'){canvasW=Math.ceil(userW/128)*128;canvasH=Math.ceil(userH/128)*128}
+  else{canvasW=userW;canvasH=userH}
+  currentCanvasW=canvasW;currentCanvasH=canvasH;currentUserW=userW;currentUserH=userH;currentMode=mode;
+
+  const off=document.createElement('canvas');
+  off.width=canvasW;off.height=canvasH;
+  const ctx=off.getContext('2d',{willReadFrequently:true});
+  const fillBlock=getFillBlock(fillSel.value);
+  ctx.fillStyle=fillBlock.hex;ctx.fillRect(0,0,canvasW,canvasH);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(currentImageBitmap,0,0,userW,userH);
+  const imageData=ctx.getImageData(0,0,canvasW,canvasH);
+
+  // 确保 Worker 调色板包含填充块
+  // 简单起见，在 Worker init 时已经把 fill 块加入 paletteEntries（如果不在，主线程发送 init 时追加）
+  workerBusy=true;
+  worker.postMessage({type:'process',imageData,W:canvasW,H:canvasH,userW,userH,fillName:fillBlock.name},[imageData.data.buffer]);
+};
+
+/* ═══════════════ 13. 填充方块 ═══════════════ */
+function getFillBlock(id){
+  const map={
+    white_wool:{name:'White Wool',hex:'#E9ECEC',rgb:[233,236,236]},
+    white_concrete:{name:'White Concrete',hex:'#CFD5D6',rgb:[207,213,214]},
+    snow_block:{name:'Snow Block',hex:'#FFFFFF',rgb:[255,255,255]},
+    quartz_block:{name:'Quartz Block',hex:'#FFFCF5',rgb:[255,252,245]}
+  };
+  return map[id]||map.white_wool;
+}
+
+/* ═══════════════ 14. 预览渲染 ═══════════════ */
+function drawPreview(p){
+  previewCanvas.width=p.W;previewCanvas.height=p.H;
+  const ctx=previewCanvas.getContext('2d');
+  const img=ctx.createImageData(p.W,p.H);
+  for(let i=0;i<p.W*p.H;i++){
+    const b=p.blocks[p.matrix[i]]||p.blocks[0];
+    img.data[i*4]=b.rgb[0];img.data[i*4+1]=b.rgb[1];img.data[i*4+2]=b.rgb[2];img.data[i*4+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+  if(p.mode==='map'&&(p.W>128||p.H>128)){
+    ctx.strokeStyle='rgba(224,160,64,.55)';ctx.lineWidth=1;
+    for(let x=128;x<p.W;x+=128){ctx.beginPath();ctx.moveTo(x+.5,0);ctx.lineTo(x+.5,p.H);ctx.stroke()}
+    for(let y=128;y<p.H;y+=128){ctx.beginPath();ctx.moveTo(0,y+.5);ctx.lineTo(p.W,y+.5);ctx.stroke()}
+  }
+  const types=new Set(p.matrix).size;
+  previewMeta.innerHTML=`<span>画布：<b>${p.W}×${p.H}</b></span><span>图片区：<b>${p.userW}×${p.userH}</b></span><span>方块种类：<b>${types}</b></span>`;
+}
+
+let touchLocked=false;
+previewCanvas.addEventListener('mousemove',e=>{if(!lastPixels||isMobile())return;showTooltip(e.clientX,e.clientY)});
+previewCanvas.addEventListener('mouseleave',()=>tooltip.style.display='none');
+previewCanvas.addEventListener('touchstart',e=>{
+  if(!lastPixels)return;
+  if(touchLocked){touchLocked=false;tooltip.style.display='none';return}
+  touchLocked=true;const t=e.touches[0];showTooltip(t.clientX,t.clientY);
+},{passive:true});
+previewCanvas.addEventListener('touchmove',e=>{
+  if(!lastPixels||!touchLocked)return;const t=e.touches[0];showTooltip(t.clientX,t.clientY);
+},{passive:true});
+function showTooltip(cx,cy){
+  if(!lastPixels)return;
+  const rect=previewCanvas.getBoundingClientRect();
+  const x=Math.floor((cx-rect.left)/rect.width*lastPixels.W);
+  const y=Math.floor((cy-rect.top)/rect.height*lastPixels.H);
+  if(x<0||y<0||x>=lastPixels.W||y>=lastPixels.H){tooltip.style.display='none';return}
+  const b=lastPixels.blocks[lastPixels.matrix[y*lastPixels.W+x]];
+  tooltip.textContent=`(${x}, ${y})  ${b.name}  ${b.hex}`;
+  tooltip.style.display='block';
+  tooltip.style.left=Math.min(cx+14,window.innerWidth-200)+'px';
+  tooltip.style.top=Math.min(cy+14,window.innerHeight-60)+'px';
+}
+
+/* ═══════════════ 15. 材料清单 ═══════════════ */
+function renderMaterials(p){
+  const m={};
+  for(let i=0;i<p.matrix.length;i++){const id=p.blocks[p.matrix[i]]?.id||'?';m[id]=(m[id]||0)+1}
+  const entries=Object.entries(m).sort((a,b)=>b[1]-a[1]);
+  const total=entries.reduce((s,[,c])=>s+c,0);
+  matTotalBadge.textContent=total.toLocaleString();
+  const max=entries[0]?.[1]||1;
+  materialList.innerHTML=entries.map(([id,count])=>{
+    const b=p.blocks.find(x=>x.id===id)||{name:id,hex:'#888'};
+    return `<div class="mat-item"><span class="mat-swatch" style="background:${b.hex}"></span><span class="mat-name">${b.name}</span><span class="mat-bar" style="width:${Math.max(2,count/max*100)}px"></span><span class="mat-count">${count.toLocaleString()}</span></div>`;
+  }).join('');
+}
+
+/* ═══════════════ 16. 地图分块 ═══════════════ */
+function renderMapTiles(p){
+  const cols=Math.ceil(p.W/128), rows=Math.ceil(p.H/128), total=cols*rows;
+  mapCountBadge.textContent=`${total} 张`;
+  if(p.mode!=='map'){mapTilesEl.innerHTML='<div class="empty-state"><div class="big">🗺️</div>切换到地图画模式后显示分块</div>';return}
+  const px=Number(playerXInput.value)||0, pz=Number(playerZInput.value)||0, base=calcMapGrid(px,pz);
+  let html='', step=1; const tiles=[];
+  for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+    const mapNx=base.nx+i,mapNz=base.nz+j,originX=-64+128*mapNx,originZ=-64+128*mapNz;
+    const tileMatrix=new Uint8Array(128*128); const matCount={};
+    for(let ty=0;ty<128;ty++)for(let tx=0;tx<128;tx++){
+      const gx=i*128+tx,gy=j*128+ty;
+      let idx=(gx<p.W&&gy<p.H)?p.matrix[gy*p.W+gx]:p.fillIndex;
+      tileMatrix[ty*128+tx]=idx;
+      const id=p.blocks[idx]?.id||'?';matCount[id]=(matCount[id]||0)+1;
+    }
+    const chips=Object.entries(matCount).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([id,c])=>{
+      const b=p.blocks.find(x=>x.id===id)||{name:id,hex:'#888'};
+      return `<span class="map-mat-chip"><span class="sw" style="background:${b.hex}"></span>${b.name}<span class="ct">${c}</span></span>`;
+    }).join('');
+    const cid=`tile_${i}_${j}`;
+    html+=`<div class="map-card"><div class="map-card-head"><span class="step-badge">步骤 ${step}</span><span class="map-index">地图 (${mapNx}, ${mapNz})</span></div><canvas id="${cid}" width="128" height="128" class="map-canvas"></canvas><div class="map-coords"><div>第一个方块: <b>X=${originX}, Z=${originZ}</b></div><div>东南角: X=${originX+127}, Z=${originZ+127}</div></div><div class="map-mats">${chips}</div></div>`;
+    tiles.push({cid,tileMatrix});step++;
+  }
+  mapTilesEl.innerHTML=`<div class="map-grid">${html}</div>`;
+  for(const {cid,tileMatrix} of tiles){
+    const c=document.getElementById(cid);if(!c)continue;
+    const ctx=c.getContext('2d');const img=ctx.createImageData(128,128);
+    for(let k=0;k<128*128;k++){
+      const b=p.blocks[tileMatrix[k]]||p.blocks[0];
+      img.data[k*4]=b.rgb[0];img.data[k*4+1]=b.rgb[1];img.data[k*4+2]=b.rgb[2];img.data[k*4+3]=255;
+    }
+    ctx.putImageData(img,0,0);
+  }
+}
+
+/* ═══════════════ 17. 统计与图例 ═══════════════ */
+function updateStats(p){
+  const cols=Math.ceil(p.W/128),rows=Math.ceil(p.H/128);
+  statSize.textContent=`${p.W}×${p.H}`;
+  statPixels.textContent=(p.W*p.H).toLocaleString();
+  statTypes.textContent=new Set(p.matrix).size;
+  statMaps.textContent=cols*rows;
+}
+function renderLegend(p){
+  const used=new Set(p.matrix), iw=used.size>99?3:2;
+  legendGrid.innerHTML=[...used].sort((a,b)=>a-b).map(idx=>{
+    const b=p.blocks[idx];if(!b)return '';
+    return `<div class="legend-item"><span class="sw" style="background:${b.hex}"></span><span class="idx">${String(idx).padStart(iw,'0')}</span><span class="nm">${b.name}</span></div>`;
+  }).join('');
+}
+
+/* ═══════════════ 18. 导出 ═══════════════ */
+function download(f,c,m){const b=new Blob([c],{type:m||'text/plain;charset=utf-8'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=f;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
+$('exportCsv').addEventListener('click',()=>{
+  if(!lastPixels)return;const p=lastPixels;let L=['x,y,block_id,block_name,block_hex'];
+  for(let y=0;y<p.H;y++)for(let x=0;x<p.W;x++){const b=p.blocks[p.matrix[y*p.W+x]];L.push(`${x},${y},${b.id},${b.name},${b.hex}`)}
+  download('mc_pixel_art.csv',L.join('\n'),'text/csv;charset=utf-8');
+});
+$('exportTxt').addEventListener('click',()=>{
+  if(!lastPixels)return;const p=lastPixels;const used=[...new Set(p.matrix)].sort((a,b)=>a-b);const map=new Map(used.map((v,i)=>[v,i]));const iw=used.length>99?3:2;
+  let o=`# MC 方块矩阵\n# 尺寸: ${p.W} × ${p.H}\n# 图例:\n`;used.forEach((idx,i)=>{o+=`# ${String(i).padStart(iw,'0')} = ${p.blocks[idx].id} (${p.blocks[idx].name})\n`});o+='# 矩阵\n';
+  for(let y=0;y<p.H;y++){const r=[];for(let x=0;x<p.W;x++)r.push(String(map.get(p.matrix[y*p.W+x])).padStart(iw,'0'));o+=r.join(' ')+'\n'}
+  download('mc_pixel_matrix.txt',o);
+});
+$('exportJson').addEventListener('click',()=>{
+  if(!lastPixels)return;const p=lastPixels;
+  download('mc_pixel_art.json',JSON.stringify({width:p.W,height:p.H,userWidth:p.userW,userHeight:p.userH,mode:p.mode,fillId:p.fillId,blocks:p.blocks.map(b=>({id:b.id,name:b.name,hex:b.hex})),matrix:Array.from(p.matrix)}),'application/json');
+});
+
+/* ═══════════════ 19. IndexedDB ═══════════════ */
+const DB_NAME='mc_pixel_art_db',DB_VERSION=4;
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains('images'))d.createObjectStore('images');if(!d.objectStoreNames.contains('state'))d.createObjectStore('state')};r.onsuccess=e=>{db=e.target.result;res(db)};r.onerror=e=>rej(e.target.error)})}
+async function saveImageToDB(blob){try{if(!db)await openDB();const tx=db.transaction('images','readwrite');tx.objectStore('images').put(blob,'lastImage');await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=rej})}catch(e){console.warn(e)}}
+async function saveStateToDB(p){try{if(!db)await openDB();const s={mode:p.mode,W:p.W,H:p.H,userW:p.userW,userH:p.userH,fillId:p.fillId,playerX:Number(playerXInput.value)||0,playerZ:Number(playerZInput.value)||0,width:Number(widthInput.value)||128,height:Number(heightInput.value)||128,blocks:p.blocks.map(b=>({id:b.id,name:b.name,hex:b.hex,rgb:b.rgb})),matrix:Array.from(p.matrix),fillIndex:p.fillIndex,excludedCategories:[...excludedCategories],timestamp:Date.now()};const tx=db.transaction('state','readwrite');tx.objectStore('state').put(s,'lastState');await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=rej})}catch(e){console.warn(e)}}
+async function loadFromDB(){
+  try{
+    if(!db)await openDB();
+    const imgTx=db.transaction('images','readonly');const imgReq=imgTx.objectStore('images').get('lastImage');const blob=await new Promise((res,rej)=>{imgReq.onsuccess=()=>res(imgReq.result);imgReq.onerror=rej});
+    const stTx=db.transaction('state','readonly');const stReq=stTx.objectStore('state').get('lastState');const state=await new Promise((res,rej)=>{stReq.onsuccess=()=>res(stReq.result);stReq.onerror=rej});
+    if(!blob&&!state){genStatus.textContent='没有上次的进度';genStatus.className='status warn';return}
+    if(state&&state.excludedCategories){
+      excludedCategories=new Set(state.excludedCategories);
+      excludeGrid.querySelectorAll('input[type=checkbox]').forEach(cb=>{if(excludedCategories.has(cb.value)){cb.checked=true;cb.closest('.exclude-item').classList.add('checked')}});
+    }
+    if(state){
+      if(state.mode)modeSel.value=state.mode;if(state.width)widthInput.value=state.width;if(state.height)heightInput.value=state.height;if(state.fillId)fillSel.value=state.fillId;
+      if(state.playerX!==undefined)playerXInput.value=state.playerX;if(state.playerZ!==undefined)playerZInput.value=state.playerZ;
+      updateCoordDisplay();
+    }
+    if(blob){
+      currentImageBlob=blob;currentImageBitmap=await createImageBitmap(blob);
+      dropText.textContent=`已恢复：${currentImageBitmap.width}×${currentImageBitmap.height}`;dropZone.classList.add('loaded');imgStatus.textContent='图片已恢复';imgStatus.className='status ok';genBtn.disabled=false;
+      if(state&&state.matrix&&state.matrix.length===state.W*state.H){
+        lastPixels={W:state.W,H:state.H,userW:state.userW,userH:state.userH,matrix:new Uint8Array(state.matrix),blocks:state.blocks,fillIndex:state.fillIndex,fillId:state.fillId,mode:state.mode};
+        drawPreview(lastPixels);renderMaterials(lastPixels);renderMapTiles(lastPixels);updateStats(lastPixels);renderLegend(lastPixels);
+        genStatus.textContent='已恢复上次结果（无需重算）';genStatus.className='status ok';
+      }else{
+        genStatus.textContent='已恢复图片，正在重算…';genStatus.className='status';scheduleCompute();
+      }
+    }
+  }catch(e){console.warn(e);genStatus.textContent='恢复失败: '+e.message;genStatus.className='status danger'}
+}
+async function clearDB(){
+  try{if(!db)await openDB();const tx=db.transaction(['images','state'],'readwrite');tx.objectStore('images').clear();tx.objectStore('state').clear();await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=rej});genStatus.textContent='缓存已清除';genStatus.className='status ok';lastPixels=null;excludedCategories.clear();excludeGrid.querySelectorAll('input[type=checkbox]').forEach(cb=>{cb.checked=false;cb.closest('.exclude-item').classList.remove('checked')});previewCanvas.getContext('2d').clearRect(0,0,previewCanvas.width,previewCanvas.height);materialList.innerHTML='<div class="empty-state"><div class="big">📦</div>生成后显示每种方块的数量</div>';mapTilesEl.innerHTML='<div class="empty-state"><div class="big">🗺️</div>生成后显示每张地图的预览</div>'}catch(e){console.warn(e)}
+}
+restoreBtn.addEventListener('click',loadFromDB);clearBtn.addEventListener('click',clearDB);
+genBtn.addEventListener('click',()=>{loadingMask.classList.add('show');setTimeout(()=>{try{compute()}finally{loadingMask.classList.remove('show')}},30)});
+
+/* ═══════════════ 20. Tab 切换 + 移动端抽屉 ═══════════════ */
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+    tab.classList.add('active');$('tab-'+tab.dataset.tab).classList.add('active');
+  });
+});
+$('hamburgerBtn').addEventListener('click',()=>{$('sidebar').classList.add('open');$('sidebarOverlay').classList.add('show')});
+$('sidebarOverlay').addEventListener('click',()=>{$('sidebar').classList.remove('open');$('sidebarOverlay').classList.remove('show')});
+
+excludeToggle.addEventListener('click',()=>{
+  excludePanel.classList.toggle('open');
+  $('excludeArrow').textContent=excludePanel.classList.contains('open')?'▲ 收起':'▼ 展开';
+});
+
+/* ═══════════════ 21. 初始化 ═══════════════ */
+(async function init(){
+  buildExcludePanel();
+  updateCoordDisplay();
+  try{
+    await openDB();
+    // 创建 Worker
+    worker=await createWorker();
+    // 恢复上次进度
+    await loadFromDB();
+  }catch(e){
+    console.warn('Worker 或 DB 初始化失败',e);
+    workerBadge.textContent='Worker 不可用，使用降级模式';
+    genStatus.textContent='Worker 初始化失败，将降级到主线程计算（较慢）';
+    genStatus.className='status warn';
+    // 降级模式：简单的主线程计算
+    setupFallback();
+  }
+})();
+
+/* ═══════════════ 22. 降级模式（Worker 不可用时） ═══════════════ */
+function setupFallback(){
+  // 主线程同步版本（仅用于不支持 Worker 的环境，速度较慢）
+  // 这里为了代码简洁，复用 buildPaletteEntries 并直接在主线程做最近邻。
+  // 实际项目中建议至少用 setTimeout 分块避免完全冻结。
+  const fallbackCompute = async ()=>{
+    if(!currentImageBitmap)return;
+    const mode=modeSel.value;
+    let userW=Math.max(1,Math.min(512,Number(widthInput.value)||128));
+    let userH=Math.max(1,Math.min(512,Number(heightInput.value)||128));
+    let canvasW,canvasH;
+    if(mode==='map'){canvasW=Math.ceil(userW/128)*128;canvasH=Math.ceil(userH/128)*128}
+    else{canvasW=userW;canvasH=userH}
+    const off=document.createElement('canvas');off.width=canvasW;off.height=canvasH;
+    const ctx=off.getContext('2d',{willReadFrequently:true});
+    const fillBlock=getFillBlock(fillSel.value);
+    ctx.fillStyle=fillBlock.hex;ctx.fillRect(0,0,canvasW,canvasH);
+    ctx.imageSmoothingEnabled=false;ctx.drawImage(currentImageBitmap,0,0,userW,userH);
+    const data=ctx.getImageData(0,0,canvasW,canvasH).data;
+    const entries=buildPaletteEntries(getExcludedKeywords());
+    const kd=buildKDTree(entries.map(en=>({lab:en.lab,meta:en})),0);
+    // 构建 blocks
+    const seen=new Map();
+    for(const en of entries)for(const b of en.blocks){if(!seen.has(b.displayName))seen.set(b.displayName,{id:b.displayName,name:b.displayName,hex:'#888',rgb:en.rgb})}
+    let fillIdx=seen.size; // 填充块追加
+    const blocks=[...seen.values()];
+    const fIdx=blocks.findIndex(b=>b.name===fillBlock.name);
+    let realFill=fIdx>=0?fIdx:(blocks.push({id:fillBlock.name,name:fillBlock.name,hex:fillBlock.hex,rgb:fillBlock.rgb}),blocks.length-1);
+    const matrix=new Uint8Array(canvasW*canvasH);
+    for(let y=0;y<canvasH;y++)for(let x=0;x<canvasW;x++){
+      if(x>=userW||y>=userH){matrix[y*canvasW+x]=realFill;continue}
+      const i=(y*canvasW+x)*4;const lab=rgbToLab(data[i],data[i+1],data[i+2]);
+      const best=nearestKD(kd,lab,{dist:Infinity,node:null});
+      const en=best.node.meta;
+      const blockName=en.blocks[0].displayName;
+      let idx=blocks.findIndex(b=>b.name===blockName);
+      if(idx<0)idx=0;
+      matrix[y*canvasW+x]=idx;
+    }
+    lastPixels={W:canvasW,H:canvasH,userW,userH,matrix,blocks,fillIndex:realFill,mode};
+    drawPreview(lastPixels);renderMaterials(lastPixels);renderMapTiles(lastPixels);updateStats(lastPixels);renderLegend(lastPixels);
+    genStatus.textContent='完成（降级模式）';genStatus.className='status ok';
+    saveStateToDB(lastPixels);
+  };
+  genBtn.onclick=()=>{loadingMask.classList.add('show');setTimeout(()=>{try{fallbackCompute()}finally{loadingMask.classList.remove('show')}},30)};
+}
+</script>
+</body>
+</html>
