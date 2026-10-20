@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MC 地图画生成器1.5·基岩版</title>
+<title>MC 地图画生成器1.7 · 基岩版</title>
 <style>
 :root {
   --bg:#0e0e13; --bg2:#16161d; --panel:#1e1e27; --panel2:#262631;
@@ -52,7 +52,7 @@ select{cursor:pointer;font-family:inherit}
 .file-drop .icon{font-size:24px;display:block;margin-bottom:6px}
 .file-drop.loaded{border-style:solid;border-color:var(--ok);color:var(--ok)}
 
-.btn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;width:100%;transition:filter .15s,transform .1s;min-height:44px}
+.btn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;width:100%;transition:filter .15s,transform .1s;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
 .btn:hover{filter:brightness(1.12)}.btn:active{transform:scale(.98)}
 .btn:disabled{opacity:.35;cursor:not-allowed;filter:none}
 .btn.secondary{background:var(--panel2);color:var(--text);border:1px solid var(--border)}
@@ -62,7 +62,7 @@ select{cursor:pointer;font-family:inherit}
 .btn.sm{padding:7px 11px;font-size:12px;width:auto;min-height:36px}
 .btn-row{display:flex;gap:7px;margin-top:9px}.btn-row .btn{width:auto;flex:1}
 
-/* 坐标引导面板重做 */
+/* 坐标引导面板 */
 .coord-banner{background:linear-gradient(135deg, rgba(124,108,255,.1), rgba(91,154,255,.1));border:1px solid var(--accent2);border-radius:8px;padding:12px;margin-top:10px}
 .coord-line{display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px}
 .coord-line:last-child{margin-bottom:0}
@@ -100,20 +100,16 @@ select{cursor:pointer;font-family:inherit}
 .empty-state{text-align:center;color:var(--muted);padding:50px 20px;font-size:13px}
 .empty-state .big{font-size:40px;margin-bottom:12px;opacity:.5}
 
-/* 材料与图例 */
-.mat-list{display:flex;flex-direction:column;gap:1px}
-.mat-item{display:flex;align-items:center;gap:9px;padding:6px 4px;border-bottom:1px solid var(--border);font-size:13px}
-.mat-item:last-child{border-bottom:none}
-.mat-swatch{width:20px;height:20px;border-radius:4px;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}
-.mat-name{flex:1}.mat-count{font-family:var(--mono);color:var(--accent2);font-weight:700}
-
+/* 地图分块卡片 */
 .maps-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
 .maps-head h3{font-size:15px}
 .badge{display:inline-block;background:var(--accent);color:#fff;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700;margin-left:6px;vertical-align:middle}
 .map-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
 @media(max-width:600px){.map-grid{grid-template-columns:1fr}}
-.map-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:11px;transition:border-color .15s}
-.map-card:hover{border-color:var(--accent)}
+.map-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:11px;transition:border-color .15s, transform .1s;cursor:pointer;position:relative}
+.map-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.map-card::after{content:'点击放大查看建造详情';position:absolute;inset:0;background:rgba(124,108,255,0.85);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:bold;opacity:0;transition:opacity .2s;border-radius:10px;font-size:12px}
+.map-card:hover::after{opacity:1}
 .map-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .step-badge{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px}
 .map-index{font-size:11px;color:var(--muted);font-family:var(--mono)}
@@ -121,12 +117,49 @@ select{cursor:pointer;font-family:inherit}
 .map-coords{font-size:11px;font-family:var(--mono);color:var(--muted);margin-top:8px;line-height:1.7}
 .map-coords b{color:var(--warn)}
 
-.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px}
-.stat-box{background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:11px 13px}
-.stat-box .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-.stat-box .v{font-size:20px;font-weight:700;color:var(--accent2);font-family:var(--mono);margin-top:3px}
+/* 全屏地图详情 Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(10,10,15,0.95);z-index:3000;display:none;flex-direction:column;backdrop-filter:blur(8px)}
+.modal-overlay.show{display:flex}
+.modal-header{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:var(--bg2);border-bottom:1px solid var(--border)}
+.modal-header h3{font-size:16px;color:var(--accent)}
+.modal-close{background:none;border:none;color:var(--muted);font-size:28px;cursor:pointer;padding:0 10px}
+.modal-body{flex:1;display:flex;overflow:hidden}
+@media(max-width:768px){.modal-body{flex-direction:column}}
+.modal-left{flex:1;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;position:relative}
+.modal-canvas-wrap{position:relative;width:100%;max-width:600px;aspect-ratio:1;box-shadow:0 0 30px rgba(0,0,0,.6);border:2px solid var(--border);border-radius:8px;overflow:hidden;background:var(--panel)}
+#modalCanvas{display:block;width:100%;height:100%;image-rendering:pixelated;cursor:crosshair;touch-action:none}
+#modalGuideCanvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;pointer-events:none;transition:opacity .2s}
 
-.loading-mask{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:2000;backdrop-filter:blur(2px)}
+.modal-right{width:400px;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+@media(max-width:768px){.modal-right{width:100%;flex:none;height:50vh;border-left:none;border-top:1px solid var(--border)}}
+
+.guide-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--panel)}
+.guide-tab{flex:1;background:none;border:none;color:var(--muted);padding:12px 0;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent}
+.guide-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+.guide-content{flex:1;padding:16px;overflow-y:auto;display:none;flex-direction:column;gap:12px}
+.guide-content.active{display:flex}
+
+.step-info{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center}
+.step-info .big-num{font-size:24px;font-family:var(--mono);color:var(--accent2);font-weight:bold;margin-bottom:4px}
+.step-info .sub-text{font-size:13px;color:var(--muted)}
+.step-block{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:12px;background:var(--bg);padding:12px;border-radius:8px;border:1px solid var(--border)}
+.step-block .sw{width:26px;height:26px;border-radius:4px;border:1px solid rgba(255,255,255,.2)}
+.step-block .name{font-size:18px;font-weight:bold;color:var(--text)}
+
+.step-ctrls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:auto}
+.step-ctrls .btn{width:100%;padding:12px}
+.list-row{display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid var(--border);font-size:12px}
+.list-row.active{background:rgba(124,108,255,.2);border-left:3px solid var(--accent)}
+.list-row .idx{font-family:var(--mono);color:var(--muted);width:40px}
+.list-row .sw{width:18px;height:18px;border-radius:3px;border:1px solid rgba(255,255,255,.1)}
+.list-row .name{flex:1}
+.list-row .coord{font-family:var(--mono);color:var(--muted);font-size:10px}
+
+.row-col-ctrl{display:flex;align-items:center;justify-content:space-between;background:var(--panel);padding:8px 12px;border-radius:8px}
+.row-col-ctrl .val{font-family:var(--mono);font-size:18px;font-weight:bold;color:var(--accent2)}
+
+.loading-mask{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:4000;backdrop-filter:blur(2px)}
 .loading-mask.show{display:flex}
 .spinner{width:42px;height:42px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -178,7 +211,7 @@ select{cursor:pointer;font-family:inherit}
         <div><label>宽（格）</label><input type="number" id="widthInput" value="128" min="1" max="1024"></div>
         <div><label>高（格）</label><input type="number" id="heightInput" value="128" min="1" max="1024"></div>
       </div>
-      <div class="hint" id="sizeHint">原图会等比缩放居中，地图模式下自动扩展到 128 倍数并填白。</div>
+      <div class="hint" id="sizeHint">原图等比缩放居中，地图模式自动扩展到 128 倍数填白。</div>
     </div>
 
     <div class="card">
@@ -201,7 +234,7 @@ select{cursor:pointer;font-family:inherit}
       <div class="card-title" style="margin-bottom:0;cursor:pointer" id="excludeToggle">
         <span class="num">4</span>方块排除 <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400" id="excludeArrow">▼ 展开</span>
       </div>
-      <div class="hint" style="margin-top:6px">默认全部方块参与。勾选排除某类材质（如只看纯羊毛和混凝土）。</div>
+      <div class="hint" style="margin-top:6px">默认全部方块参与。勾选排除某类材质。</div>
       <div class="exclude-panel" id="excludePanel">
         <div class="exclude-grid" id="excludeGrid"></div>
       </div>
@@ -217,21 +250,18 @@ select{cursor:pointer;font-family:inherit}
       
       <div class="coord-banner">
         <div class="coord-line">
-          <span class="coord-label">第一个方块放在：</span>
+          <span class="coord-label">地图起点（放第一块）：</span>
           <span class="coord-val highlight" id="startPos">X=0, Z=0</span>
         </div>
         <div class="coord-line">
-          <span class="coord-label">后续方块向哪延伸：</span>
+          <span class="coord-label">延伸方向：</span>
           <span class="coord-val" style="color:var(--warn)">向 +X（东）, +Z（南）</span>
-        </div>
-        <div class="coord-line">
-          <span class="coord-label">本图地图索引：</span>
-          <span class="coord-val" id="mapIndex">(0, 0)</span>
         </div>
       </div>
 
-      <div class="grid-wrap"><canvas id="gridCanvas" width="300" height="300"></canvas></div>
-      <div class="hint">基岩版地图固定按 <code>128×128</code> 划分。玩家坐标所在的地图西北角，就是你需要放置第一个方块的位置。</div>
+      <!-- 左侧网格联动 -->
+      <div class="grid-wrap"><canvas id="gridCanvas" width="450" height="450"></canvas></div>
+      <div class="hint">基岩版地图按 <code>128×128</code> 划分。点击右侧地图卡片时，此网格会随之切换视角并高亮。</div>
     </div>
 
     <div class="card">
@@ -262,7 +292,7 @@ select{cursor:pointer;font-family:inherit}
 
     <div class="tab-content" id="tab-maps">
       <div class="maps-head"><h3>地图分块与放置步骤 <span class="badge" id="mapCountBadge">0 张</span></h3></div>
-      <div id="mapTiles"><div class="empty-state"><div class="big">🗺️</div>生成后显示每张地图的坐标和放置顺序</div></div>
+      <div id="mapTiles"><div class="empty-state"><div class="big">🗺️</div>生成后点击卡片进入建造导航</div></div>
     </div>
 
     <div class="tab-content" id="tab-materials">
@@ -279,20 +309,76 @@ select{cursor:pointer;font-family:inherit}
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
         <button class="btn sm" id="exportCsv">导出 CSV</button>
-        <button class="btn sm secondary" id="exportTxt">导出 TXT 矩阵</button>
+        <button class="btn sm secondary" id="exportTxt">导出 TXT</button>
         <button class="btn sm secondary" id="exportJson">导出 JSON</button>
       </div>
-      <div class="hint" style="margin-bottom:12px">CSV 包含每个像素的 x, y, 方块名称, 颜色，可以直接配合投影模组或打印使用。</div>
     </div>
   </main>
+</div>
+
+<!-- 全屏地图详情 Modal -->
+<div class="modal-overlay" id="mapModal">
+  <div class="modal-header">
+    <h3 id="modalTitle">地图详情</h3>
+    <button class="modal-close" id="modalCloseBtn">×</button>
+  </div>
+  <div class="modal-body">
+    <div class="modal-left">
+      <div class="modal-canvas-wrap">
+        <canvas id="modalCanvas" width="128" height="128"></canvas>
+        <canvas id="modalGuideCanvas" width="128" height="128"></canvas>
+      </div>
+    </div>
+    <div class="modal-right">
+      <div class="guide-tabs">
+        <button class="guide-tab active" data-gtab="step">逐格指引</button>
+        <button class="guide-tab" data-gtab="row">按行预览</button>
+        <button class="guide-tab" data-gtab="col">按列预览</button>
+      </div>
+
+      <!-- 逐格模式 -->
+      <div class="guide-content active" id="gc-step">
+        <div class="step-info">
+          <div class="big-num" id="gStepNum">1 / 16384</div>
+          <div class="sub-text">相对坐标: <span id="gRelPos">(0, 0)</span> | 世界坐标: <b id="gWorldPos">(X, Z)</b></div>
+        </div>
+        <div class="step-block">
+          <span class="sw" id="gBlockSw"></span>
+          <span class="name" id="gBlockName">等待生成</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px">
+          在左侧地图上点击可移动探照灯。<br>进度会自动保存，下次打开继续。
+        </div>
+        <div class="step-ctrls">
+          <button class="btn secondary" id="gBtnPrev">上一步</button>
+          <button class="btn" id="gBtnNext">下一步</button>
+        </div>
+      </div>
+
+      <!-- 行/列预览模式 -->
+      <div class="guide-content" id="gc-line">
+        <div class="row-col-ctrl">
+          <button class="btn ghost sm" id="gLinePrev">上一</button>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted)" id="gLineLabel">第 1 行</div>
+            <div class="val" id="gLineVal">1</div>
+          </div>
+          <button class="btn ghost sm" id="gLineNext">下一</button>
+        </div>
+        <div id="gLineList" style="flex:1;overflow-y:auto;background:var(--panel);border:1px solid var(--border);border-radius:8px">
+          <!-- 列表渲染 -->
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="tooltip" id="tooltip"></div>
 
 <script>
-/* ═══════════════ 1. 内置数据：完整 MapartCraft 调色板 + 中文映射 ═══════════════ */
+/* ═══════════════ 1. 数据与常量 ═══════════════ */
 const ZH_MAP = {
-  'Grass Block':'草方块','Slime Block':'史莱姆块','Cactus':'仙人掌','Sand':'沙子','Sandstone':'砂岩','Birch Planks':'白桦木板','End Stone':'末地石','Cobweb':'蜘蛛网','Mushroom Stem':'蘑菇柄','Redstone Block':'红石块','TNT':'TNT','Magma Block':'岩浆块','Ice':'冰','Packed Ice':'浮冰','Blue Ice':'蓝冰','Iron Block':'铁块','Iron Anvil':'铁砧','Iron Door':'铁门','Smoker':'烟熏炉','Oak Leaves':'橡木树叶','Vine':'藤蔓','Sugar Cane':'甘蔗','Snow Block':'雪块','White Wool':'白色羊毛','White Concrete':'白色混凝土','Clay':'黏土块','Dirt Path':'土径','Dirt':'泥土','Gravel':'砂砾','Jungle Planks':'丛林木板','Coarse Dirt':'砂土','Stone':'石头','Cobblestone':'圆石','Andesite':'安山岩','Bricks':'红砖块','Water':'水','Bubble Column':'气泡柱','Oak Planks':'橡木木板','Crafting Table':'工作台','Bookshelf':'书架','Oak Sign':'橡木告示牌','Quartz Block':'石英块','Sea Lantern':'海晶灯','White Terracotta':'白色陶瓦','Orange Wool':'橙色羊毛','Orange Concrete':'橙色混凝土','Pumpkin':'南瓜','Copper Block':'铜块','Magenta Wool':'品红色羊毛','Magenta Concrete':'品红色混凝土','Amethyst Cluster':'紫水晶簇','Light Blue Wool':'淡蓝色羊毛','Light Blue Concrete':'淡蓝色混凝土','Yellow Wool':'黄色羊毛','Yellow Concrete':'黄色混凝土','Sponge':'海绵','Lime Wool':'黄绿色羊毛','Lime Concrete':'黄绿色混凝土','Pitcher Plant':'瓶子草','Pink Wool':'粉红色羊毛','Pink Concrete':'粉红色混凝土','Cherry Planks':'樱花木板','Gray Wool':'灰色羊毛','Gray Concrete':'灰色混凝土','Deepslate':'深板岩','Light Gray Wool':'淡灰色羊毛','Light Gray Concrete':'淡灰色混凝土','Smooth Stone':'平滑石头','Cyan Wool':'青色羊毛','Cyan Concrete':'青色混凝土','Purple Wool':'紫色羊毛','Purple Concrete':'紫色混凝土','Purpur Block':'紫珀块','Blue Wool':'蓝色羊毛','Blue Concrete':'蓝色混凝土','Lapis Block':'青金石块','Brown Wool':'棕色羊毛','Brown Concrete':'棕色混凝土','Dark Oak Planks':'深色橡木木板','Green Wool':'绿色羊毛','Green Concrete':'绿色混凝土','Emerald Block':'绿宝石块','Red Wool':'红色羊毛','Red Concrete':'红色混凝土','Black Wool':'黑色羊毛','Black Concrete':'黑色混凝土','Coal Block':'煤炭块','Gold Block':'金块','Diamond Block':'钻石块','Prismarine':'海晶石','Nether Bricks':'下界砖块','Red Nether Bricks':'红色下界砖块','Nether Wart Block':'下界疣块','Warped Wart Block':'诡异疣块','Obsidian':'黑曜石','Crying Obsidian':'哭泣的黑曜石','Moss Block':'苔藓块','Moss Carpet':'苔藓地毯','Shroomlight':'菌光体','Oxidized Copper':'氧化铜','Dark Prismarine':'暗海晶石','Red Sand':'红沙','Red Sandstone':'红砂岩','Soul Sand':'灵魂沙','Soul Soil':'灵魂土','End Stone Bricks':'末地石砖','Cherry Log':'樱花原木','Deepslate Bricks':'深板岩砖','Calcite':'方解石','Tuff':'凝灰岩','Dripstone Block':'滴水石块','Amethyst Block':'紫水晶块','Nautilus Shell Block':'鹦鹉螺壳块','Honeycomb Block':'蜜脾块','Honey Block':'蜂蜜块','Hay Bale':'干草捆','Watermelon':'西瓜','Carved Pumpkin':'雕刻南瓜','Netherrack':'地狱岩','Glowstone':'荧石','Lapis Block':'青金石块'
+  'Grass Block':'草方块','Slime Block':'史莱姆块','Cactus':'仙人掌','Sand':'沙子','Sandstone':'砂岩','Birch Planks':'白桦木板','End Stone':'末地石','Cobweb':'蜘蛛网','Mushroom Stem':'蘑菇柄','Redstone Block':'红石块','TNT':'TNT','Magma Block':'岩浆块','Ice':'冰','Packed Ice':'浮冰','Blue Ice':'蓝冰','Iron Block':'铁块','Iron Anvil':'铁砧','Iron Door':'铁门','Smoker':'烟熏炉','Oak Leaves':'橡木树叶','Vine':'藤蔓','Sugar Cane':'甘蔗','Snow Block':'雪块','White Wool':'白色羊毛','White Concrete':'白色混凝土','Clay':'黏土块','Dirt Path':'土径','Dirt':'泥土','Gravel':'砂砾','Jungle Planks':'丛林木板','Coarse Dirt':'砂土','Stone':'石头','Cobblestone':'圆石','Andesite':'安山岩','Bricks':'红砖块','Water':'水','Bubble Column':'气泡柱','Oak Planks':'橡木木板','Crafting Table':'工作台','Bookshelf':'书架','Oak Sign':'橡木告示牌','Quartz Block':'石英块','Sea Lantern':'海晶灯','White Terracotta':'白色陶瓦','Orange Wool':'橙色羊毛','Orange Concrete':'橙色混凝土','Pumpkin':'南瓜','Copper Block':'铜块','Magenta Wool':'品红色羊毛','Magenta Concrete':'品红色混凝土','Amethyst Cluster':'紫水晶簇','Light Blue Wool':'淡蓝色羊毛','Light Blue Concrete':'淡蓝色混凝土','Yellow Wool':'黄色羊毛','Yellow Concrete':'黄色混凝土','Sponge':'海绵','Lime Wool':'黄绿色羊毛','Lime Concrete':'黄绿色混凝土','Pitcher Plant':'瓶子草','Pink Wool':'粉红色羊毛','Pink Concrete':'粉红色混凝土','Cherry Planks':'樱花木板','Gray Wool':'灰色羊毛','Gray Concrete':'灰色混凝土','Deepslate':'深板岩','Light Gray Wool':'淡灰色羊毛','Light Gray Concrete':'淡灰色混凝土','Smooth Stone':'平滑石头','Cyan Wool':'青色羊毛','Cyan Concrete':'青色混凝土','Purple Wool':'紫色羊毛','Purple Concrete':'紫色混凝土','Purpur Block':'紫珀块','Blue Wool':'蓝色羊毛','Blue Concrete':'蓝色混凝土','Lapis Block':'青金石块','Brown Wool':'棕色羊毛','Brown Concrete':'棕色混凝土','Dark Oak Planks':'深色橡木木板','Green Wool':'绿色羊毛','Green Concrete':'绿色混凝土','Emerald Block':'绿宝石块','Red Wool':'红色羊毛','Red Concrete':'红色混凝土','Black Wool':'黑色羊毛','Black Concrete':'黑色混凝土','Coal Block':'煤炭块','Gold Block':'金块','Diamond Block':'钻石块','Prismarine':'海晶石','Nether Bricks':'下界砖块','Red Nether Bricks':'红色下界砖块','Nether Wart Block':'下界疣块','Warped Wart Block':'诡异疣块','Obsidian':'黑曜石','Crying Obsidian':'哭泣的黑曜石','Moss Block':'苔藓块','Moss Carpet':'苔藓地毯','Shroomlight':'菌光体','Oxidized Copper':'氧化铜','Dark Prismarine':'暗海晶石','Red Sand':'红沙','Red Sandstone':'红砂岩','Soul Sand':'灵魂沙','Soul Soil':'灵魂土','End Stone Bricks':'末地石砖','Cherry Log':'樱花原木','Deepslate Bricks':'深板岩砖','Calcite':'方解石','Tuff':'凝灰岩','Dripstone Block':'滴水石块','Amethyst Block':'紫水晶块','Nautilus Shell Block':'鹦鹉螺壳块','Honeycomb Block':'蜜脾块','Honey Block':'蜂蜜块','Hay Bale':'干草捆','Watermelon':'西瓜','Carved Pumpkin':'雕刻南瓜','Netherrack':'地狱岩','Glowstone':'荧石'
 };
 
 const FULL_PALETTE = [
@@ -371,7 +457,6 @@ function rgbToLab(r,g,b){
   return [116*fy-16, 500*(fx-fy), 200*(fy-fz)];
 }
 
-/* 展开全量调色板：每个 tone 独立，带中文名 */
 function buildFlatPalette(excludes){
   const flat = [];
   for(const p of FULL_PALETTE){
@@ -385,8 +470,7 @@ function buildFlatPalette(excludes){
       if(avail.length === 0) continue;
       flat.push({
         name: p.c + ' (' + tone + ')',
-        rgb: rgb,
-        hex: rgbToHex(rgb[0], rgb[1], rgb[2]),
+        rgb: rgb, hex: rgbToHex(rgb[0], rgb[1], rgb[2]),
         lab: rgbToLab(rgb[0], rgb[1], rgb[2]),
         blocks: avail.map(n => ({ name: n, nameZh: ZH_MAP[n] || n }))
       });
@@ -395,7 +479,7 @@ function buildFlatPalette(excludes){
   return flat;
 }
 
-/* ═══════════════ 2. Web Worker（内联，纯净无依赖） ═══════════════ */
+/* ═══════════════ 2. Web Worker ═══════════════ */
 const WORKER_CODE = `
 function sRGBToLinear(c){c/=255;return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4)}
 function rgbToLab(r,g,b){
@@ -440,7 +524,6 @@ self.onmessage = function(e){
     
     for(let y=0; y<H; y++){
       for(let x=0; x<W; x++){
-        // 判断是否在图片区域内（非空白填充区）
         if(x < dx || x >= dx + dw || y < dy || y >= dy + dh){
           matrix[y*W + x] = fillIndex;
           continue;
@@ -448,7 +531,7 @@ self.onmessage = function(e){
         const i = (y*W + x)*4;
         const lab = rgbToLab(data[i], data[i+1], data[i+2]);
         const best = nearestKD(kdRoot, lab, {dist:Infinity, node:null});
-        matrix[y*W + x] = best.node.meta.idx; // 存调色板索引
+        matrix[y*W + x] = best.node.meta.idx;
       }
     }
     self.postMessage({type:'result', matrix}, [matrix.buffer]);
@@ -475,8 +558,15 @@ let worker=null, workerBusy=false;
 let currentImageBitmap=null, currentImageBlob=null;
 let lastPixels=null;
 let excludedCategories=new Set();
-let flatPalette=[]; // 当前参与计算的颜色数组
+let flatPalette=[]; 
 let fillBlockObj=null;
+
+// 地图详情相关
+const mapModal=$('mapModal'), modalCloseBtn=$('modalCloseBtn');
+let activeMap=null; // { mx, mz, globalX, globalZ, tileMatrix }
+let guideState={ mode:'step', stepIdx:0, lineIdx:0 };
+let mapProgress={}; // { "mx,mz": { step: 123, mode: "step" } }
+let focusMap=null; // 用于左侧侧边栏联动
 
 const isMobile = ()=>window.innerWidth<=900;
 
@@ -497,7 +587,6 @@ function getExcludes(){
   return kw;
 }
 
-/* 初始化 Worker */
 function initWorker(){
   return new Promise((resolve, reject)=>{
     try {
@@ -510,8 +599,6 @@ function initWorker(){
         else if(e.data.type==='result'){ workerBusy=false; onWorkerResult(e.data); }
       };
       w.onerror = (err)=>{ reject(err); };
-      
-      // 构建并发送初始调色板
       const raw = buildFlatPalette(getExcludes());
       flatPalette = raw.map((p, i)=>({...p, idx:i}));
       w.postMessage({type:'init', palette: flatPalette});
@@ -526,7 +613,6 @@ function rebuildPalette(){
   worker.postMessage({type:'init', palette: flatPalette});
 }
 
-/* 图片上传 */
 dropZone.addEventListener('click',()=>fileInput.click());
 dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('dragover')});
 dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('dragover'));
@@ -545,37 +631,42 @@ async function handleFile(file){
   scheduleCompute();
 }
 
-/* 坐标计算 */
+// 获取当前的地图基准
 function calcMapGrid(x,z){
   const nx=Math.floor((x+64)/128), nz=Math.floor((z+64)/128);
   return {nx,nz,originX:-64+128*nx,originZ:-64+128*nz};
 }
-function updateCoordDisplay(){
-  const x=Number(playerXInput.value)||0, z=Number(playerZInput.value)||0;
-  const g=calcMapGrid(x,z);
-  $('startPos').textContent = `X=${g.originX}, Z=${g.originZ}`;
-  $('mapIndex').textContent = `(${g.nx}, ${g.nz})`;
-  drawGrid(g,x,z);
-}
 
-function drawGrid(g, px, pz){
+// 绘制侧边栏网格（支持 focusMap 联动）
+function drawGrid(px, pz, focusMx, focusMz){
   const ctx=gridCanvas.getContext('2d'), W=gridCanvas.width, H=gridCanvas.height;
   ctx.clearRect(0,0,W,H); const cw=W/3, ch=H/3;
   ctx.fillStyle='#16161d'; ctx.fillRect(0,0,W,H);
   
+  const base = calcMapGrid(px, pz);
+  // 如果传了 focus，就以 focus 为中心
+  const centerNx = focusMx !== undefined ? focusMx : base.nx;
+  const centerNz = focusMz !== undefined ? focusMz : base.nz;
+
   for(let gz=0;gz<3;gz++)for(let gx=0;gx<3;gx++){
-    const nx=g.nx+(gx-1), nz=g.nz+(gz-1), sx=gx*cw, sy=gz*ch, isCenter=(gx===1&&gz===1);
-    ctx.fillStyle = isCenter ? 'rgba(124,108,255,.15)' : 'rgba(255,255,255,.02)';
+    const nx=centerNx+(gx-1), nz=centerNz+(gz-1), sx=gx*cw, sy=gz*ch;
+    
+    // 判断这个格子是不是玩家所在的图，或者是不是当前要高亮的图
+    const isPlayerMap = (nx === base.nx && nz === base.nz);
+    const isHighlight = (nx === centerNx && nz === centerNz);
+    
+    ctx.fillStyle = isHighlight ? 'rgba(124,108,255,.15)' : 'rgba(255,255,255,.02)';
     ctx.fillRect(sx,sy,cw,ch);
-    ctx.strokeStyle = isCenter ? '#7c6cff' : '#32323e';
-    ctx.lineWidth = isCenter ? 3 : 1;
+    
+    ctx.strokeStyle = isHighlight ? '#7c6cff' : '#32323e';
+    ctx.lineWidth = isHighlight ? 3 : 1;
     ctx.strokeRect(sx+1,sy+1,cw-2,ch-2);
     
-    ctx.fillStyle = isCenter ? '#fff' : '#5a5a68';
-    ctx.font = 'bold 14px system-ui'; // 字体放大
+    ctx.fillStyle = isHighlight ? '#fff' : (isPlayerMap ? '#5b9aff' : '#5a5a68');
+    ctx.font = 'bold 14px system-ui';
     ctx.fillText(`地图 (${nx}, ${nz})`, sx+10, sy+24);
     
-    if(isCenter){
+    if(isHighlight){
       const ox=-64+128*nx, oz=-64+128*nz;
       ctx.fillStyle = 'rgba(255,255,255,.7)';
       ctx.font = '13px monospace';
@@ -583,25 +674,37 @@ function drawGrid(g, px, pz){
     }
   }
   
-  // 玩家位置
-  const cx=cw, cy=ch;
-  const lx=Math.max(0,Math.min(1,(px-g.originX)/128)), lz=Math.max(0,Math.min(1,(pz-g.originZ)/128));
-  const dx=cx+lx*cw, dy=cy+lz*ch;
+  // 玩家位置始终画在最正确的地图里
+  const pxMap = base.nx, pzMap = base.nz;
+  // 找到玩家所在格子在当前视野里的位置
+  const gxPlayer = pxMap - centerNx + 1;
+  const gzPlayer = pzMap - centerNz + 1;
   
-  ctx.beginPath(); ctx.arc(dx,dy,8,0,Math.PI*2);
-  ctx.fillStyle='#5b9aff'; ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.stroke();
-  
-  // 箭头
-  ctx.beginPath(); ctx.moveTo(cx+40,cy+60); ctx.lineTo(cx+cw-40,cy+ch-40);
-  ctx.strokeStyle='#e0a040'; ctx.lineWidth=4; ctx.stroke();
-  const ang=Math.atan2((cy+ch-40)-(cy+60), (cx+cw-40)-(cx+40));
-  ctx.beginPath(); ctx.moveTo(cx+cw-40,cy+ch-40);
-  ctx.lineTo(cx+cw-40-16*Math.cos(ang-0.4), cy+ch-40-16*Math.sin(ang-0.4));
-  ctx.lineTo(cx+cw-40-16*Math.cos(ang+0.4), cy+ch-40-16*Math.sin(ang+0.4));
-  ctx.closePath(); ctx.fillStyle='#e0a040'; ctx.fill();
+  if(gxPlayer >= 0 && gxPlayer < 3 && gzPlayer >= 0 && gzPlayer < 3){
+    const cx = gxPlayer * cw, cy = gzPlayer * ch;
+    const lx=Math.max(0,Math.min(1,(px-base.originX)/128)), lz=Math.max(0,Math.min(1,(pz-base.originZ)/128));
+    const dx=cx+lx*cw, dy=cy+lz*ch;
+    
+    ctx.beginPath(); ctx.arc(dx,dy,8,0,Math.PI*2);
+    ctx.fillStyle='#5b9aff'; ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.stroke();
+    ctx.fillStyle='#fff'; ctx.font='bold 12px monospace'; ctx.fillText('玩家', dx+12, dy+4);
+  }
 }
-playerXInput.addEventListener('input',()=>{updateCoordDisplay();if(lastPixels)renderMapTiles(lastPixels)});
-playerZInput.addEventListener('input',()=>{updateCoordDisplay();if(lastPixels)renderMapTiles(lastPixels)});
+
+function updateCoordDisplay(){
+  const x=Number(playerXInput.value)||0, z=Number(playerZInput.value)||0;
+  const g=calcMapGrid(x,z);
+  $('startPos').textContent = `X=${g.originX}, Z=${g.originZ}`;
+  
+  if (activeMap) {
+    drawGrid(x, z, activeMap.mx, activeMap.mz);
+  } else {
+    drawGrid(x, z);
+  }
+}
+
+playerXInput.addEventListener('input', updateCoordDisplay);
+playerZInput.addEventListener('input', updateCoordDisplay);
 
 /* 调度计算 */
 [presetSel,widthInput,heightInput,modeSel,fillSel].forEach(el=>{
@@ -619,7 +722,6 @@ function scheduleCompute(){
   window._debounce = setTimeout(()=>{ compute(); }, isMobile()?300:150);
 }
 
-/* 核心计算（等比缩放） */
 async function compute(){
   if(!currentImageBitmap || !worker || workerBusy) return;
   
@@ -636,13 +738,11 @@ async function compute(){
   off.width=canvasW; off.height=canvasH;
   const ctx = off.getContext('2d', {willReadFrequently:true});
   
-  // 获取填充方块数据
   const fillName = getFillName(fillSel.value);
   fillBlockObj = flatPalette.find(p => p.blocks.some(b => b.name === fillName)) || flatPalette[0];
   ctx.fillStyle = fillBlockObj.hex;
   ctx.fillRect(0,0,canvasW,canvasH);
   
-  // 等比缩放居中
   const imgRatio = currentImageBitmap.width / currentImageBitmap.height;
   const targetRatio = userW / userH;
   let dw, dh, dx, dy;
@@ -671,7 +771,6 @@ function getFillName(id) {
   return {'white_wool':'White Wool','white_concrete':'White Concrete','snow_block':'Snow Block','quartz_block':'Quartz Block'}[id] || 'White Wool';
 }
 
-/* Worker 结果处理 */
 function onWorkerResult(data){
   const { matrix } = data;
   const p = window._calcParams;
@@ -684,6 +783,9 @@ function onWorkerResult(data){
     fillIndex: p.fillIdx,
     mode: p.mode
   };
+
+  // 新图生成后，清空之前所有地图的建造进度
+  mapProgress = {};
 
   drawPreview(lastPixels);
   renderMaterials(lastPixels);
@@ -698,7 +800,6 @@ function onWorkerResult(data){
   workerBusy = false;
 }
 
-/* 预览渲染 */
 function drawPreview(p){
   previewCanvas.width=p.W; previewCanvas.height=p.H;
   const ctx=previewCanvas.getContext('2d');
@@ -722,7 +823,7 @@ function drawPreview(p){
   previewMeta.innerHTML = `<span>画布：<b>${p.W}×${p.H}</b></span><span>方块种类：<b>${used}</b></span>`;
 }
 
-/* 触摸/鼠标 Tooltip（Pointer Events） */
+// 触摸/鼠标 Tooltip
 let pointerLocked = false;
 previewCanvas.addEventListener('pointerdown', e=>{
   if(!lastPixels) return;
@@ -752,18 +853,14 @@ function showTooltip(cx, cy){
   const block = lastPixels.palette[lastPixels.matrix[y*lastPixels.W+x]];
   if(!block) return;
   
-  const zhName = block.blocks[0].nameZh;
-  const enName = block.blocks[0].name;
-  
-  tooltip.innerHTML = `<span style="color:var(--accent)">${zhName}</span> <span style="font-size:10px;color:#aaa">(${enName})</span>`;
+  tooltip.innerHTML = `<span style="color:var(--accent)">${block.blocks[0].nameZh}</span> <span style="font-size:10px;color:#aaa">(${block.blocks[0].name})</span>`;
   tooltip.style.display = 'block';
   tooltip.style.left = Math.min(cx+14, window.innerWidth-200)+'px';
   tooltip.style.top = Math.min(cy+14, window.innerHeight-60)+'px';
 }
 
-/* 材料清单统计（按方块合并） */
 function renderMaterials(p){
-  const m = {}; // nameZh -> { count, hex }
+  const m = {};
   for(let i=0;i<p.matrix.length;i++){
     const block = p.palette[p.matrix[i]];
     if(!block) continue;
@@ -777,15 +874,15 @@ function renderMaterials(p){
   matTotalBadge.textContent = total.toLocaleString();
   
   materialList.innerHTML = entries.map(([name, v])=>{
-    return `<div class="mat-item">
-      <span class="mat-swatch" style="background:${v.hex}"></span>
-      <span class="mat-name">${name}</span>
-      <span class="mat-count">${v.count.toLocaleString()}</span>
+    return `<div class="mat-item" style="display:flex;align-items:center;gap:9px;padding:6px 4px;border-bottom:1px solid var(--border)">
+      <span style="width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,.15);background:${v.hex}"></span>
+      <span style="flex:1">${name}</span>
+      <span style="font-family:var(--mono);color:var(--accent2);font-weight:700">${v.count.toLocaleString()}</span>
     </div>`;
   }).join('');
 }
 
-/* 地图分块 */
+// 渲染分块卡片
 function renderMapTiles(p){
   const cols=Math.ceil(p.W/128), rows=Math.ceil(p.H/128);
   mapCountBadge.textContent=`${cols*rows} 张`;
@@ -802,11 +899,11 @@ function renderMapTiles(p){
       tMatrix[ty*128+tx] = (gx<p.W && gy<p.H) ? p.matrix[gy*p.W+gx] : p.fillIndex;
     }
     const cid=`tile_${i}_${j}`;
-    html += `<div class="map-card">
+    html += `<div class="map-card" onclick="openMapDetail(${nx}, ${nz}, ${ox}, ${oz})">
       <div class="map-card-head"><span class="step-badge">步骤 ${step}</span><span class="map-index">地图 (${nx}, ${nz})</span></div>
       <canvas id="${cid}" width="128" height="128" class="map-canvas"></canvas>
       <div class="map-coords">
-        <div>第一个方块: <b>X=${ox}, Z=${oz}</b></div>
+        <div>起点: <b>X=${ox}, Z=${oz}</b></div>
       </div>
     </div>`;
     tiles.push({cid, tMatrix}); step++;
@@ -827,6 +924,271 @@ function renderMapTiles(p){
   }
 }
 
+/* ═══════════════ 4. 地图详情与施工导航 ═══════════════ */
+
+window.openMapDetail = function(mx, mz, ox, oz) {
+  if(!lastPixels) return;
+  
+  const base = calcMapGrid(Number(playerXInput.value)||0, Number(playerZInput.value)||0);
+  const relX = mx - base.nx, relZ = mz - base.nz;
+  
+  // 提取子矩阵
+  const tMatrix = new Uint8Array(128*128);
+  for(let ty=0;ty<128;ty++)for(let tx=0;tx<128;tx++){
+    const gx=relX*128+tx, gy=relZ*128+ty;
+    tMatrix[ty*128+tx] = (gx>=0 && gx<lastPixels.W && gy>=0 && gy<lastPixels.H) ? lastPixels.matrix[gy*lastPixels.W+gx] : lastPixels.fillIndex;
+  }
+  
+  activeMap = { mx, mz, globalX: ox, globalZ: oz, tileMatrix: tMatrix };
+  
+  // 左侧侧边栏网格联动
+  updateCoordDisplay();
+  
+  // 初始化进度
+  const mapKey = `${mx},${mz}`;
+  if(!mapProgress[mapKey]) mapProgress[mapKey] = { step: 0, mode: 'step', lineIdx: 0 };
+  guideState = { ...mapProgress[mapKey] };
+  
+  // 设置 UI
+  $('modalTitle').textContent = `地图 (${mx}, ${mz}) 建造详情`;
+  
+  // 绘制主图
+  const mCanvas = $('modalCanvas');
+  const mCtx = mCanvas.getContext('2d');
+  const mImg = mCtx.createImageData(128,128);
+  for(let k=0;k<128*128;k++){
+    const b = lastPixels.palette[tMatrix[k]] || lastPixels.palette[0];
+    const hex = b.hex;
+    mImg.data[k*4]=parseInt(hex.slice(1,3),16);
+    mImg.data[k*4+1]=parseInt(hex.slice(3,5),16);
+    mImg.data[k*4+2]=parseInt(hex.slice(5,7),16);
+    mImg.data[k*4+3]=255;
+  }
+  mCtx.putImageData(mImg, 0, 0);
+  
+  // 切换 Tab 到正确的模式
+  document.querySelectorAll('.guide-tab').forEach(t=>t.classList.toggle('active', t.dataset.gtab === guideState.mode));
+  document.querySelectorAll('.guide-content').forEach(c=>c.classList.remove('active'));
+  $('gc-step').classList.toggle('active', guideState.mode==='step');
+  $('gc-line').classList.toggle('active', guideState.mode!=='step');
+  
+  // 恢复模式 UI
+  if(guideState.mode === 'step') {
+    updateStepUI();
+  } else {
+    $('gLineLabel').textContent = guideState.mode==='row' ? '行索引' : '列索引';
+    $('gLineVal').textContent = guideState.lineIdx + 1;
+    renderLineList();
+    updateGuideCanvas();
+  }
+  
+  mapModal.classList.add('show');
+};
+
+modalCloseBtn.onclick = () => {
+  mapModal.classList.remove('show');
+  activeMap = null;
+  updateCoordDisplay(); // 恢复左侧网格
+};
+
+// 逐格模式 UI 更新
+function updateStepUI() {
+  if(!activeMap) return;
+  const step = guideState.stepIdx;
+  const rx = step % 128;
+  const ry = Math.floor(step / 128);
+  const b = lastPixels.palette[activeMap.tileMatrix[ry*128+rx]] || lastPixels.palette[0];
+  
+  $('gStepNum').textContent = `${step + 1} / 16384`;
+  $('gRelPos').textContent = `(${rx}, ${ry})`;
+  $('gWorldPos').textContent = `(X=${activeMap.globalX + rx}, Z=${activeMap.globalZ + ry})`;
+  $('gBlockSw').style.background = b.hex;
+  $('gBlockName').textContent = b.blocks[0].nameZh;
+  
+  updateGuideCanvas();
+  saveProgress();
+}
+
+// 高亮探照灯 Canvas
+function updateGuideCanvas() {
+  if(!activeMap) return;
+  const ctx = $('modalGuideCanvas').getContext('2d');
+  ctx.clearRect(0,0,128,128);
+  
+  if(guideState.mode === 'step') {
+    const rx = guideState.stepIdx % 128;
+    const ry = Math.floor(guideState.stepIdx / 128);
+    
+    // 画暗色遮罩
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0,0,128,128);
+    // 清空当前格子
+    ctx.clearRect(rx, ry, 1, 1);
+    
+    // 画高亮红框
+    ctx.strokeStyle = '#ff0055';
+    ctx.lineWidth = 0.8;
+    ctx.strokeRect(rx + 0.4, ry + 0.4, 1, 1);
+    
+    // 十字线辅助定位（如果边缘太远）
+    if(rx < 4 || rx > 124 || ry < 4 || ry > 124) {
+      ctx.strokeStyle = 'rgba(255,0,85,0.3)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(rx + 0.5, 0); ctx.lineTo(rx + 0.5, 128);
+      ctx.moveTo(0, ry + 0.5); ctx.lineTo(128, ry + 0.5);
+      ctx.stroke();
+    }
+  } else if(guideState.mode === 'row') {
+    const ry = guideState.lineIdx;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0,0,128,128);
+    ctx.clearRect(0, ry, 128, 1);
+    ctx.strokeStyle = '#7c6cff';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(0, ry + 0.5, 128, 1);
+  } else if(guideState.mode === 'col') {
+    const rx = guideState.lineIdx;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0,0,128,128);
+    ctx.clearRect(rx, 0, 1, 128);
+    ctx.strokeStyle = '#7c6cff';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(rx + 0.5, 0, 1, 128);
+  }
+}
+
+// 渲染行/列列表
+function renderLineList() {
+  if(!activeMap) return;
+  const listEl = $('gLineList');
+  let html = '';
+  
+  if(guideState.mode === 'row') {
+    const ry = guideState.lineIdx;
+    for(let x=0; x<128; x++) {
+      const b = lastPixels.palette[activeMap.tileMatrix[ry*128+x]] || lastPixels.palette[0];
+      html += `<div class="list-row ${x === guideState.stepIdx % 128 ? 'active' : ''}">
+        <span class="idx">${x}</span>
+        <span class="sw" style="background:${b.hex}"></span>
+        <span class="name">${b.blocks[0].nameZh}</span>
+        <span class="coord">X+${x}, Z+${ry}</span>
+      </div>`;
+    }
+  } else {
+    const rx = guideState.lineIdx;
+    for(let y=0; y<128; y++) {
+      const b = lastPixels.palette[activeMap.tileMatrix[y*128+rx]] || lastPixels.palette[0];
+      html += `<div class="list-row ${y === Math.floor(guideState.stepIdx / 128) ? 'active' : ''}">
+        <span class="idx">${y}</span>
+        <span class="sw" style="background:${b.hex}"></span>
+        <span class="name">${b.blocks[0].nameZh}</span>
+        <span class="coord">X+${rx}, Z+${y}</span>
+      </div>`;
+    }
+  }
+  listEl.innerHTML = html;
+  
+  // 自动滚动到高亮位置
+  const activeRow = listEl.querySelector('.list-row.active');
+  if(activeRow) {
+    activeRow.scrollIntoView({ block: 'center' });
+  }
+}
+
+// 保存进度
+function saveProgress() {
+  if(!activeMap) return;
+  const mapKey = `${activeMap.mx},${activeMap.mz}`;
+  mapProgress[mapKey] = { ...guideState };
+  // 异步写入 IndexedDB
+  if(db) {
+    const tx = db.transaction('state','readwrite');
+    tx.objectStore('state').put({ ...window.lastSavedState, mapProgress }, 'lastState');
+  }
+}
+
+// 逐格按钮事件
+$('gBtnPrev').onclick = () => {
+  if(guideState.stepIdx > 0) { guideState.stepIdx--; updateStepUI(); }
+};
+$('gBtnNext').onclick = () => {
+  if(guideState.stepIdx < 16383) { guideState.stepIdx++; updateStepUI(); }
+};
+
+// 行/列按钮事件
+$('gLinePrev').onclick = () => {
+  if(guideState.lineIdx > 0) {
+    guideState.lineIdx--;
+    // 更新 stepIdx 以便同步高亮
+    guideState.stepIdx = guideState.mode === 'row' ? guideState.lineIdx * 128 : guideState.lineIdx;
+    $('gLineVal').textContent = guideState.lineIdx + 1;
+    renderLineList();
+    updateGuideCanvas();
+    saveProgress();
+  }
+};
+$('gLineNext').onclick = () => {
+  if(guideState.lineIdx < 127) {
+    guideState.lineIdx++;
+    guideState.stepIdx = guideState.mode === 'row' ? guideState.lineIdx * 128 : guideState.lineIdx;
+    $('gLineVal').textContent = guideState.lineIdx + 1;
+    renderLineList();
+    updateGuideCanvas();
+    saveProgress();
+  }
+};
+
+// Tab 切换
+document.querySelectorAll('.guide-tab').forEach(tab => {
+  tab.onclick = () => {
+    guideState.mode = tab.dataset.gtab;
+    document.querySelectorAll('.guide-tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('.guide-content').forEach(c=>c.classList.remove('active'));
+    $('gc-step').classList.toggle('active', guideState.mode==='step');
+    $('gc-line').classList.toggle('active', guideState.mode!=='step');
+    
+    if(guideState.mode === 'step') {
+      updateStepUI();
+    } else {
+      guideState.lineIdx = guideState.mode === 'row' ? Math.floor(guideState.stepIdx / 128) : guideState.stepIdx % 128;
+      $('gLineLabel').textContent = guideState.mode==='row' ? '行索引' : '列索引';
+      $('gLineVal').textContent = guideState.lineIdx + 1;
+      renderLineList();
+      updateGuideCanvas();
+      saveProgress();
+    }
+  };
+});
+
+// 点击大图移动探照灯
+$('modalCanvas').addEventListener('pointerdown', e => {
+  if(!activeMap) return;
+  const rect = $('modalCanvas').getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / rect.width * 128);
+  const y = Math.floor((e.clientY - rect.top) / rect.height * 128);
+  if(x<0||y<0||x>=128||y>=128) return;
+  
+  if(guideState.mode === 'step') {
+    guideState.stepIdx = y * 128 + x;
+    updateStepUI();
+  } else if(guideState.mode === 'row') {
+    guideState.lineIdx = y;
+    $('gLineVal').textContent = y + 1;
+    renderLineList();
+    updateGuideCanvas();
+    saveProgress();
+  } else {
+    guideState.lineIdx = x;
+    $('gLineVal').textContent = x + 1;
+    renderLineList();
+    updateGuideCanvas();
+    saveProgress();
+  }
+});
+
+/* ═══════════════ 5. 数据统计/导出/持久化 ═══════════════ */
 function updateStats(p){
   statSize.textContent=`${p.W}×${p.H}`;
   statPixels.textContent=(p.W*p.H).toLocaleString();
@@ -834,7 +1196,6 @@ function updateStats(p){
   statMaps.textContent=Math.ceil(p.W/128)*Math.ceil(p.H/128);
 }
 
-/* 导出与缓存 */
 function download(f,c,m){const b=new Blob([c],{type:m||'text/plain;charset=utf-8'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=f;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
 $('exportCsv').addEventListener('click',()=>{
   if(!lastPixels)return;const p=lastPixels;let L=['x,y,方块名称,方块ID,颜色HEX'];
@@ -844,36 +1205,42 @@ $('exportCsv').addEventListener('click',()=>{
   }
   download('mc_pixel_art.csv',L.join('\n'),'text/csv;charset=utf-8');
 });
-$('exportJson').addEventListener('click',()=>{
-  if(!lastPixels)return;const p=lastPixels;
-  const blocks = p.palette.map((b,i)=>({idx:i,name:b.blocks[0].name,nameZh:b.blocks[0].nameZh,hex:b.hex}));
-  download('mc_pixel_art.json',JSON.stringify({width:p.W,height:p.H,blocks,matrix:Array.from(p.matrix)}),'application/json');
-});
 
-const DB_NAME='mc_pixel_db',DB_VER=5;
+const DB_NAME='mc_pixel_db',DB_VER=6;
+let db=null;
 function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VER);r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains('images'))d.createObjectStore('images');if(!d.objectStoreNames.contains('state'))d.createObjectStore('state')};r.onsuccess=e=>{db=e.target.result;res(db)};r.onerror=e=>rej(e.target.error)})}
 async function saveImageToDB(blob){if(!db)await openDB();const tx=db.transaction('images','readwrite');tx.objectStore('images').put(blob,'lastImage')}
+
 async function saveStateToDB(p){
   if(!db)await openDB();
-  const state={W:p.W,H:p.H,userW:p.userW,userH:p.userH,mode:p.mode,fillId:fillSel.value,playerX:playerXInput.value,playerZ:playerZInput.value,width:widthInput.value,height:heightInput.value,matrix:Array.from(p.matrix),excludes:[...excludedCategories]};
-  const tx=db.transaction('state','readwrite');tx.objectStore('state').put(state,'lastState');
+  window.lastSavedState = {
+    W:p.W, H:p.H, userW:p.userW, userH:p.userH, mode:p.mode,
+    fillId:fillSel.value, playerX:playerXInput.value, playerZ:playerZInput.value,
+    width:widthInput.value, height:heightInput.value,
+    matrix:Array.from(p.matrix), excludes:[...excludedCategories],
+    mapProgress: mapProgress // 把施工进度存入
+  };
+  const tx=db.transaction('state','readwrite');tx.objectStore('state').put(window.lastSavedState,'lastState');
 }
+
 async function loadFromDB(){
   if(!db)await openDB();
   const blob=await new Promise(r=>{const q=db.transaction('images').objectStore('images').get('lastImage');q.onsuccess=()=>r(q.result)});
   const state=await new Promise(r=>{const q=db.transaction('state').objectStore('state').get('lastState');q.onsuccess=()=>r(q.result)});
   if(!blob||!state) return;
   
+  window.lastSavedState = state;
   if(state.excludes){ excludedCategories=new Set(state.excludes); updateExcludesUI(); }
   if(state.mode)modeSel.value=state.mode; if(state.width)widthInput.value=state.width; if(state.height)heightInput.value=state.height; if(state.fillId)fillSel.value=state.fillId;
   if(state.playerX)playerXInput.value=state.playerX; if(state.playerZ)playerZInput.value=state.playerZ;
+  
+  if(state.mapProgress) mapProgress = state.mapProgress;
   
   currentImageBlob=blob; currentImageBitmap=await createImageBitmap(blob);
   dropText.textContent=`已恢复（${currentImageBitmap.width}×${currentImageBitmap.height}）`; dropZone.classList.add('loaded');
   genBtn.disabled=false;
   
   if(state.matrix && state.matrix.length===state.W*state.H){
-    // 如果调色板没变，直接恢复
     lastPixels={W:state.W,H:state.H,userW:state.userW,userH:state.userH,matrix:new Uint8Array(state.matrix),palette:flatPalette,fillIndex:0,mode:state.mode};
     drawPreview(lastPixels);renderMaterials(lastPixels);renderMapTiles(lastPixels);updateStats(lastPixels);updateCoordDisplay();
     genStatus.textContent='已恢复上次结果'; genStatus.className='status ok';
@@ -882,7 +1249,6 @@ async function loadFromDB(){
   }
 }
 
-/* 其它 UI 逻辑 */
 function updateExcludesUI(){
   excludeGrid.innerHTML = BLOCK_CATEGORIES.map(c=>
     `<label class="exclude-item ${excludedCategories.has(c.id)?'checked':''}"><input type="checkbox" value="${c.id}" ${excludedCategories.has(c.id)?'checked':''}><span>${c.name}</span></label>`
@@ -908,7 +1274,7 @@ genBtn.addEventListener('click',()=>{loadingMask.classList.add('show');scheduleC
 restoreBtn.addEventListener('click',loadFromDB);
 clearBtn.addEventListener('click',()=>{
   if(!db)return; const tx=db.transaction(['images','state'],'readwrite'); tx.objectStore('images').clear(); tx.objectStore('state').clear();
-  lastPixels=null; excludedCategories.clear(); updateExcludesUI(); rebuildPalette();
+  lastPixels=null; excludedCategories.clear(); mapProgress={}; updateExcludesUI(); rebuildPalette();
   previewCanvas.getContext('2d').clearRect(0,0,previewCanvas.width,previewCanvas.height);
   materialList.innerHTML=''; mapTilesEl.innerHTML=''; genStatus.textContent='缓存已清除';
 });
