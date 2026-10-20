@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MC 地图画生成器 · 基岩版</title>
+<title>MC 地图画生成器2.0</title>
 <style>
 :root {
   --bg:#0e0e13; --bg2:#16161d; --panel:#1e1e27; --panel2:#262631;
@@ -130,12 +130,18 @@ select{cursor:pointer;font-family:inherit}
 #modalCanvas{display:block;width:100%;height:100%;image-rendering:pixelated;cursor:crosshair;touch-action:none}
 #modalGuideCanvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;pointer-events:none;transition:opacity .2s}
 
-.modal-right{width:400px;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
-@media(max-width:768px){.modal-right{width:100%;flex:none;height:50vh;border-left:none;border-top:1px solid var(--border)}}
+.modal-right{width:420px;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+@media(max-width:768px){.modal-right{width:100%;flex:none;height:55vh;border-left:none;border-top:1px solid var(--border)}}
 
 .guide-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--panel);flex-shrink:0}
 .guide-tab{flex:1;background:none;border:none;color:var(--muted);padding:12px 0;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent}
 .guide-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* 坐标跳转输入框 */
+.coord-jump{display:flex;gap:8px;padding:10px 16px;background:var(--bg2);border-bottom:1px solid var(--border);align-items:center;flex-shrink:0}
+.coord-jump span{font-size:12px;color:var(--muted);white-space:nowrap}
+.coord-jump input{width:60px;text-align:center;padding:4px;font-size:12px;min-height:32px;border-radius:6px}
+.coord-jump button{padding:0 12px;font-size:12px;min-height:32px;width:auto}
 
 .guide-content{flex:1;padding:16px;overflow-y:auto;display:none;flex-direction:column;gap:12px}
 .guide-content.active{display:flex}
@@ -190,39 +196,30 @@ select{cursor:pointer;font-family:inherit}
     </div>
 
     <div class="card">
-      <div class="card-title"><span class="num">2</span>分辨率</div>
-      <label>预设尺寸</label>
+      <div class="card-title"><span class="num">2</span>尺寸与切分</div>
+      <label>预设尺寸（自动为 128 的倍数）</label>
       <select id="presetSel">
         <option value="">— 选择预设 —</option>
-        <optgroup label="普通像素画">
-          <option value="16x16">16 × 16</option><option value="32x32">32 × 32</option>
-          <option value="48x48">48 × 48</option><option value="64x64">64 × 64</option>
-          <option value="96x96">96 × 96</option><option value="128x128">128 × 128</option>
-          <option value="192x192">192 × 192</option><option value="256x256">256 × 256</option>
-        </optgroup>
-        <optgroup label="地图画（128 倍数）">
-          <option value="128x128">128 × 128（1 张）</option>
-          <option value="256x128">256 × 128（2 张）</option>
-          <option value="256x256">256 × 256（4 张）</option>
-          <option value="384x256">384 × 256（6 张）</option>
-          <option value="384x384">384 × 384（9 张）</option>
-        </optgroup>
+        <option value="128x128">128 × 128（1 张地图）</option>
+        <option value="256x256">256 × 256（4 张地图）</option>
+        <option value="384x384">384 × 384（9 张地图）</option>
+        <option value="512x512">512 × 512（16 张地图）</option>
       </select>
       <div class="row" style="margin-top:9px">
-        <div><label>宽（格）</label><input type="number" id="widthInput" value="128" min="1" max="1024"></div>
-        <div><label>高（格）</label><input type="number" id="heightInput" value="128" min="1" max="1024"></div>
+        <div><label>宽（格）</label><input type="number" id="widthInput" value="128" min="1" max="2048"></div>
+        <div><label>高（格）</label><input type="number" id="heightInput" value="128" min="1" max="2048"></div>
       </div>
-      <div class="hint" id="sizeHint">原图等比缩放居中，地图模式自动扩展到 128 倍数填白。</div>
+      <div class="hint" id="sizeHint">尺寸越大，细节越丰富，同色可混合的方块也越多。空白自动填白。</div>
     </div>
 
     <div class="card">
-      <div class="card-title"><span class="num">3</span>模式与填充</div>
-      <label>生成模式</label>
-      <select id="modeSel">
-        <option value="pixel">普通像素画</option>
-        <option value="map" selected>地图画（自动切分）</option>
+      <div class="card-title"><span class="num">3</span>资源库与填充</div>
+      <label>方块资源库</label>
+      <select id="libSel">
+        <option value="survival" selected>生存友好（纯建筑，易量产）</option>
+        <option value="creative">创造全量（包含所有可用方块）</option>
       </select>
-      <label>填充方块（空白区域）</label>
+      <label>填充方块（边缘空白）</label>
       <select id="fillSel">
         <option value="white_wool">白色羊毛</option>
         <option value="white_concrete">白色混凝土</option>
@@ -233,9 +230,9 @@ select{cursor:pointer;font-family:inherit}
 
     <div class="card">
       <div class="card-title" style="margin-bottom:0;cursor:pointer" id="excludeToggle">
-        <span class="num">4</span>方块排除 <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400" id="excludeArrow">▼ 展开</span>
+        <span class="num">4</span>排除特定材质 <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400" id="excludeArrow">▼ 展开</span>
       </div>
-      <div class="hint" style="margin-top:6px">排除过多材质会导致“同色只能选黑曜石”的情况。推荐保留羊毛/混凝土。</div>
+      <div class="hint" style="margin-top:6px">在资源库基础上，进一步排除不想用的材质。</div>
       <div class="exclude-panel" id="excludePanel">
         <div class="exclude-grid" id="excludeGrid"></div>
       </div>
@@ -251,17 +248,17 @@ select{cursor:pointer;font-family:inherit}
       
       <div class="coord-banner">
         <div class="coord-line">
-          <span class="coord-label">地图起点（放第一块）：</span>
+          <span class="coord-label">起点（放第一块）：</span>
           <span class="coord-val highlight" id="startPos">X=0, Z=0</span>
         </div>
         <div class="coord-line">
           <span class="coord-label">延伸方向：</span>
-          <span class="coord-val" style="color:var(--warn)">向 +X（东）, +Z（南）</span>
+          <span class="coord-val" style="color:var(--warn)">+X（东）, +Z（南）</span>
         </div>
       </div>
 
       <div class="grid-wrap"><canvas id="gridCanvas" width="450" height="450"></canvas></div>
-      <div class="hint">基岩版地图按 <code>128×128</code> 划分。点击右侧地图卡片时，此网格会随之切换视角并高亮。</div>
+      <div class="hint">按 <code>128×128</code> 划分。点击右侧卡片时，网格联动高亮。</div>
     </div>
 
     <div class="card">
@@ -277,7 +274,7 @@ select{cursor:pointer;font-family:inherit}
 
   <main class="main">
     <nav class="tabs">
-      <button class="tab active" data-tab="preview">🖼️ 像素预览</button>
+      <button class="tab active" data-tab="preview">🖼️ 物理预览</button>
       <button class="tab" data-tab="maps">🗺️ 地图分块</button>
       <button class="tab" data-tab="materials">📦 材料清单</button>
       <button class="tab" data-tab="matrix">🔢 方块矩阵</button>
@@ -286,7 +283,7 @@ select{cursor:pointer;font-family:inherit}
     <div class="tab-content active" id="tab-preview">
       <div class="preview-stage">
         <div class="canvas-frame"><canvas id="previewCanvas" width="256" height="256"></canvas></div>
-        <div class="preview-meta" id="previewMeta"><span>上传图片后自动生成预览</span></div>
+        <div class="preview-meta" id="previewMeta"><span>上传图片后自动生成物理预览</span></div>
       </div>
     </div>
 
@@ -336,6 +333,13 @@ select{cursor:pointer;font-family:inherit}
         <button class="guide-tab" data-gtab="col">按列预览</button>
       </div>
 
+      <div class="coord-jump">
+        <span>跳转 (0-127):</span>
+        <input type="number" id="jumpX" placeholder="X" min="0" max="127">
+        <input type="number" id="jumpZ" placeholder="Z" min="0" max="127">
+        <button class="btn sm" id="jumpBtn">定位</button>
+      </div>
+
       <!-- 逐格模式 -->
       <div class="guide-content active" id="gc-step">
         <div class="step-info">
@@ -347,7 +351,7 @@ select{cursor:pointer;font-family:inherit}
           <span class="name" id="gBlockName">等待生成</span>
         </div>
         <div style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px">
-          在左侧地图上点击可移动探照灯。<br>进度会自动保存，下次打开继续。
+          在左侧地图上点击也可移动探照灯。<br>进度会自动保存，下次打开继续。
         </div>
         <div class="step-ctrls">
           <button class="btn secondary" id="gBtnPrev">上一步</button>
@@ -377,72 +381,181 @@ select{cursor:pointer;font-family:inherit}
 
 <script>
 /* ═══════════════ 1. 数据与常量 ═══════════════ */
-const ZH_MAP = {
-  'Grass Block':'草方块','Slime Block':'史莱姆块','Cactus':'仙人掌','Sand':'沙子','Sandstone':'砂岩','Birch Planks':'白桦木板','End Stone':'末地石','Cobweb':'蜘蛛网','Mushroom Stem':'蘑菇柄','Redstone Block':'红石块','TNT':'TNT','Magma Block':'岩浆块','Ice':'冰','Packed Ice':'浮冰','Blue Ice':'蓝冰','Iron Block':'铁块','Iron Anvil':'铁砧','Iron Door':'铁门','Smoker':'烟熏炉','Oak Leaves':'橡木树叶','Vine':'藤蔓','Sugar Cane':'甘蔗','Snow Block':'雪块','White Wool':'白色羊毛','White Concrete':'白色混凝土','Clay':'黏土块','Dirt Path':'土径','Dirt':'泥土','Gravel':'砂砾','Jungle Planks':'丛林木板','Coarse Dirt':'砂土','Stone':'石头','Cobblestone':'圆石','Andesite':'安山岩','Bricks':'红砖块','Water':'水','Bubble Column':'气泡柱','Oak Planks':'橡木木板','Crafting Table':'工作台','Bookshelf':'书架','Oak Sign':'橡木告示牌','Quartz Block':'石英块','Sea Lantern':'海晶灯','White Terracotta':'白色陶瓦','Orange Wool':'橙色羊毛','Orange Concrete':'橙色混凝土','Pumpkin':'南瓜','Copper Block':'铜块','Magenta Wool':'品红色羊毛','Magenta Concrete':'品红色混凝土','Amethyst Cluster':'紫水晶簇','Light Blue Wool':'淡蓝色羊毛','Light Blue Concrete':'淡蓝色混凝土','Yellow Wool':'黄色羊毛','Yellow Concrete':'黄色混凝土','Sponge':'海绵','Lime Wool':'黄绿色羊毛','Lime Concrete':'黄绿色混凝土','Pitcher Plant':'瓶子草','Pink Wool':'粉红色羊毛','Pink Concrete':'粉红色混凝土','Cherry Planks':'樱花木板','Gray Wool':'灰色羊毛','Gray Concrete':'灰色混凝土','Deepslate':'深板岩','Light Gray Wool':'淡灰色羊毛','Light Gray Concrete':'淡灰色混凝土','Smooth Stone':'平滑石头','Cyan Wool':'青色羊毛','Cyan Concrete':'青色混凝土','Purple Wool':'紫色羊毛','Purple Concrete':'紫色混凝土','Purpur Block':'紫珀块','Blue Wool':'蓝色羊毛','Blue Concrete':'蓝色混凝土','Lapis Block':'青金石块','Brown Wool':'棕色羊毛','Brown Concrete':'棕色混凝土','Dark Oak Planks':'深色橡木木板','Green Wool':'绿色羊毛','Green Concrete':'绿色混凝土','Emerald Block':'绿宝石块','Red Wool':'红色羊毛','Red Concrete':'红色混凝土','Black Wool':'黑色羊毛','Black Concrete':'黑色混凝土','Coal Block':'煤炭块','Gold Block':'金块','Diamond Block':'钻石块','Prismarine':'海晶石','Nether Bricks':'下界砖块','Red Nether Bricks':'红色下界砖块','Nether Wart Block':'下界疣块','Warped Wart Block':'诡异疣块','Obsidian':'黑曜石','Crying Obsidian':'哭泣的黑曜石','Moss Block':'苔藓块','Moss Carpet':'苔藓地毯','Shroomlight':'菌光体','Oxidized Copper':'氧化铜','Dark Prismarine':'暗海晶石','Red Sand':'红沙','Red Sandstone':'红砂岩','Soul Sand':'灵魂沙','Soul Soil':'灵魂土','End Stone Bricks':'末地石砖','Cherry Log':'樱花原木','Deepslate Bricks':'深板岩砖','Calcite':'方解石','Tuff':'凝灰岩','Dripstone Block':'滴水石块','Amethyst Block':'紫水晶块','Nautilus Shell Block':'鹦鹉螺壳块','Honeycomb Block':'蜜脾块','Honey Block':'蜂蜜块','Hay Bale':'干草捆','Watermelon':'西瓜','Carved Pumpkin':'雕刻南瓜','Netherrack':'地狱岩','Glowstone':'荧石'
+// 物理方块真实颜色库
+const BLOCKS_DB = {
+  // 基础建筑（生存）
+  'White Wool': { hex:'#E9ECEC', rgb:[233,236,236], zh:'白色羊毛', cat:'wool' },
+  'Orange Wool': { hex:'#F07613', rgb:[240,118,19], zh:'橙色羊毛', cat:'wool' },
+  'Magenta Wool': { hex:'#BD44B3', rgb:[189,68,179], zh:'品红色羊毛', cat:'wool' },
+  'Light Blue Wool': { hex:'#3AAFD9', rgb:[58,175,217], zh:'淡蓝色羊毛', cat:'wool' },
+  'Yellow Wool': { hex:'#F8C627', rgb:[248,198,39], zh:'黄色羊毛', cat:'wool' },
+  'Lime Wool': { hex:'#70B919', rgb:[112,185,25], zh:'黄绿色羊毛', cat:'wool' },
+  'Pink Wool': { hex:'#ED8DAC', rgb:[237,141,172], zh:'粉红色羊毛', cat:'wool' },
+  'Gray Wool': { hex:'#3E4447', rgb:[62,68,71], zh:'灰色羊毛', cat:'wool' },
+  'Light Gray Wool': { hex:'#8E8E86', rgb:[142,142,134], zh:'淡灰色羊毛', cat:'wool' },
+  'Cyan Wool': { hex:'#158991', rgb:[21,137,145], zh:'青色羊毛', cat:'wool' },
+  'Purple Wool': { hex:'#792AAC', rgb:[121,42,172], zh:'紫色羊毛', cat:'wool' },
+  'Blue Wool': { hex:'#35399D', rgb:[53,57,157], zh:'蓝色羊毛', cat:'wool' },
+  'Brown Wool': { hex:'#724728', rgb:[114,71,40], zh:'棕色羊毛', cat:'wool' },
+  'Green Wool': { hex:'#546D1B', rgb:[84,109,27], zh:'绿色羊毛', cat:'wool' },
+  'Red Wool': { hex:'#A12722', rgb:[161,39,34], zh:'红色羊毛', cat:'wool' },
+  'Black Wool': { hex:'#141519', rgb:[20,21,25], zh:'黑色羊毛', cat:'wool' },
+
+  'White Concrete': { hex:'#CFD5D6', rgb:[207,213,214], zh:'白色混凝土', cat:'concrete' },
+  'Orange Concrete': { hex:'#E06101', rgb:[224,97,1], zh:'橙色混凝土', cat:'concrete' },
+  'Magenta Concrete': { hex:'#A9309F', rgb:[169,48,159], zh:'品红色混凝土', cat:'concrete' },
+  'Light Blue Concrete': { hex:'#2489C7', rgb:[36,137,199], zh:'淡蓝色混凝土', cat:'concrete' },
+  'Yellow Concrete': { hex:'#F1AF15', rgb:[241,175,21], zh:'黄色混凝土', cat:'concrete' },
+  'Lime Concrete': { hex:'#5EA919', rgb:[94,169,25], zh:'黄绿色混凝土', cat:'concrete' },
+  'Pink Concrete': { hex:'#D5658F', rgb:[213,101,143], zh:'粉红色混凝土', cat:'concrete' },
+  'Gray Concrete': { hex:'#373A3E', rgb:[55,58,62], zh:'灰色混凝土', cat:'concrete' },
+  'Light Gray Concrete': { hex:'#7D7D73', rgb:[125,125,115], zh:'淡灰色混凝土', cat:'concrete' },
+  'Cyan Concrete': { hex:'#157788', rgb:[21,119,136], zh:'青色混凝土', cat:'concrete' },
+  'Purple Concrete': { hex:'#64209C', rgb:[100,32,156], zh:'紫色混凝土', cat:'concrete' },
+  'Blue Concrete': { hex:'#2C2E8F', rgb:[44,46,143], zh:'蓝色混凝土', cat:'concrete' },
+  'Brown Concrete': { hex:'#603C20', rgb:[96,60,32], zh:'棕色混凝土', cat:'concrete' },
+  'Green Concrete': { hex:'#495B24', rgb:[73,91,36], zh:'绿色混凝土', cat:'concrete' },
+  'Red Concrete': { hex:'#8E2121', rgb:[142,33,33], zh:'红色混凝土', cat:'concrete' },
+  'Black Concrete': { hex:'#080A0F', rgb:[8,10,15], zh:'黑色混凝土', cat:'concrete' },
+
+  'White Terracotta': { hex:'#D1B1A1', rgb:[209,177,161], zh:'白色陶瓦', cat:'terracotta' },
+  'Orange Terracotta': { hex:'#A25426', rgb:[162,84,38], zh:'橙色陶瓦', cat:'terracotta' },
+  'Magenta Terracotta': { hex:'#95576C', rgb:[149,87,108], zh:'品红色陶瓦', cat:'terracotta' },
+  'Light Blue Terracotta': { hex:'#706C8A', rgb:[112,108,138], zh:'淡蓝色陶瓦', cat:'terracotta' },
+  'Yellow Terracotta': { hex:'#BA8523', rgb:[186,133,35], zh:'黄色陶瓦', cat:'terracotta' },
+  'Lime Terracotta': { hex:'#677535', rgb:[103,117,53], zh:'黄绿色陶瓦', cat:'terracotta' },
+  'Pink Terracotta': { hex:'#A24E4E', rgb:[162,78,78], zh:'粉红色陶瓦', cat:'terracotta' },
+  'Gray Terracotta': { hex:'#3A2A24', rgb:[58,42,36], zh:'灰色陶瓦', cat:'terracotta' },
+  'Light Gray Terracotta': { hex:'#876B62', rgb:[135,107,98], zh:'淡灰色陶瓦', cat:'terracotta' },
+  'Cyan Terracotta': { hex:'#575B5B', rgb:[87,91,91], zh:'青色陶瓦', cat:'terracotta' },
+  'Purple Terracotta': { hex:'#76465A', rgb:[118,70,90], zh:'紫色陶瓦', cat:'terracotta' },
+  'Blue Terracotta': { hex:'#4A3C5B', rgb:[74,60,91], zh:'蓝色陶瓦', cat:'terracotta' },
+  'Brown Terracotta': { hex:'#4D3324', rgb:[77,51,36], zh:'棕色陶瓦', cat:'terracotta' },
+  'Green Terracotta': { hex:'#4C532A', rgb:[76,83,42], zh:'绿色陶瓦', cat:'terracotta' },
+  'Red Terracotta': { hex:'#8E3C2E', rgb:[142,60,46], zh:'红色陶瓦', cat:'terracotta' },
+  'Black Terracotta': { hex:'#251610', rgb:[37,22,16], zh:'黑色陶瓦', cat:'terracotta' },
+
+  // 扩展（创造）
+  'Snow Block': { hex:'#F9FEFE', rgb:[249,254,254], zh:'雪块', cat:'other' },
+  'Quartz Block': { hex:'#EBE5DE', rgb:[235,229,222], zh:'石英块', cat:'mineral' },
+  'Calcite': { hex:'#DFDFDA', rgb:[223,223,218], zh:'方解石', cat:'stone' },
+  'Smooth Stone': { hex:'#A0A0A0', rgb:[160,160,160], zh:'平滑石头', cat:'stone' },
+  'Stone': { hex:'#7D7D7D', rgb:[125,125,125], zh:'石头', cat:'stone' },
+  'Cobblestone': { hex:'#7A7A7A', rgb:[122,122,122], zh:'圆石', cat:'stone' },
+  'Andesite': { hex:'#888B88', rgb:[136,139,136], zh:'安山岩', cat:'stone' },
+  'Deepslate': { hex:'#515151', rgb:[81,81,81], zh:'深板岩', cat:'stone' },
+  'Tuff': { hex:'#6D6E5F', rgb:[109,110,95], zh:'凝灰岩', cat:'stone' },
+  'Dripstone Block': { hex:'#866855', rgb:[134,104,85], zh:'滴水石块', cat:'stone' },
+  
+  'Oak Planks': { hex:'#BC8F5A', rgb:[188,143,90], zh:'橡木木板', cat:'wood' },
+  'Spruce Planks': { hex:'#755631', rgb:[117,86,49], zh:'云杉木板', cat:'wood' },
+  'Birch Planks': { hex:'#D7C185', rgb:[215,193,133], zh:'白桦木板', cat:'wood' },
+  'Jungle Planks': { hex:'#B8865B', rgb:[184,134,91], zh:'丛林木板', cat:'wood' },
+  'Dark Oak Planks': { hex:'#4C3420', rgb:[76,52,32], zh:'深色橡木木板', cat:'wood' },
+  'Cherry Planks': { hex:'#E2B2A6', rgb:[226,178,166], zh:'樱花木板', cat:'wood' },
+  'Crimson Planks': { hex:'#65334D', rgb:[101,51,77], zh:'绯红木板', cat:'wood' },
+  'Warped Planks': { hex:'#2B6963', rgb:[43,105,99], zh:'诡异木板', cat:'wood' },
+
+  'Gold Block': { hex:'#F9ED4E', rgb:[249,237,78], zh:'金块', cat:'mineral' },
+  'Iron Block': { hex:'#DCDCDC', rgb:[220,220,220], zh:'铁块', cat:'mineral' },
+  'Diamond Block': { hex:'#62EDE3', rgb:[98,237,227], zh:'钻石块', cat:'mineral' },
+  'Emerald Block': { hex:'#42E074', rgb:[66,224,116], zh:'绿宝石块', cat:'mineral' },
+  'Lapis Block': { hex:'#1D489D', rgb:[29,72,157], zh:'青金石块', cat:'mineral' },
+  'Redstone Block': { hex:'#A81708', rgb:[168,23,8], zh:'红石块', cat:'mineral' },
+  'Coal Block': { hex:'#100F0F', rgb:[16,15,15], zh:'煤炭块', cat:'mineral' },
+  'Copper Block': { hex:'#C06B4E', rgb:[192,107,78], zh:'铜块', cat:'mineral' },
+  'Amethyst Block': { hex:'#8464C2', rgb:[132,100,194], zh:'紫水晶块', cat:'mineral' },
+  
+  'Netherrack': { hex:'#612828', rgb:[97,40,40], zh:'地狱岩', cat:'nether' },
+  'Nether Bricks': { hex:'#2C1618', rgb:[44,22,24], zh:'下界砖块', cat:'nether' },
+  'Red Nether Bricks': { hex:'#450A0D', rgb:[69,10,13], zh:'红色下界砖块', cat:'nether' },
+  'Obsidian': { hex:'#0F0919', rgb:[15,9,25], zh:'黑曜石', cat:'stone' },
+  'Magma Block': { hex:'#8B3A00', rgb:[139,58,0], zh:'岩浆块', cat:'nether' },
+  'Glowstone': { hex:'#C09C58', rgb:[192,156,88], zh:'荧石', cat:'nether' },
+  'Shroomlight': { hex:'#E8892A', rgb:[232,137,42], zh:'菌光体', cat:'nether' },
+  
+  'Sea Lantern': { hex:'#A1D0C4', rgb:[161,208,196], zh:'海晶灯', cat:'other' },
+  'Prismarine': { hex:'#639A8F', rgb:[99,154,143], zh:'海晶石', cat:'other' },
+  'Dark Prismarine': { hex:'#345B4A', rgb:[52,91,74], zh:'暗海晶石', cat:'other' },
+  'Purpur Block': { hex:'#A97BA9', rgb:[169,123,169], zh:'紫珀块', cat:'other' },
+  'Sand': { hex:'#DBD3A0', rgb:[219,211,160], zh:'沙子', cat:'other' },
+  'Red Sand': { hex:'#BE6728', rgb:[190,103,40], zh:'红沙', cat:'other' },
+  'End Stone': { hex:'#DBDEA1', rgb:[219,222,161], zh:'末地石', cat:'other' },
+  'Cactus': { hex:'#0B6119', rgb:[11,97,25], zh:'仙人掌', cat:'plant' },
+  'Oak Leaves': { hex:'#386E24', rgb:[56,110,36], zh:'橡木树叶', cat:'plant' },
+  'Moss Block': { hex:'#597D27', rgb:[89,125,39], zh:'苔藓块', cat:'plant' },
+  'Pumpkin': { hex:'#C57615', rgb:[197,118,21], zh:'南瓜', cat:'plant' },
+  'Watermelon': { hex:'#6D8A2A', rgb:[109,138,42], zh:'西瓜', cat:'plant' },
+  'Hay Bale': { hex:'#B8A02A', rgb:[184,160,42], zh:'干草捆', cat:'plant' },
+  
+  'TNT': { hex:'#DB4B40', rgb:[219,75,64], zh:'TNT', cat:'other' },
+  'Slime Block': { hex:'#7EBF72', rgb:[126,191,114], zh:'史莱姆块', cat:'other' },
+  'Honey Block': { hex:'#FBAF32', rgb:[251,175,50], zh:'蜂蜜块', cat:'other' }
 };
 
-const FULL_PALETTE = [
-  { c:'Grass', t:{dark:[89,125,39],normal:[109,153,48],light:[127,178,56],un:[67,94,29]}, b:['Grass Block','Slime Block','Cactus'] },
-  { c:'Sand', t:{dark:[174,164,115],normal:[213,201,140],light:[247,233,163],un:[130,123,86]}, b:['Sand','Sandstone','Birch Planks','End Stone'] },
-  { c:'Wool', t:{dark:[140,140,140],normal:[171,171,171],light:[199,199,199],un:[105,105,105]}, b:['Cobweb','Mushroom Stem'] },
-  { c:'Fire', t:{dark:[180,0,0],normal:[220,0,0],light:[255,0,0],un:[135,0,0]}, b:['Redstone Block','TNT','Magma Block'] },
-  { c:'Ice', t:{dark:[112,112,180],normal:[138,138,220],light:[160,160,255],un:[84,84,135]}, b:['Ice','Packed Ice','Blue Ice'] },
-  { c:'Metal', t:{dark:[117,117,117],normal:[144,144,144],light:[167,167,167],un:[88,88,88]}, b:['Iron Block','Iron Anvil','Iron Door','Smoker'] },
-  { c:'Plant', t:{dark:[0,87,0],normal:[0,106,0],light:[0,124,0],un:[0,65,0]}, b:['Oak Leaves','Vine','Cactus','Sugar Cane'] },
-  { c:'Snow', t:{dark:[180,180,180],normal:[220,220,220],light:[255,255,255],un:[135,135,135]}, b:['Snow Block','White Wool','White Concrete'] },
-  { c:'Clay', t:{dark:[115,118,129],normal:[141,144,158],light:[164,168,184],un:[86,88,97]}, b:['Clay','Dirt Path'] },
-  { c:'Dirt', t:{dark:[106,76,54],normal:[130,94,66],light:[151,109,77],un:[79,57,40]}, b:['Dirt','Gravel','Jungle Planks','Coarse Dirt'] },
-  { c:'Stone', t:{dark:[79,79,79],normal:[96,96,96],light:[112,112,112],un:[59,59,59]}, b:['Stone','Cobblestone','Andesite','Bricks'] },
-  { c:'Water', t:{dark:[45,45,180],normal:[55,55,220],light:[64,64,255],un:[33,33,135]}, b:['Water','Bubble Column'] },
-  { c:'Wood', t:{dark:[100,84,50],normal:[123,102,62],light:[143,119,72],un:[75,63,38]}, b:['Oak Planks','Crafting Table','Bookshelf','Oak Sign'] },
-  { c:'Quartz', t:{dark:[180,177,172],normal:[220,217,211],light:[255,252,245],un:[135,133,129]}, b:['Quartz Block','Sea Lantern','White Terracotta'] },
-  { c:'Orange', t:{dark:[152,89,36],normal:[186,109,44],light:[216,127,51],un:[114,67,27]}, b:['Orange Wool','Orange Concrete','Pumpkin','Copper Block'] },
-  { c:'Magenta', t:{dark:[125,53,152],normal:[153,65,186],light:[178,76,216],un:[94,40,114]}, b:['Magenta Wool','Magenta Concrete','Amethyst Cluster'] },
-  { c:'Light Blue', t:{dark:[72,108,152],normal:[88,132,186],light:[102,153,216],un:[54,81,114]}, b:['Light Blue Wool','Light Blue Concrete'] },
-  { c:'Yellow', t:{dark:[161,161,36],normal:[197,197,44],light:[229,229,51],un:[121,121,27]}, b:['Yellow Wool','Yellow Concrete','Sponge'] },
-  { c:'Light Green', t:{dark:[89,144,17],normal:[109,176,21],light:[113,185,25],un:[63,102,12]}, b:['Lime Wool','Lime Concrete','Pitcher Plant'] },
-  { c:'Pink', t:{dark:[168,87,111],normal:[201,107,138],light:[237,141,172],un:[122,63,81]}, b:['Pink Wool','Pink Concrete','Cherry Planks'] },
-  { c:'Gray', t:{dark:[50,56,59],normal:[62,68,71],light:[74,82,86],un:[37,42,44]}, b:['Gray Wool','Gray Concrete','Deepslate'] },
-  { c:'Light Gray', t:{dark:[110,110,104],normal:[142,142,134],light:[168,168,160],un:[82,82,78]}, b:['Light Gray Wool','Light Gray Concrete','Smooth Stone'] },
-  { c:'Cyan', t:{dark:[15,100,105],normal:[21,137,145],light:[27,163,172],un:[10,74,78]}, b:['Cyan Wool','Cyan Concrete','Sea Lantern'] },
-  { c:'Purple', t:{dark:[92,32,128],normal:[121,42,172],light:[143,51,196],un:[67,23,94]}, b:['Purple Wool','Purple Concrete','Purpur Block'] },
-  { c:'Blue', t:{dark:[39,43,117],normal:[53,57,157],light:[66,71,181],un:[28,31,85]}, b:['Blue Wool','Blue Concrete','Lapis Block'] },
-  { c:'Brown', t:{dark:[90,56,32],normal:[114,71,40],light:[138,86,47],un:[66,41,24]}, b:['Brown Wool','Brown Concrete','Dark Oak Planks'] },
-  { c:'Green', t:{dark:[66,86,21],normal:[84,109,27],light:[102,133,33],un:[48,64,15]}, b:['Green Wool','Green Concrete','Emerald Block'] },
-  { c:'Red', t:{dark:[126,30,26],normal:[161,39,34],light:[196,48,42],un:[92,22,19]}, b:['Red Wool','Red Concrete','Redstone Block'] },
-  { c:'Black', t:{dark:[15,16,19],normal:[20,21,25],light:[26,27,32],un:[10,11,13]}, b:['Black Wool','Black Concrete','Coal Block'] },
-  { c:'Gold', t:{dark:[184,134,11],normal:[255,215,0],light:[255,236,128],un:[139,101,8]}, b:['Gold Block'] },
-  { c:'Diamond', t:{dark:[74,158,158],normal:[92,219,213],light:[127,255,212],un:[58,122,122]}, b:['Diamond Block','Prismarine'] },
-  { c:'Emerald', t:{dark:[26,143,60],normal:[46,204,113],light:[88,232,138],un:[20,110,46]}, b:['Emerald Block'] },
-  { c:'Nether Brick', t:{dark:[90,30,30],normal:[122,42,42],light:[154,54,54],un:[68,22,22]}, b:['Nether Bricks','Red Nether Bricks'] },
-  { c:'Nether Wart', t:{dark:[94,26,26],normal:[127,36,36],light:[159,46,46],un:[70,20,20]}, b:['Nether Wart Block','Warped Wart Block'] },
-  { c:'Magma', t:{dark:[139,58,0],normal:[194,78,0],light:[232,106,26],un:[107,45,0]}, b:['Magma Block'] },
-  { c:'Obsidian', t:{dark:[10,6,18],normal:[20,14,32],light:[30,22,48],un:[6,4,10]}, b:['Obsidian','Crying Obsidian','Black Wool','Black Concrete'] },
-  { c:'Moss', t:{dark:[58,90,30],normal:[78,122,42],light:[98,154,54],un:[44,69,22]}, b:['Moss Block','Moss Carpet'] },
-  { c:'Shroomlight', t:{dark:[184,106,26],normal:[232,137,42],light:[255,169,64],un:[138,78,18]}, b:['Shroomlight'] },
-  { c:'Copper', t:{dark:[138,90,58],normal:[184,122,74],light:[216,154,106],un:[106,68,42]}, b:['Copper Block','Oxidized Copper'] },
-  { c:'Purpur', t:{dark:[90,42,90],normal:[122,58,122],light:[154,74,154],un:[68,30,68]}, b:['Purpur Block'] },
-  { c:'Prismarine', t:{dark:[42,106,106],normal:[58,138,138],light:[74,170,170],un:[30,78,78]}, b:['Prismarine','Dark Prismarine'] },
-  { c:'Red Sand', t:{dark:[138,74,26],normal:[184,106,42],light:[216,138,74],un:[106,54,18]}, b:['Red Sand','Red Sandstone'] },
-  { c:'Soul Sand', t:{dark:[58,42,26],normal:[78,58,36],light:[98,74,46],un:[44,30,18]}, b:['Soul Sand','Soul Soil'] },
-  { c:'End Stone', t:{dark:[174,174,114],normal:[213,213,140],light:[247,247,163],un:[130,130,86]}, b:['End Stone','End Stone Bricks'] },
-  { c:'Cherry', t:{dark:[184,122,138],normal:[232,160,176],light:[255,192,208],un:[138,90,102]}, b:['Cherry Planks','Cherry Log'] },
-  { c:'Deepslate', t:{dark:[42,42,48],normal:[58,58,66],light:[74,74,84],un:[30,30,34]}, b:['Deepslate','Deepslate Bricks'] },
-  { c:'Calcite', t:{dark:[174,174,170],normal:[213,213,208],light:[240,240,234],un:[130,130,126]}, b:['Calcite'] },
-  { c:'Tuff', t:{dark:[74,74,58],normal:[96,96,80],light:[118,118,102],un:[54,54,42]}, b:['Tuff'] },
-  { c:'Dripstone', t:{dark:[90,74,58],normal:[122,102,80],light:[154,134,102],un:[68,54,42]}, b:['Dripstone Block'] },
-  { c:'Amethyst', t:{dark:[106,58,138],normal:[138,74,170],light:[170,90,202],un:[78,42,102]}, b:['Amethyst Block'] },
-  { c:'Nautilus', t:{dark:[138,106,90],normal:[184,138,122],light:[216,170,154],un:[106,78,66]}, b:['Nautilus Shell Block'] },
-  { c:'Honey', t:{dark:[184,134,11],normal:[232,168,42],light:[255,200,74],un:[138,101,8]}, b:['Honeycomb Block','Honey Block'] },
-  { c:'Hay', t:{dark:[138,122,26],normal:[184,160,42],light:[216,192,74],un:[106,90,18]}, b:['Hay Bale'] },
-  { c:'Watermelon', t:{dark:[74,106,26],normal:[106,138,42],light:[138,170,58],un:[54,78,18]}, b:['Watermelon'] },
-  { c:'Pumpkin', t:{dark:[138,90,10],normal:[184,122,26],light:[216,154,42],un:[106,66,8]}, b:['Pumpkin','Carved Pumpkin'] },
-  { c:'Netherrack', t:{dark:[90,26,26],normal:[122,42,42],light:[154,58,58],un:[68,18,18]}, b:['Netherrack'] },
-  { c:'Glowstone', t:{dark:[138,106,10],normal:[184,154,26],light:[216,186,42],un:[106,78,8]}, b:['Glowstone'] },
-  { c:'Redstone', t:{dark:[106,10,10],normal:[154,20,20],light:[196,30,30],un:[78,6,6]}, b:['Redstone Block'] },
-  { c:'Lapis', t:{dark:[10,26,90],normal:[20,40,122],light:[30,54,154],un:[6,14,68]}, b:['Lapis Block'] },
-  { c:'Coal', t:{dark:[10,10,10],normal:[20,20,20],light:[30,30,30],un:[6,6,6]}, b:['Coal Block'] },
-  { c:'Iron', t:{dark:[106,106,106],normal:[138,138,138],light:[170,170,170],un:[78,78,78]}, b:['Iron Block'] }
+// 依据 61 基础地图色建立映射（将方块映射到对应地图色系，方便分配）
+const MAP_BASE_COLORS = [
+  { name:'Grass', dark:[89,125,39], normal:[109,153,48], light:[127,178,56], blocks:['Green Concrete','Moss Block','Cactus','Oak Leaves','Lime Terracotta'] },
+  { name:'Sand', dark:[174,164,115], normal:[213,201,140], light:[247,233,163], blocks:['Sand','Birch Planks','End Stone','White Terracotta'] },
+  { name:'Wool', dark:[140,140,140], normal:[171,171,171], light:[199,199,199], blocks:['White Wool','White Concrete','White Terracotta'] },
+  { name:'Fire', dark:[180,0,0], normal:[220,0,0], light:[255,0,0], blocks:['Redstone Block','TNT','Red Wool','Red Concrete'] },
+  { name:'Ice', dark:[112,112,180], normal:[138,138,220], light:[160,160,255], blocks:['Light Blue Terracotta','Light Blue Wool','Light Blue Concrete'] },
+  { name:'Metal', dark:[117,117,117], normal:[144,144,144], light:[167,167,167], blocks:['Iron Block','Smooth Stone','Andesite','Light Gray Concrete'] },
+  { name:'Plant', dark:[0,87,0], normal:[0,106,0], light:[0,124,0], blocks:['Green Wool','Green Concrete','Green Terracotta'] },
+  { name:'Snow', dark:[180,180,180], normal:[220,220,220], light:[255,255,255], blocks:['Snow Block','Quartz Block','Calcite','White Wool'] },
+  { name:'Clay', dark:[115,118,129], normal:[141,144,158], light:[164,168,184], blocks:['Light Gray Terracotta','Clay','Light Gray Wool'] },
+  { name:'Dirt', dark:[106,76,54], normal:[130,94,66], light:[151,109,77], blocks:['Dirt','Brown Terracotta','Brown Wool','Spruce Planks'] },
+  { name:'Stone', dark:[79,79,79], normal:[96,96,96], light:[112,112,112], blocks:['Stone','Cobblestone','Deepslate','Tuff'] },
+  { name:'Water', dark:[45,45,180], normal:[55,55,220], light:[64,64,255], blocks:['Blue Terracotta','Blue Wool','Blue Concrete','Lapis Block'] },
+  { name:'Wood', dark:[100,84,50], normal:[123,102,62], light:[143,119,72], blocks:['Oak Planks','Jungle Planks'] },
+  { name:'Quartz', dark:[180,177,172], normal:[220,217,211], light:[255,252,245], blocks:['Quartz Block','Sea Lantern'] },
+  { name:'Orange', dark:[152,89,36], normal:[186,109,44], light:[216,127,51], blocks:['Orange Wool','Orange Concrete','Orange Terracotta','Copper Block'] },
+  { name:'Magenta', dark:[125,53,152], normal:[153,65,186], light:[178,76,216], blocks:['Magenta Wool','Magenta Concrete','Magenta Terracotta'] },
+  { name:'Light Blue', dark:[72,108,152], normal:[88,132,186], light:[102,153,216], blocks:['Light Blue Wool','Light Blue Concrete'] },
+  { name:'Yellow', dark:[161,161,36], normal:[197,197,44], light:[229,229,51], blocks:['Yellow Wool','Yellow Concrete','Yellow Terracotta','Gold Block'] },
+  { name:'Light Green', dark:[89,144,17], normal:[109,176,21], light:[113,185,25], blocks:['Lime Wool','Lime Concrete','Lime Terracotta'] },
+  { name:'Pink', dark:[168,87,111], normal:[201,107,138], light:[237,141,172], blocks:['Pink Wool','Pink Concrete','Pink Terracotta','Cherry Planks'] },
+  { name:'Gray', dark:[50,56,59], normal:[62,68,71], light:[74,82,86], blocks:['Gray Wool','Gray Concrete','Gray Terracotta'] },
+  { name:'Light Gray', dark:[110,110,104], normal:[142,142,134], light:[168,168,160], blocks:['Light Gray Wool','Light Gray Concrete','Light Gray Terracotta'] },
+  { name:'Cyan', dark:[15,100,105], normal:[21,137,145], light:[27,163,172], blocks:['Cyan Wool','Cyan Concrete','Cyan Terracotta'] },
+  { name:'Purple', dark:[92,32,128], normal:[121,42,172], light:[143,51,196], blocks:['Purple Wool','Purple Concrete','Purple Terracotta','Amethyst Block'] },
+  { name:'Blue', dark:[39,43,117], normal:[53,57,157], light:[66,71,181], blocks:['Blue Wool','Blue Concrete','Blue Terracotta'] },
+  { name:'Brown', dark:[90,56,32], normal:[114,71,40], light:[138,86,47], blocks:['Brown Wool','Brown Concrete','Brown Terracotta','Dark Oak Planks'] },
+  { name:'Green', dark:[66,86,21], normal:[84,109,27], light:[102,133,33], blocks:['Green Wool','Green Concrete','Green Terracotta'] },
+  { name:'Red', dark:[126,30,26], normal:[161,39,34], light:[196,48,42], blocks:['Red Wool','Red Concrete','Red Terracotta'] },
+  { name:'Black', dark:[15,16,19], normal:[20,21,25], light:[26,27,32], blocks:['Black Wool','Black Concrete','Black Terracotta','Obsidian','Coal Block'] },
+  { name:'Gold', dark:[184,134,11], normal:[255,215,0], light:[255,236,128], blocks:['Gold Block','Yellow Terracotta'] },
+  { name:'Diamond', dark:[74,158,158], normal:[92,219,213], light:[127,255,212], blocks:['Diamond Block','Prismarine'] },
+  { name:'Emerald', dark:[26,143,60], normal:[46,204,113], light:[88,232,138], blocks:['Emerald Block','Green Concrete'] },
+  { name:'Nether Brick', dark:[90,30,30], normal:[122,42,42], light:[154,54,54], blocks:['Nether Bricks','Red Nether Bricks'] },
+  { name:'Nether Wart', dark:[94,26,26], normal:[127,36,36], light:[159,46,46], blocks:['Red Terracotta','Netherrack'] },
+  { name:'Magma', dark:[139,58,0], normal:[194,78,0], light:[232,106,26], blocks:['Magma Block','Orange Terracotta'] },
+  { name:'Obsidian', dark:[10,6,18], normal:[20,14,32], light:[30,22,48], blocks:['Obsidian','Black Terracotta'] },
+  { name:'Moss', dark:[58,90,30], normal:[78,122,42], light:[98,154,54], blocks:['Moss Block','Green Terracotta'] },
+  { name:'Shroomlight', dark:[184,106,26], normal:[232,137,42], light:[255,169,64], blocks:['Shroomlight','Glowstone'] },
+  { name:'Copper', dark:[138,90,58], normal:[184,122,74], light:[216,154,106], blocks:['Copper Block','Brown Terracotta'] },
+  { name:'Purpur', dark:[90,42,90], normal:[122,58,122], light:[154,74,154], blocks:['Purpur Block','Magenta Terracotta'] },
+  { name:'Prismarine', dark:[42,106,106], normal:[58,138,138], light:[74,170,170], blocks:['Prismarine','Dark Prismarine'] },
+  { name:'Red Sand', dark:[138,74,26], normal:[184,106,42], light:[216,138,74], blocks:['Red Sand','Orange Terracotta'] },
+  { name:'Soul Sand', dark:[58,42,26], normal:[78,58,36], light:[98,74,46], blocks:['Brown Terracotta','Brown Wool'] },
+  { name:'End Stone', dark:[174,174,114], normal:[213,213,140], light:[247,247,163], blocks:['End Stone','Sandstone'] },
+  { name:'Cherry', dark:[184,122,138], normal:[232,160,176], light:[255,192,208], blocks:['Cherry Planks','Pink Terracotta'] },
+  { name:'Deepslate', dark:[42,42,48], normal:[58,58,66], light:[74,74,84], blocks:['Deepslate','Black Terracotta'] },
+  { name:'Calcite', dark:[174,174,170], normal:[213,213,208], light:[240,240,234], blocks:['Calcite','Smooth Stone'] },
+  { name:'Tuff', dark:[74,74,58], normal:[96,96,80], light:[118,118,102], blocks:['Tuff','Cobblestone'] },
+  { name:'Dripstone', dark:[90,74,58], normal:[122,102,80], light:[154,134,102], blocks:['Dripstone Block','Brown Terracotta'] },
+  { name:'Amethyst', dark:[106,58,138], normal:[138,74,170], light:[170,90,202], blocks:['Amethyst Block','Purple Concrete'] },
+  { name:'Nautilus', dark:[138,106,90], normal:[184,138,122], light:[216,170,154], blocks:['Light Gray Terracotta','Pink Terracotta'] },
+  { name:'Honey', dark:[184,134,11], normal:[232,168,42], light:[255,200,74], blocks:['Honey Block','Yellow Terracotta'] },
+  { name:'Hay', dark:[138,122,26], normal:[184,160,42], light:[216,192,74], blocks:['Hay Bale','Yellow Concrete'] },
+  { name:'Watermelon', dark:[74,106,26], normal:[106,138,42], light:[138,170,58], blocks:['Watermelon','Green Concrete'] },
+  { name:'Pumpkin', dark:[138,90,10], normal:[184,122,26], light:[216,154,42], blocks:['Pumpkin','Orange Concrete'] },
+  { name:'Netherrack', dark:[90,26,26], normal:[122,42,42], light:[154,58,58], blocks:['Netherrack','Red Terracotta'] },
+  { name:'Glowstone', dark:[138,106,10], normal:[184,154,26], light:[216,186,42], blocks:['Glowstone','Yellow Concrete'] },
+  { name:'Redstone', dark:[106,10,10], normal:[154,20,20], light:[196,30,30], blocks:['Redstone Block','Red Concrete'] },
+  { name:'Lapis', dark:[10,26,90], normal:[20,40,122], light:[30,54,154], blocks:['Lapis Block','Blue Concrete'] },
+  { name:'Coal', dark:[10,10,10], normal:[20,20,20], light:[30,30,30], blocks:['Coal Block','Black Concrete'] },
+  { name:'Iron', dark:[106,106,106], normal:[138,138,138], light:[170,170,170], blocks:['Iron Block','Light Gray Concrete'] }
 ];
 
 function rgbToHex(r,g,b){ return '#' + [r,g,b].map(c=>c.toString(16).padStart(2,'0')).join(''); }
@@ -457,28 +570,39 @@ function rgbToLab(r,g,b){
   return [116*fy-16, 500*(fx-fy), 200*(fy-fz)];
 }
 
-// 关键修复：把每个方块单独拆成一条记录放入调色板，建树时自动混合
-function buildFlatPalette(excludes){
+// 构建物理调色板（生存 / 创造）
+function buildFlatPalette(excludes, libMode){
   const flat = [];
-  for(const p of FULL_PALETTE){
-    for(const tone of ['dark','normal','light','un']){
-      const rgb = p.t[tone];
+  const allowedCats = libMode === 'survival' ? ['wool','concrete','terracotta','stone','wood','other'] : null;
+
+  for(const base of MAP_BASE_COLORS){
+    for(const tone of ['dark','normal','light']){
+      const rgb = base[tone];
       if(!rgb) continue;
-      const avail = p.b.filter(name => {
-        for(const kw of excludes) if(name.toLowerCase().includes(kw.toLowerCase())) return false;
+      
+      // 过滤可用方块
+      const avail = base.blocks.filter(name => {
+        const data = BLOCKS_DB[name];
+        if(!data) return false;
+        // 生存模式限制
+        if(allowedCats && !allowedCats.includes(data.cat)) return false;
+        // 用户排除限制
+        if(excludes.includes(data.cat)) return false;
         return true;
       });
+      
       if(avail.length === 0) continue;
       
-      // 把每个可用的方块拆分成独立的记录
+      // 将每个实际可用的方块独立加入
       for(const blockName of avail) {
+        const data = BLOCKS_DB[blockName];
         flat.push({
-          name: p.c + ' (' + tone + ')',
           blockName: blockName,
-          nameZh: ZH_MAP[blockName] || blockName,
-          rgb: rgb,
-          hex: rgbToHex(rgb[0], rgb[1], rgb[2]),
-          lab: rgbToLab(rgb[0], rgb[1], rgb[2])
+          nameZh: data.zh,
+          hex: data.hex,
+          rgb: data.rgb,
+          lab: rgbToLab(data.rgb[0], data.rgb[1], data.rgb[2]),
+          mapColorName: base.name + ' (' + tone + ')'
         });
       }
     }
@@ -518,11 +642,32 @@ function nearestKD(node,target,best){
 }
 
 let kdRoot=null, palette=[];
+// 随机数种子
+function pseudoRandom(x, y) {
+  let n = x * 374761393 + y * 668265263;
+  n = (n ^ (n >> 13)) * 1274126177;
+  return Math.abs((n ^ (n >> 16)) % 1000) / 1000;
+}
+
 self.onmessage = function(e){
   const msg = e.data;
   if(msg.type==='init'){
     palette = msg.palette;
-    kdRoot = buildKD(palette.map(p=>({lab:p.lab, meta:p})), 0);
+    // 按地图色分组，以便后续混合
+    const groups = {};
+    for(let i=0; i<palette.length; i++){
+      const groupName = palette[i].mapColorName;
+      if(!groups[groupName]) groups[groupName] = [];
+      groups[groupName].push(i);
+    }
+    // 为每个方块记录它所属的组
+    for(const key in groups){
+      for(const idx of groups[key]){
+        palette[idx].groupIndices = groups[key];
+      }
+    }
+    
+    kdRoot = buildKD(palette.map((p, i)=>({lab:p.lab, meta:i})), 0);
     self.postMessage({type:'ready'});
   } else if(msg.type==='process'){
     const {imageData, W, H, userW, userH, dx, dy, dw, dh, fillIndex} = msg;
@@ -537,8 +682,21 @@ self.onmessage = function(e){
         }
         const i = (y*W + x)*4;
         const lab = rgbToLab(data[i], data[i+1], data[i+2]);
-        const best = nearestKD(kdRoot, lab, {dist:Infinity, node:null});
-        matrix[y*W + x] = best.node.meta.idx; // 直接存具体方块的索引
+        const best = nearestKD(kdRoot, lab, {dist:Infinity, node:-1});
+        
+        // 获取最佳匹配的调色板项，以及它所属的组（同色系的所有可能方块）
+        const bestIdx = best.node;
+        const group = palette[bestIdx].groupIndices;
+        
+        // 如果该颜色组有多个方块，利用当前坐标的伪随机数均匀分配
+        // 这样大面积的深色会自动混用 黑羊毛、黑混凝土、黑曜石
+        let chosenIdx = bestIdx;
+        if(group && group.length > 1) {
+          const rand = pseudoRandom(x, y);
+          chosenIdx = group[Math.floor(rand * group.length)];
+        }
+        
+        matrix[y*W + x] = chosenIdx;
       }
     }
     self.postMessage({type:'result', matrix}, [matrix.buffer]);
@@ -550,7 +708,7 @@ self.onmessage = function(e){
 const $ = id=>document.getElementById(id);
 const dropZone=$('dropZone'), fileInput=$('fileInput'), dropText=$('dropText');
 const presetSel=$('presetSel'), widthInput=$('widthInput'), heightInput=$('heightInput');
-const modeSel=$('modeSel'), fillSel=$('fillSel');
+const libSel=$('libSel'), fillSel=$('fillSel');
 const playerXInput=$('playerX'), playerZInput=$('playerZ');
 const genBtn=$('genBtn'), restoreBtn=$('restoreBtn'), clearBtn=$('clearBtn');
 const imgStatus=$('imgStatus'), genStatus=$('genStatus');
@@ -576,20 +734,19 @@ let mapProgress={};
 const isMobile = ()=>window.innerWidth<=900;
 
 const BLOCK_CATEGORIES = [
-  {id:'wool',name:'羊毛',keywords:['Wool']},
-  {id:'concrete',name:'混凝土',keywords:['Concrete']},
-  {id:'terracotta',name:'陶瓦',keywords:['Terracotta']},
-  {id:'wood',name:'木质',keywords:['Planks','Log','Crafting','Bookshelf','Sign','Cherry']},
-  {id:'stone',name:'石质',keywords:['Stone','Cobblestone','Andesite','Bricks','Deepslate','Calcite','Tuff','Dripstone','Obsidian']},
-  {id:'mineral',name:'矿物/金属',keywords:['Gold','Iron','Diamond','Emerald','Lapis','Redstone','Coal','Amethyst']},
-  {id:'nether',name:'下界',keywords:['Nether','Magma','Glowstone','Soul']},
-  {id:'plant',name:'植物/草',keywords:['Grass','Leaves','Vine','Cactus','Sugar','Moss','Hay','Watermelon','Pumpkin','Shroomlight']}
+  {id:'wool',name:'羊毛'},
+  {id:'concrete',name:'混凝土'},
+  {id:'terracotta',name:'陶瓦'},
+  {id:'wood',name:'木质'},
+  {id:'stone',name:'石质'},
+  {id:'mineral',name:'矿物/金属'},
+  {id:'nether',name:'下界'},
+  {id:'plant',name:'植物/草'},
+  {id:'other',name:'其他'}
 ];
 
 function getExcludes(){
-  let kw=[];
-  for(const cat of BLOCK_CATEGORIES) if(excludedCategories.has(cat.id)) kw.push(...cat.keywords);
-  return kw;
+  return [...excludedCategories];
 }
 
 function initWorker(){
@@ -612,7 +769,7 @@ function initWorker(){
 }
 
 function rebuildPalette(){
-  const raw = buildFlatPalette(getExcludes());
+  const raw = buildFlatPalette(getExcludes(), libSel.value);
   flatPalette = raw.map((p, i)=>({...p, idx:i}));
   if(worker) worker.postMessage({type:'init', palette: flatPalette});
 }
@@ -640,6 +797,7 @@ function calcMapGrid(x,z){
   return {nx,nz,originX:-64+128*nx,originZ:-64+128*nz};
 }
 
+// 修复左侧网格文字重叠
 function drawGrid(px, pz, focusMx, focusMz){
   const ctx=gridCanvas.getContext('2d'), W=gridCanvas.width, H=gridCanvas.height;
   ctx.clearRect(0,0,W,H); const cw=W/3, ch=H/3;
@@ -661,15 +819,19 @@ function drawGrid(px, pz, focusMx, focusMz){
     ctx.lineWidth = isHighlight ? 3 : 1;
     ctx.strokeRect(sx+1,sy+1,cw-2,ch-2);
     
+    // 顶部背景条，防止文字和线重叠
+    ctx.fillStyle = isHighlight ? '#1e1e27' : '#16161d';
+    ctx.fillRect(sx+2, sy+2, cw-4, 22);
+    
     ctx.fillStyle = isHighlight ? '#fff' : (isPlayerMap ? '#5b9aff' : '#5a5a68');
-    ctx.font = 'bold 14px system-ui';
-    ctx.fillText(`地图 (${nx}, ${nz})`, sx+10, sy+24);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText(`地图 (${nx}, ${nz})`, sx+8, sy+17);
     
     if(isHighlight){
       const ox=-64+128*nx, oz=-64+128*nz;
       ctx.fillStyle = 'rgba(255,255,255,.7)';
-      ctx.font = '13px monospace';
-      ctx.fillText(`西北角: ${ox}, ${oz}`, sx+10, sy+46);
+      ctx.font = '10px monospace';
+      ctx.fillText(`起点: ${ox}, ${oz}`, sx+8, sy+36);
     }
   }
   
@@ -681,9 +843,13 @@ function drawGrid(px, pz, focusMx, focusMz){
     const cx = gxPlayer * cw, cy = gzPlayer * ch;
     const lx=Math.max(0,Math.min(1,(px-base.originX)/128)), lz=Math.max(0,Math.min(1,(pz-base.originZ)/128));
     const dx=cx+lx*cw, dy=cy+lz*ch;
-    ctx.beginPath(); ctx.arc(dx,dy,8,0,Math.PI*2);
-    ctx.fillStyle='#5b9aff'; ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.stroke();
-    ctx.fillStyle='#fff'; ctx.font='bold 12px monospace'; ctx.fillText('玩家', dx+12, dy+4);
+    
+    ctx.beginPath(); ctx.arc(dx,dy,7,0,Math.PI*2);
+    ctx.fillStyle='#5b9aff'; ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke();
+    
+    // 玩家标签加背景
+    ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(dx+8, dy-10, 32, 20);
+    ctx.fillStyle='#fff'; ctx.font='bold 11px monospace'; ctx.fillText('玩家', dx+12, dy+4);
   }
 }
 
@@ -698,7 +864,7 @@ function updateCoordDisplay(){
 playerXInput.addEventListener('input', updateCoordDisplay);
 playerZInput.addEventListener('input', updateCoordDisplay);
 
-[presetSel,widthInput,heightInput,modeSel,fillSel].forEach(el=>{
+[presetSel,widthInput,heightInput,libSel,fillSel].forEach(el=>{
   el.addEventListener('input',scheduleCompute); el.addEventListener('change',scheduleCompute);
 });
 presetSel.addEventListener('change',()=>{
@@ -716,14 +882,11 @@ function scheduleCompute(){
 async function compute(){
   if(!currentImageBitmap || !worker || workerBusy) return;
   
-  const mode = modeSel.value;
-  const maxDim = isMobile() ? 512 : 1024;
-  let userW = Math.max(1, Math.min(maxDim, Number(widthInput.value)||128));
-  let userH = Math.max(1, Math.min(maxDim, Number(heightInput.value)||128));
+  let userW = Math.max(1, Math.min(2048, Number(widthInput.value)||128));
+  let userH = Math.max(1, Math.min(2048, Number(heightInput.value)||128));
   
-  let canvasW, canvasH;
-  if(mode==='map'){ canvasW=Math.ceil(userW/128)*128; canvasH=Math.ceil(userH/128)*128; }
-  else { canvasW=userW; canvasH=userH; }
+  let canvasW = Math.ceil(userW/128)*128;
+  let canvasH = Math.ceil(userH/128)*128;
 
   const off = document.createElement('canvas');
   off.width=canvasW; off.height=canvasH;
@@ -751,7 +914,7 @@ async function compute(){
   const imageData = ctx.getImageData(0,0,canvasW,canvasH);
   const fillIdx = flatPalette.indexOf(fillBlockObj);
   
-  window._calcParams = { canvasW, canvasH, userW, userH, dx, dy, dw, dh, fillIdx, mode };
+  window._calcParams = { canvasW, canvasH, userW, userH, dx, dy, dw, dh, fillIdx };
   workerBusy = true;
   worker.postMessage({
     type:'process', imageData, W:canvasW, H:canvasH, userW, userH, dx, dy, dw, dh, fillIndex:fillIdx
@@ -771,8 +934,7 @@ function onWorkerResult(data){
     userW: p.userW, userH: p.userH,
     matrix: matrix,
     palette: flatPalette,
-    fillIndex: p.fillIdx,
-    mode: p.mode
+    fillIndex: p.fillIdx
   };
 
   mapProgress = {};
@@ -783,13 +945,14 @@ function onWorkerResult(data){
   updateStats(lastPixels);
   updateCoordDisplay();
   
-  genStatus.textContent = `完成：${p.canvasW}×${p.canvasH} 格`;
+  genStatus.textContent = `完成：${p.canvasW}×${p.canvasH} 格（${Math.ceil(p.canvasW/128)}×${Math.ceil(p.canvasH/128)} 张地图）`;
   genStatus.className='status ok';
   loadingMask.classList.remove('show');
   saveStateToDB(lastPixels);
   workerBusy = false;
 }
 
+// 严格读取物理颜色渲染
 function drawPreview(p){
   previewCanvas.width=p.W; previewCanvas.height=p.H;
   const ctx=previewCanvas.getContext('2d');
@@ -801,13 +964,13 @@ function drawPreview(p){
     img.data[i*4]=r; img.data[i*4+1]=g; img.data[i*4+2]=b2; img.data[i*4+3]=255;
   }
   ctx.putImageData(img,0,0);
-  if(p.mode==='map' && (p.W>128 || p.H>128)){
+  if(p.W>128 || p.H>128){
     ctx.strokeStyle='rgba(224,160,64,.6)'; ctx.lineWidth=1;
     for(let x=128;x<p.W;x+=128){ctx.beginPath();ctx.moveTo(x+.5,0);ctx.lineTo(x+.5,p.H);ctx.stroke()}
     for(let y=128;y<p.H;y+=128){ctx.beginPath();ctx.moveTo(0,y+.5);ctx.lineTo(p.W,y+.5);ctx.stroke()}
   }
   const used = new Set(p.matrix).size;
-  previewMeta.innerHTML = `<span>画布：<b>${p.W}×${p.H}</b></span><span>方块种类：<b>${used}</b></span>`;
+  previewMeta.innerHTML = `<span>画布：<b>${p.W}×${p.H}</b></span><span>物理方块种类：<b>${used}</b></span>`;
 }
 
 let pointerLocked = false;
@@ -844,7 +1007,6 @@ function showTooltip(cx, cy){
   tooltip.style.top = Math.min(cy+14, window.innerHeight-60)+'px';
 }
 
-// 修复：根据具体的方块名称统计，不再统一叫黑曜石
 function renderMaterials(p){
   const m = {};
   for(let i=0;i<p.matrix.length;i++){
@@ -871,7 +1033,6 @@ function renderMaterials(p){
 function renderMapTiles(p){
   const cols=Math.ceil(p.W/128), rows=Math.ceil(p.H/128);
   mapCountBadge.textContent=`${cols*rows} 张`;
-  if(p.mode!=='map'){ mapTilesEl.innerHTML='<div class="empty-state"><div class="big">🗺️</div>非地图画模式</div>'; return; }
   
   const base = calcMapGrid(Number(playerXInput.value)||0, Number(playerZInput.value)||0);
   let html='', step=1; const tiles=[];
@@ -949,6 +1110,9 @@ window.openMapDetail = function(mx, mz, ox, oz) {
   $('gc-step').classList.toggle('active', guideState.mode==='step');
   $('gc-line').classList.toggle('active', guideState.mode!=='step');
   
+  $('jumpX').value = '';
+  $('jumpZ').value = '';
+  
   if(guideState.mode === 'step') {
     updateStepUI();
   } else {
@@ -967,7 +1131,6 @@ modalCloseBtn.onclick = () => {
   updateCoordDisplay();
 };
 
-// 修复：名称直接取具体方块，不再取 blocks[0]
 function updateStepUI() {
   if(!activeMap) return;
   const step = guideState.stepIdx;
@@ -1052,7 +1215,6 @@ function renderLineList() {
   
   const activeRow = listEl.querySelector('.list-row.active');
   if(activeRow) {
-    // 修复：精准控制容器内部的滚动，不滚动外部
     const rowRect = activeRow.getBoundingClientRect();
     const listRect = listEl.getBoundingClientRect();
     listEl.scrollTop += (rowRect.top - listRect.top) - (listRect.height / 2) + (rowRect.height / 2);
@@ -1108,6 +1270,31 @@ document.querySelectorAll('.guide-tab').forEach(tab => {
   };
 });
 
+// 坐标输入跳转
+$('jumpBtn').onclick = () => {
+  if(!activeMap) return;
+  let x = parseInt($('jumpX').value);
+  let z = parseInt($('jumpZ').value);
+  if(isNaN(x) || x < 0 || x > 127) x = 0;
+  if(isNaN(z) || z < 0 || z > 127) z = 0;
+  
+  if(guideState.mode === 'step') {
+    guideState.stepIdx = z * 128 + x;
+    updateStepUI();
+  } else if(guideState.mode === 'row') {
+    guideState.lineIdx = z;
+    guideState.stepIdx = z * 128 + x;
+    $('gLineVal').textContent = z + 1;
+    renderLineList(); updateGuideCanvas(); saveProgress();
+  } else {
+    guideState.lineIdx = x;
+    guideState.stepIdx = z * 128 + x;
+    $('gLineVal').textContent = x + 1;
+    renderLineList(); updateGuideCanvas(); saveProgress();
+  }
+};
+
+// 点击大图跳转
 $('modalCanvas').addEventListener('pointerdown', e => {
   if(!activeMap) return;
   const rect = $('modalCanvas').getBoundingClientRect();
@@ -1117,15 +1304,20 @@ $('modalCanvas').addEventListener('pointerdown', e => {
   const x = Math.floor(relX * 128);
   const y = Math.floor(relY * 128);
   
+  $('jumpX').value = x;
+  $('jumpZ').value = y;
+  
   if(guideState.mode === 'step') {
     guideState.stepIdx = y * 128 + x;
     updateStepUI();
   } else if(guideState.mode === 'row') {
     guideState.lineIdx = y;
+    guideState.stepIdx = y * 128 + x;
     $('gLineVal').textContent = y + 1;
     renderLineList(); updateGuideCanvas(); saveProgress();
   } else {
     guideState.lineIdx = x;
+    guideState.stepIdx = y * 128 + x;
     $('gLineVal').textContent = x + 1;
     renderLineList(); updateGuideCanvas(); saveProgress();
   }
@@ -1148,7 +1340,7 @@ $('exportCsv').addEventListener('click',()=>{
   download('mc_pixel_art.csv',L.join('\n'),'text/csv;charset=utf-8');
 });
 
-const DB_NAME='mc_pixel_db',DB_VER=8;
+const DB_NAME='mc_pixel_db',DB_VER=10;
 let db=null;
 function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VER);r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains('images'))d.createObjectStore('images');if(!d.objectStoreNames.contains('state'))d.createObjectStore('state')};r.onsuccess=e=>{db=e.target.result;res(db)};r.onerror=e=>rej(e.target.error)})}
 async function saveImageToDB(blob){if(!db)await openDB();const tx=db.transaction('images','readwrite');tx.objectStore('images').put(blob,'lastImage')}
@@ -1156,9 +1348,9 @@ async function saveImageToDB(blob){if(!db)await openDB();const tx=db.transaction
 async function saveStateToDB(p){
   if(!db)await openDB();
   window.lastSavedState = {
-    W:p.W, H:p.H, userW:p.userW, userH:p.userH, mode:p.mode,
+    W:p.W, H:p.H, userW:p.userW, userH:p.userH,
     fillId:fillSel.value, playerX:playerXInput.value, playerZ:playerZInput.value,
-    width:widthInput.value, height:heightInput.value,
+    width:widthInput.value, height:heightInput.value, libMode:libSel.value,
     matrix:Array.from(p.matrix), excludes:[...excludedCategories],
     mapProgress: mapProgress
   };
@@ -1173,8 +1365,9 @@ async function loadFromDB(){
   
   window.lastSavedState = state;
   if(state.excludes){ excludedCategories=new Set(state.excludes); updateExcludesUI(); }
-  if(state.mode)modeSel.value=state.mode; if(state.width)widthInput.value=state.width; if(state.height)heightInput.value=state.height; if(state.fillId)fillSel.value=state.fillId;
+  if(state.width)widthInput.value=state.width; if(state.height)heightInput.value=state.height; if(state.fillId)fillSel.value=state.fillId;
   if(state.playerX)playerXInput.value=state.playerX; if(state.playerZ)playerZInput.value=state.playerZ;
+  if(state.libMode)libSel.value=state.libMode;
   
   if(state.mapProgress) mapProgress = state.mapProgress;
   
@@ -1183,7 +1376,7 @@ async function loadFromDB(){
   genBtn.disabled=false;
   
   if(state.matrix && state.matrix.length===state.W*state.H){
-    lastPixels={W:state.W,H:state.H,userW:state.userW,userH:state.userH,matrix:new Uint8Array(state.matrix),palette:flatPalette,fillIndex:0,mode:state.mode};
+    lastPixels={W:state.W,H:state.H,userW:state.userW,userH:state.userH,matrix:new Uint8Array(state.matrix),palette:flatPalette,fillIndex:0};
     drawPreview(lastPixels);renderMaterials(lastPixels);renderMapTiles(lastPixels);updateStats(lastPixels);updateCoordDisplay();
     genStatus.textContent='已恢复上次结果'; genStatus.className='status ok';
   } else {
