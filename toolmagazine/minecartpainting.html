@@ -123,15 +123,16 @@ select{cursor:pointer;font-family:inherit}
 .modal-header{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0}
 .modal-header h3{font-size:16px;color:var(--accent)}
 .modal-close{background:none;border:none;color:var(--muted);font-size:28px;cursor:pointer;padding:0 10px}
-.modal-body{flex:1;display:flex;overflow:hidden}
+.modal-body{flex:1;display:flex;overflow:hidden;min-height:0}
 @media(max-width:768px){.modal-body{flex-direction:column}}
-.modal-left{flex:1;display:flex;align-items:center;justify-content:center;padding:20px;overflow:hidden;position:relative;min-width:0; min-height:0}
-.modal-canvas-wrap{position:relative;width:100%;max-width:600px;aspect-ratio:1;box-shadow:0 0 30px rgba(0,0,0,.6);border:2px solid var(--border);border-radius:8px;overflow:hidden;background:var(--panel)}
+.modal-left{flex:1 1 auto;display:flex;align-items:center;justify-content:center;padding:16px;overflow:hidden;position:relative;min-width:0;min-height:0}
+.modal-canvas-wrap{position:relative;flex:0 0 auto;width:100%;max-width:600px;aspect-ratio:1;box-shadow:0 0 30px rgba(0,0,0,.6);border:2px solid var(--border);border-radius:8px;overflow:hidden;background:var(--panel)}
 #modalCanvas{display:block;width:100%;height:100%;image-rendering:pixelated;cursor:crosshair;touch-action:none}
 #modalGuideCanvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;pointer-events:none;transition:opacity .2s}
 
 .modal-right{width:420px;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
-@media(max-width:768px){.modal-right{width:100%;flex:none;height:55vh;border-left:none;border-top:1px solid var(--border)}}
+@media(max-width:768px){.modal-right{width:100%;flex:0 0 auto;height:clamp(200px,44dvh,400px);border-left:none;border-top:1px solid var(--border)}}
+@media(max-width:768px){.modal-left{padding:8px}}
 
 .guide-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--panel);flex-shrink:0}
 .guide-tab{flex:1;background:none;border:none;color:var(--muted);padding:12px 0;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent}
@@ -226,6 +227,11 @@ select{cursor:pointer;font-family:inherit}
         <option value="snow_block">雪块</option>
         <option value="quartz_block">石英块</option>
       </select>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:10px">
+        <input type="checkbox" id="ditherChk" style="width:15px;height:15px;accent-color:var(--accent)">
+        <span style="margin:0">色彩抖动（减少失真）</span>
+      </label>
+      <div class="hint" style="margin-top:4px">开启后用 Floyd–Steinberg 误差扩散混合现有色，观感更接近原图，但会有颗粒感、方块种类增多。适合照片类图片。</div>
     </div>
 
     <div class="card">
@@ -323,7 +329,7 @@ select{cursor:pointer;font-family:inherit}
     <div class="modal-left">
       <div class="modal-canvas-wrap">
         <canvas id="modalCanvas" width="128" height="128"></canvas>
-        <canvas id="modalGuideCanvas" width="128" height="128"></canvas>
+        <canvas id="modalGuideCanvas" width="512" height="512"></canvas>
       </div>
     </div>
     <div class="modal-right">
@@ -490,40 +496,100 @@ const BLOCKS_DB = {
   
   'TNT': { hex:'#DB4B40', rgb:[219,75,64], zh:'TNT', cat:'other' },
   'Slime Block': { hex:'#7EBF72', rgb:[126,191,114], zh:'史莱姆块', cat:'other' },
-  'Honey Block': { hex:'#FBAF32', rgb:[251,175,50], zh:'蜂蜜块', cat:'other' }
+  'Honey Block': { hex:'#FBAF32', rgb:[251,175,50], zh:'蜂蜜块', cat:'other' },
+
+  // 混凝土粉末（生存易量产）
+  'White Concrete Powder': { hex:'#D8DADA', rgb:[216,218,218], zh:'白色混凝土粉末', cat:'powder' },
+  'Orange Concrete Powder': { hex:'#E45F0A', rgb:[228,95,10], zh:'橙色混凝土粉末', cat:'powder' },
+  'Magenta Concrete Powder': { hex:'#B33FA2', rgb:[179,63,162], zh:'品红色混凝土粉末', cat:'powder' },
+  'Light Blue Concrete Powder': { hex:'#4A9BC9', rgb:[74,155,201], zh:'淡蓝色混凝土粉末', cat:'powder' },
+  'Yellow Concrete Powder': { hex:'#E7AE1C', rgb:[231,174,28], zh:'黄色混凝土粉末', cat:'powder' },
+  'Lime Concrete Powder': { hex:'#5FA91B', rgb:[95,169,27], zh:'黄绿色混凝土粉末', cat:'powder' },
+  'Pink Concrete Powder': { hex:'#DE92A9', rgb:[222,146,169], zh:'粉红色混凝土粉末', cat:'powder' },
+  'Gray Concrete Powder': { hex:'#4B4E50', rgb:[75,78,80], zh:'灰色混凝土粉末', cat:'powder' },
+  'Light Gray Concrete Powder': { hex:'#9C9C93', rgb:[156,156,147], zh:'淡灰色混凝土粉末', cat:'powder' },
+  'Cyan Concrete Powder': { hex:'#1F8F90', rgb:[31,143,144], zh:'青色混凝土粉末', cat:'powder' },
+  'Purple Concrete Powder': { hex:'#6A2FA0', rgb:[106,47,160], zh:'紫色混凝土粉末', cat:'powder' },
+  'Blue Concrete Powder': { hex:'#3E3F9C', rgb:[62,63,156], zh:'蓝色混凝土粉末', cat:'powder' },
+  'Brown Concrete Powder': { hex:'#78512C', rgb:[120,81,44], zh:'棕色混凝土粉末', cat:'powder' },
+  'Green Concrete Powder': { hex:'#5B6F1E', rgb:[91,111,30], zh:'绿色混凝土粉末', cat:'powder' },
+  'Red Concrete Powder': { hex:'#9E2B21', rgb:[158,43,33], zh:'红色混凝土粉末', cat:'powder' },
+  'Black Concrete Powder': { hex:'#191B1F', rgb:[25,27,31], zh:'黑色混凝土粉末', cat:'powder' },
+
+  // 潜影盒（含未染色）
+  'Shulker Box': { hex:'#8A6A8A', rgb:[138,106,138], zh:'潜影盒', cat:'shulker' },
+  'White Shulker Box': { hex:'#B9C0C1', rgb:[185,192,193], zh:'白色潜影盒', cat:'shulker' },
+  'Orange Shulker Box': { hex:'#CE6611', rgb:[206,102,17], zh:'橙色潜影盒', cat:'shulker' },
+  'Magenta Shulker Box': { hex:'#96388B', rgb:[150,56,139], zh:'品红色潜影盒', cat:'shulker' },
+  'Light Blue Shulker Box': { hex:'#2F86AC', rgb:[47,134,172], zh:'淡蓝色潜影盒', cat:'shulker' },
+  'Yellow Shulker Box': { hex:'#C7951B', rgb:[199,149,27], zh:'黄色潜影盒', cat:'shulker' },
+  'Lime Shulker Box': { hex:'#4C8D1A', rgb:[76,141,26], zh:'黄绿色潜影盒', cat:'shulker' },
+  'Pink Shulker Box': { hex:'#BB7C94', rgb:[187,124,148], zh:'粉红色潜影盒', cat:'shulker' },
+  'Gray Shulker Box': { hex:'#3B3F42', rgb:[59,63,66], zh:'灰色潜影盒', cat:'shulker' },
+  'Light Gray Shulker Box': { hex:'#7E7E77', rgb:[126,126,119], zh:'淡灰色潜影盒', cat:'shulker' },
+  'Cyan Shulker Box': { hex:'#17787A', rgb:[23,120,122], zh:'青色潜影盒', cat:'shulker' },
+  'Purple Shulker Box': { hex:'#562781', rgb:[86,39,129], zh:'紫色潜影盒', cat:'shulker' },
+  'Blue Shulker Box': { hex:'#30337C', rgb:[48,51,124], zh:'蓝色潜影盒', cat:'shulker' },
+  'Brown Shulker Box': { hex:'#5F3F24', rgb:[95,63,36], zh:'棕色潜影盒', cat:'shulker' },
+  'Green Shulker Box': { hex:'#48581B', rgb:[72,88,27], zh:'绿色潜影盒', cat:'shulker' },
+  'Red Shulker Box': { hex:'#7E241D', rgb:[126,36,29], zh:'红色潜影盒', cat:'shulker' },
+  'Black Shulker Box': { hex:'#131417', rgb:[19,20,23], zh:'黑色潜影盒', cat:'shulker' },
+
+  // 其他完整方块
+  'Ochre Froglight': { hex:'#F2D075', rgb:[242,208,117], zh:'赭黄蛙光体', cat:'other' },
+  'Pearlescent Froglight': { hex:'#E7C6D4', rgb:[231,198,212], zh:'珠光蛙光体', cat:'other' },
+  'Verdant Froglight': { hex:'#79D0A8', rgb:[121,208,168], zh:'青翠蛙光体', cat:'other' },
+  'Jack o Lantern': { hex:'#C97B22', rgb:[201,123,34], zh:'南瓜灯', cat:'plant' },
+  'Sponge': { hex:'#C1BE49', rgb:[193,190,73], zh:'海绵', cat:'other' },
+  'Wet Sponge': { hex:'#A8B04A', rgb:[168,176,74], zh:'湿海绵', cat:'other' },
+  'Bone Block': { hex:'#E1DDB9', rgb:[225,221,185], zh:'骨块', cat:'other' },
+  'Honeycomb Block': { hex:'#E5931F', rgb:[229,147,31], zh:'蜜脾块', cat:'other' },
+  'Target Block': { hex:'#E2D4C6', rgb:[226,212,198], zh:'标靶', cat:'other' },
+  'Dried Kelp Block': { hex:'#37401F', rgb:[55,64,31], zh:'干海带块', cat:'plant' },
+  'Packed Mud': { hex:'#8E6850', rgb:[142,104,80], zh:'夯实泥', cat:'other' },
+  'Mud Bricks': { hex:'#89685A', rgb:[137,104,90], zh:'泥砖', cat:'other' },
+  'Mangrove Planks': { hex:'#773934', rgb:[119,57,52], zh:'红树木板', cat:'wood' },
+  'Bamboo Planks': { hex:'#C6AF52', rgb:[198,175,82], zh:'竹板', cat:'wood' },
+  'Crimson Nylium': { hex:'#7A3A56', rgb:[122,58,86], zh:'绯红菌岩', cat:'nether' },
+  'Warped Nylium': { hex:'#568B7B', rgb:[86,139,123], zh:'诡异菌岩', cat:'nether' },
+  'Nether Wart Block': { hex:'#72020E', rgb:[114,2,14], zh:'下界疣块', cat:'nether' },
+  'Warped Wart Block': { hex:'#167779', rgb:[22,119,121], zh:'诡异疣块', cat:'nether' },
+  'Soul Soil': { hex:'#5B4535', rgb:[91,69,53], zh:'灵魂土', cat:'nether' },
+  'Basalt': { hex:'#4D4D52', rgb:[77,77,82], zh:'玄武岩', cat:'stone' },
+  'Smooth Basalt': { hex:'#47474C', rgb:[71,71,76], zh:'平滑玄武岩', cat:'stone' }
 };
 
 // 依据 61 基础地图色建立映射（将方块映射到对应地图色系，方便分配）
 const MAP_BASE_COLORS = [
-  { name:'Grass', dark:[89,125,39], normal:[109,153,48], light:[127,178,56], blocks:['Green Concrete','Moss Block','Cactus','Oak Leaves','Lime Terracotta'] },
-  { name:'Sand', dark:[174,164,115], normal:[213,201,140], light:[247,233,163], blocks:['Sand','Birch Planks','End Stone','White Terracotta'] },
-  { name:'Wool', dark:[140,140,140], normal:[171,171,171], light:[199,199,199], blocks:['White Wool','White Concrete','White Terracotta'] },
-  { name:'Fire', dark:[180,0,0], normal:[220,0,0], light:[255,0,0], blocks:['Redstone Block','TNT','Red Wool','Red Concrete'] },
-  { name:'Ice', dark:[112,112,180], normal:[138,138,220], light:[160,160,255], blocks:['Light Blue Terracotta','Light Blue Wool','Light Blue Concrete'] },
-  { name:'Metal', dark:[117,117,117], normal:[144,144,144], light:[167,167,167], blocks:['Iron Block','Smooth Stone','Andesite','Light Gray Concrete'] },
-  { name:'Plant', dark:[0,87,0], normal:[0,106,0], light:[0,124,0], blocks:['Green Wool','Green Concrete','Green Terracotta'] },
-  { name:'Snow', dark:[180,180,180], normal:[220,220,220], light:[255,255,255], blocks:['Snow Block','Quartz Block','Calcite','White Wool'] },
-  { name:'Clay', dark:[115,118,129], normal:[141,144,158], light:[164,168,184], blocks:['Light Gray Terracotta','Clay','Light Gray Wool'] },
-  { name:'Dirt', dark:[106,76,54], normal:[130,94,66], light:[151,109,77], blocks:['Dirt','Brown Terracotta','Brown Wool','Spruce Planks'] },
-  { name:'Stone', dark:[79,79,79], normal:[96,96,96], light:[112,112,112], blocks:['Stone','Cobblestone','Deepslate','Tuff'] },
-  { name:'Water', dark:[45,45,180], normal:[55,55,220], light:[64,64,255], blocks:['Blue Terracotta','Blue Wool','Blue Concrete','Lapis Block'] },
-  { name:'Wood', dark:[100,84,50], normal:[123,102,62], light:[143,119,72], blocks:['Oak Planks','Jungle Planks'] },
-  { name:'Quartz', dark:[180,177,172], normal:[220,217,211], light:[255,252,245], blocks:['Quartz Block','Sea Lantern'] },
-  { name:'Orange', dark:[152,89,36], normal:[186,109,44], light:[216,127,51], blocks:['Orange Wool','Orange Concrete','Orange Terracotta','Copper Block'] },
-  { name:'Magenta', dark:[125,53,152], normal:[153,65,186], light:[178,76,216], blocks:['Magenta Wool','Magenta Concrete','Magenta Terracotta'] },
-  { name:'Light Blue', dark:[72,108,152], normal:[88,132,186], light:[102,153,216], blocks:['Light Blue Wool','Light Blue Concrete'] },
-  { name:'Yellow', dark:[161,161,36], normal:[197,197,44], light:[229,229,51], blocks:['Yellow Wool','Yellow Concrete','Yellow Terracotta','Gold Block'] },
-  { name:'Light Green', dark:[89,144,17], normal:[109,176,21], light:[113,185,25], blocks:['Lime Wool','Lime Concrete','Lime Terracotta'] },
-  { name:'Pink', dark:[168,87,111], normal:[201,107,138], light:[237,141,172], blocks:['Pink Wool','Pink Concrete','Pink Terracotta','Cherry Planks'] },
-  { name:'Gray', dark:[50,56,59], normal:[62,68,71], light:[74,82,86], blocks:['Gray Wool','Gray Concrete','Gray Terracotta'] },
-  { name:'Light Gray', dark:[110,110,104], normal:[142,142,134], light:[168,168,160], blocks:['Light Gray Wool','Light Gray Concrete','Light Gray Terracotta'] },
-  { name:'Cyan', dark:[15,100,105], normal:[21,137,145], light:[27,163,172], blocks:['Cyan Wool','Cyan Concrete','Cyan Terracotta'] },
-  { name:'Purple', dark:[92,32,128], normal:[121,42,172], light:[143,51,196], blocks:['Purple Wool','Purple Concrete','Purple Terracotta','Amethyst Block'] },
-  { name:'Blue', dark:[39,43,117], normal:[53,57,157], light:[66,71,181], blocks:['Blue Wool','Blue Concrete','Blue Terracotta'] },
-  { name:'Brown', dark:[90,56,32], normal:[114,71,40], light:[138,86,47], blocks:['Brown Wool','Brown Concrete','Brown Terracotta','Dark Oak Planks'] },
-  { name:'Green', dark:[66,86,21], normal:[84,109,27], light:[102,133,33], blocks:['Green Wool','Green Concrete','Green Terracotta'] },
-  { name:'Red', dark:[126,30,26], normal:[161,39,34], light:[196,48,42], blocks:['Red Wool','Red Concrete','Red Terracotta'] },
-  { name:'Black', dark:[15,16,19], normal:[20,21,25], light:[26,27,32], blocks:['Black Wool','Black Concrete','Black Terracotta','Obsidian','Coal Block'] },
+  { name:'Grass', dark:[89,125,39], normal:[109,153,48], light:[127,178,56], blocks:['Green Concrete','Moss Block','Cactus','Oak Leaves','Lime Terracotta','Verdant Froglight','Dried Kelp Block'] },
+  { name:'Sand', dark:[174,164,115], normal:[213,201,140], light:[247,233,163], blocks:['Sand','Birch Planks','End Stone','White Terracotta','Bone Block','Bamboo Planks','Sponge','Target Block'] },
+  { name:'Wool', dark:[140,140,140], normal:[171,171,171], light:[199,199,199], blocks:['White Wool','White Concrete','White Terracotta','White Concrete Powder','White Shulker Box'] },
+  { name:'Fire', dark:[180,0,0], normal:[220,0,0], light:[255,0,0], blocks:['Redstone Block','TNT','Red Wool','Red Concrete','Red Concrete Powder','Nether Wart Block'] },
+  { name:'Ice', dark:[112,112,180], normal:[138,138,220], light:[160,160,255], blocks:['Light Blue Terracotta','Light Blue Wool','Light Blue Concrete','Light Blue Concrete Powder','Light Blue Shulker Box'] },
+  { name:'Metal', dark:[117,117,117], normal:[144,144,144], light:[167,167,167], blocks:['Iron Block','Smooth Stone','Andesite','Light Gray Concrete','Light Gray Shulker Box'] },
+  { name:'Plant', dark:[0,87,0], normal:[0,106,0], light:[0,124,0], blocks:['Green Wool','Green Concrete','Green Terracotta','Green Concrete Powder','Green Shulker Box'] },
+  { name:'Snow', dark:[180,180,180], normal:[220,220,220], light:[255,255,255], blocks:['Snow Block','Quartz Block','Calcite','White Wool','Pearlescent Froglight'] },
+  { name:'Clay', dark:[115,118,129], normal:[141,144,158], light:[164,168,184], blocks:['Light Gray Terracotta','Clay','Light Gray Wool','Light Gray Concrete Powder'] },
+  { name:'Dirt', dark:[106,76,54], normal:[130,94,66], light:[151,109,77], blocks:['Dirt','Brown Terracotta','Brown Wool','Spruce Planks','Packed Mud','Soul Soil','Brown Shulker Box'] },
+  { name:'Stone', dark:[79,79,79], normal:[96,96,96], light:[112,112,112], blocks:['Stone','Cobblestone','Deepslate','Tuff','Basalt','Smooth Basalt','Gray Concrete Powder'] },
+  { name:'Water', dark:[45,45,180], normal:[55,55,220], light:[64,64,255], blocks:['Blue Terracotta','Blue Wool','Blue Concrete','Lapis Block','Blue Concrete Powder','Blue Shulker Box'] },
+  { name:'Wood', dark:[100,84,50], normal:[123,102,62], light:[143,119,72], blocks:['Oak Planks','Jungle Planks','Mud Bricks','Brown Concrete Powder'] },
+  { name:'Quartz', dark:[180,177,172], normal:[220,217,211], light:[255,252,245], blocks:['Quartz Block','Sea Lantern','White Shulker Box'] },
+  { name:'Orange', dark:[152,89,36], normal:[186,109,44], light:[216,127,51], blocks:['Orange Wool','Orange Concrete','Orange Terracotta','Copper Block','Orange Concrete Powder','Orange Shulker Box','Jack o Lantern','Honeycomb Block'] },
+  { name:'Magenta', dark:[125,53,152], normal:[153,65,186], light:[178,76,216], blocks:['Magenta Wool','Magenta Concrete','Magenta Terracotta','Magenta Concrete Powder','Magenta Shulker Box','Shulker Box','Crimson Nylium'] },
+  { name:'Light Blue', dark:[72,108,152], normal:[88,132,186], light:[102,153,216], blocks:['Light Blue Wool','Light Blue Concrete','Light Blue Shulker Box'] },
+  { name:'Yellow', dark:[161,161,36], normal:[197,197,44], light:[229,229,51], blocks:['Yellow Wool','Yellow Concrete','Yellow Terracotta','Gold Block','Yellow Concrete Powder','Yellow Shulker Box','Ochre Froglight','Wet Sponge'] },
+  { name:'Light Green', dark:[89,144,17], normal:[109,176,21], light:[113,185,25], blocks:['Lime Wool','Lime Concrete','Lime Terracotta','Lime Concrete Powder','Lime Shulker Box'] },
+  { name:'Pink', dark:[168,87,111], normal:[201,107,138], light:[237,141,172], blocks:['Pink Wool','Pink Concrete','Pink Terracotta','Cherry Planks','Pink Concrete Powder','Pink Shulker Box'] },
+  { name:'Gray', dark:[50,56,59], normal:[62,68,71], light:[74,82,86], blocks:['Gray Wool','Gray Concrete','Gray Terracotta','Gray Shulker Box'] },
+  { name:'Light Gray', dark:[110,110,104], normal:[142,142,134], light:[168,168,160], blocks:['Light Gray Wool','Light Gray Concrete','Light Gray Terracotta','Light Gray Concrete Powder'] },
+  { name:'Cyan', dark:[15,100,105], normal:[21,137,145], light:[27,163,172], blocks:['Cyan Wool','Cyan Concrete','Cyan Terracotta','Cyan Concrete Powder','Cyan Shulker Box','Warped Nylium','Warped Wart Block'] },
+  { name:'Purple', dark:[92,32,128], normal:[121,42,172], light:[143,51,196], blocks:['Purple Wool','Purple Concrete','Purple Terracotta','Amethyst Block','Purple Concrete Powder','Purple Shulker Box'] },
+  { name:'Blue', dark:[39,43,117], normal:[53,57,157], light:[66,71,181], blocks:['Blue Wool','Blue Concrete','Blue Terracotta','Blue Concrete Powder'] },
+  { name:'Brown', dark:[90,56,32], normal:[114,71,40], light:[138,86,47], blocks:['Brown Wool','Brown Concrete','Brown Terracotta','Dark Oak Planks','Brown Concrete Powder','Mangrove Planks'] },
+  { name:'Green', dark:[66,86,21], normal:[84,109,27], light:[102,133,33], blocks:['Green Wool','Green Concrete','Green Terracotta','Green Concrete Powder'] },
+  { name:'Red', dark:[126,30,26], normal:[161,39,34], light:[196,48,42], blocks:['Red Wool','Red Concrete','Red Terracotta','Red Concrete Powder','Red Shulker Box'] },
+  { name:'Black', dark:[15,16,19], normal:[20,21,25], light:[26,27,32], blocks:['Black Wool','Black Concrete','Black Terracotta','Obsidian','Coal Block','Black Concrete Powder','Black Shulker Box'] },
   { name:'Gold', dark:[184,134,11], normal:[255,215,0], light:[255,236,128], blocks:['Gold Block','Yellow Terracotta'] },
   { name:'Diamond', dark:[74,158,158], normal:[92,219,213], light:[127,255,212], blocks:['Diamond Block','Prismarine'] },
   { name:'Emerald', dark:[26,143,60], normal:[46,204,113], light:[88,232,138], blocks:['Emerald Block','Green Concrete'] },
@@ -573,7 +639,7 @@ function rgbToLab(r,g,b){
 // 构建物理调色板（生存 / 创造）
 function buildFlatPalette(excludes, libMode){
   const flat = [];
-  const allowedCats = libMode === 'survival' ? ['wool','concrete','terracotta','stone','wood','other'] : null;
+  const allowedCats = libMode === 'survival' ? ['wool','concrete','powder','terracotta','stone','wood','other'] : null;
 
   for(const base of MAP_BASE_COLORS){
     for(const tone of ['dark','normal','light']){
@@ -642,64 +708,96 @@ function nearestKD(node,target,best){
 }
 
 let kdRoot=null, palette=[];
-// 随机数种子
+// 随机数种子（同坐标恒定，保证结果可复现）
 function pseudoRandom(x, y) {
   let n = x * 374761393 + y * 668265263;
   n = (n ^ (n >> 13)) * 1274126177;
   return Math.abs((n ^ (n >> 16)) % 1000) / 1000;
 }
+function labDistSq(a,b){const d0=a[0]-b[0],d1=a[1]-b[1],d2=a[2]-b[2];return d0*d0+d1*d1+d2*d2;}
 
 self.onmessage = function(e){
   const msg = e.data;
   if(msg.type==='init'){
-    palette = msg.palette;
-    // 按地图色分组，以便后续混合
+    palette = msg.palette || [];
+    // 按地图色分组：只在“同色系且物理颜色足够接近”的方块之间混用，
+    // 避免同一色系里色差过大的方块被随机替换，造成满屏噪点。
     const groups = {};
     for(let i=0; i<palette.length; i++){
-      const groupName = palette[i].mapColorName;
-      if(!groups[groupName]) groups[groupName] = [];
-      groups[groupName].push(i);
+      const key = palette[i].mapColorName || ('__'+i);
+      if(!groups[key]) groups[key] = [];
+      groups[key].push(i);
     }
-    // 为每个方块记录它所属的组
-    for(const key in groups){
-      for(const idx of groups[key]){
-        palette[idx].groupIndices = groups[key];
+    for(let i=0; i<palette.length; i++){
+      const key = palette[i].mapColorName || ('__'+i);
+      const same = groups[key];
+      const mix = [];
+      for(let k=0; k<same.length; k++){
+        const j = same[k];
+        if(j === i || labDistSq(palette[j].lab, palette[i].lab) <= 64) mix.push(j);
       }
+      palette[i].mix = mix.length ? mix : [i];
     }
-    
-    kdRoot = buildKD(palette.map((p, i)=>({lab:p.lab, meta:i})), 0);
-    self.postMessage({type:'ready'});
+
+    kdRoot = palette.length ? buildKD(palette.map((p, i)=>({lab:p.lab, meta:i})), 0) : null;
+    self.postMessage({type:'ready', size:palette.length});
   } else if(msg.type==='process'){
-    const {imageData, W, H, userW, userH, dx, dy, dw, dh, fillIndex} = msg;
-    const data = imageData.data;
-    const matrix = new Uint8Array(W*H);
-    
-    for(let y=0; y<H; y++){
-      for(let x=0; x<W; x++){
-        if(x < dx || x >= dx + dw || y < dy || y >= dy + dh){
-          matrix[y*W + x] = fillIndex;
-          continue;
+    try{
+      const {imageData, W, H, dx, dy, dw, dh, fillIndex, dither} = msg;
+      const data = imageData.data;
+      // 调色板条目可能超过 255，必须用 16 位索引
+      const matrix = new Uint16Array(W*H);
+      const fill = (fillIndex >= 0 && fillIndex < palette.length) ? fillIndex : 0;
+
+      // Floyd–Steinberg 误差扩散缓冲（当前行 + 下一行，RGB 三通道）
+      const errCur = dither ? new Float32Array(W*3) : null;
+      const errNext = dither ? new Float32Array(W*3) : null;
+
+      for(let y=0; y<H; y++){
+        if(errCur){ errCur.set(errNext); errNext.fill(0); }
+        for(let x=0; x<W; x++){
+          const idx = y*W + x;
+          if(!kdRoot || x < dx || x >= dx + dw || y < dy || y >= dy + dh){
+            matrix[idx] = fill;
+            continue;
+          }
+          const i = idx*4;
+          let r = data[i], g = data[i+1], b = data[i+2];
+          if(errCur){
+            const e = x*3;
+            r += errCur[e]; g += errCur[e+1]; b += errCur[e+2];
+            r = r<0?0:(r>255?255:r); g = g<0?0:(g>255?255:g); b = b<0?0:(b>255?255:b);
+          }
+          const lab = rgbToLab(r, g, b);
+          const best = nearestKD(kdRoot, lab, {dist:Infinity, node:null});
+
+          // best.node 是 KD 节点对象，真正的调色板下标在 meta 里
+          const bestIdx = (best && best.node) ? best.node.meta : fill;
+          const entry = palette[bestIdx];
+
+          let chosenIdx = bestIdx;
+          if(!errCur && entry && entry.mix && entry.mix.length > 1){
+            // 抖动模式下不做随机混用，以免与误差扩散叠加产生噪点
+            const rand = pseudoRandom(x, y);
+            chosenIdx = entry.mix[Math.min(entry.mix.length - 1, Math.floor(rand * entry.mix.length))];
+          }
+          matrix[idx] = chosenIdx;
+
+          if(errCur){
+            const chosen = palette[chosenIdx];
+            const dr = r - chosen.rgb[0], dg = g - chosen.rgb[1], db = b - chosen.rgb[2];
+            const e = x*3;
+            if(x+1 < W){ errCur[e+3]+=dr*7/16; errCur[e+4]+=dg*7/16; errCur[e+5]+=db*7/16; }
+            if(x>0){ errNext[e-3]+=dr*3/16; errNext[e-2]+=dg*3/16; errNext[e-1]+=db*3/16; }
+            errNext[e]+=dr*5/16; errNext[e+1]+=dg*5/16; errNext[e+2]+=db*5/16;
+            if(x+1 < W){ errNext[e+3]+=dr/16; errNext[e+4]+=dg/16; errNext[e+5]+=db/16; }
+          }
         }
-        const i = (y*W + x)*4;
-        const lab = rgbToLab(data[i], data[i+1], data[i+2]);
-        const best = nearestKD(kdRoot, lab, {dist:Infinity, node:-1});
-        
-        // 获取最佳匹配的调色板项，以及它所属的组（同色系的所有可能方块）
-        const bestIdx = best.node;
-        const group = palette[bestIdx].groupIndices;
-        
-        // 如果该颜色组有多个方块，利用当前坐标的伪随机数均匀分配
-        // 这样大面积的深色会自动混用 黑羊毛、黑混凝土、黑曜石
-        let chosenIdx = bestIdx;
-        if(group && group.length > 1) {
-          const rand = pseudoRandom(x, y);
-          chosenIdx = group[Math.floor(rand * group.length)];
-        }
-        
-        matrix[y*W + x] = chosenIdx;
       }
+      self.postMessage({type:'result', matrix}, [matrix.buffer]);
+    }catch(err){
+      self.postMessage({type:'error', message:String((err && err.message) || err)});
     }
-    self.postMessage({type:'result', matrix}, [matrix.buffer]);
   }
 };
 `;
@@ -708,7 +806,7 @@ self.onmessage = function(e){
 const $ = id=>document.getElementById(id);
 const dropZone=$('dropZone'), fileInput=$('fileInput'), dropText=$('dropText');
 const presetSel=$('presetSel'), widthInput=$('widthInput'), heightInput=$('heightInput');
-const libSel=$('libSel'), fillSel=$('fillSel');
+const libSel=$('libSel'), fillSel=$('fillSel'), ditherChk=$('ditherChk');
 const playerXInput=$('playerX'), playerZInput=$('playerZ');
 const genBtn=$('genBtn'), restoreBtn=$('restoreBtn'), clearBtn=$('clearBtn');
 const imgStatus=$('imgStatus'), genStatus=$('genStatus');
@@ -719,7 +817,7 @@ const tooltip=$('tooltip'), loadingMask=$('loadingMask');
 const statSize=$('statSize'), statPixels=$('statPixels'), statTypes=$('statTypes'), statMaps=$('statMaps');
 const excludeGrid=$('excludeGrid'), excludePanel=$('excludePanel'), excludeToggle=$('excludeToggle');
 
-let worker=null, workerBusy=false;
+let worker=null, workerBusy=false, pendingCompute=false, computeTimer=null;
 let currentImageBitmap=null, currentImageBlob=null;
 let lastPixels=null;
 let excludedCategories=new Set();
@@ -736,7 +834,9 @@ const isMobile = ()=>window.innerWidth<=900;
 const BLOCK_CATEGORIES = [
   {id:'wool',name:'羊毛'},
   {id:'concrete',name:'混凝土'},
+  {id:'powder',name:'混凝土粉末'},
   {id:'terracotta',name:'陶瓦'},
+  {id:'shulker',name:'潜影盒'},
   {id:'wood',name:'木质'},
   {id:'stone',name:'石质'},
   {id:'mineral',name:'矿物/金属'},
@@ -749,27 +849,157 @@ function getExcludes(){
   return [...excludedCategories];
 }
 
+function showLoading(){ loadingMask.classList.add('show'); }
+function hideLoading(){ loadingMask.classList.remove('show'); }
+
+/* ---- 主线程兜底计算：本地 file:// 打开时浏览器可能禁用 Blob Worker ---- */
+let mtCache = { key:'', palette:null, kd:null };
+
+function labDistSqM(a,b){const d0=a[0]-b[0],d1=a[1]-b[1],d2=a[2]-b[2];return d0*d0+d1*d1+d2*d2;}
+function buildKDM(points, depth){
+  if(!points.length) return null;
+  const axis = depth % 3;
+  points.sort((a,b)=>a.lab[axis]-b.lab[axis]);
+  const mid = points.length >> 1;
+  return {
+    point:points[mid], axis, meta:points[mid].meta,
+    left:buildKDM(points.slice(0,mid), depth+1),
+    right:buildKDM(points.slice(mid+1), depth+1)
+  };
+}
+function nearestKDM(node, target, best){
+  if(!node) return best;
+  const d = labDistSqM(node.point.lab, target);
+  if(d < best.dist) best = {dist:d, node};
+  const diff = target[node.axis] - node.point.lab[node.axis];
+  const near = diff<0?node.left:node.right, far = diff<0?node.right:node.left;
+  best = nearestKDM(near, target, best);
+  if(diff*diff < best.dist) best = nearestKDM(far, target, best);
+  return best;
+}
+function pseudoRandomM(x,y){
+  let n = x*374761393 + y*668265263;
+  n = (n ^ (n>>13)) * 1274126177;
+  return Math.abs((n ^ (n>>16)) % 1000) / 1000;
+}
+function mtPrepare(){
+  const key = flatPalette.map(b=>b.blockName).join('|');
+  if(mtCache.key === key) return mtCache;
+  const pal = flatPalette.map((p,i)=>({lab:p.lab, rgb:p.rgb, meta:i, mapColorName:p.mapColorName || ('__'+i)}));
+  const groups = {};
+  for(let i=0;i<pal.length;i++){
+    const k = pal[i].mapColorName;
+    if(!groups[k]) groups[k] = [];
+    groups[k].push(i);
+  }
+  for(let i=0;i<pal.length;i++){
+    const same = groups[pal[i].mapColorName], mix = [];
+    for(let k=0;k<same.length;k++){
+      const j = same[k];
+      if(j===i || labDistSqM(pal[j].lab, pal[i].lab) <= 64) mix.push(j);
+    }
+    pal[i].mix = mix.length ? mix : [i];
+  }
+  mtCache = { key, palette:pal, kd: pal.length ? buildKDM(pal, 0) : null };
+  return mtCache;
+}
+
+function computeOnMainThread(imageData, o){
+  const cache = mtPrepare();
+  const {W,H,dx,dy,dw,dh,fillIdx,dither} = o;
+  const data = imageData.data;
+  const matrix = new Uint16Array(W*H);
+  const fill = (fillIdx>=0 && fillIdx<cache.palette.length) ? fillIdx : 0;
+  const errCur = dither ? new Float32Array(W*3) : null;
+  const errNext = dither ? new Float32Array(W*3) : null;
+  for(let y=0;y<H;y++){
+    if(errCur){ errCur.set(errNext); errNext.fill(0); }
+    for(let x=0;x<W;x++){
+      const idx = y*W+x;
+      if(!cache.kd || x<dx || x>=dx+dw || y<dy || y>=dy+dh){ matrix[idx] = fill; continue; }
+      const i = idx*4;
+      let r = data[i], g = data[i+1], b = data[i+2];
+      if(errCur){
+        const e = x*3;
+        r += errCur[e]; g += errCur[e+1]; b += errCur[e+2];
+        r = r<0?0:(r>255?255:r); g = g<0?0:(g>255?255:g); b = b<0?0:(b>255?255:b);
+      }
+      const lab = rgbToLab(r, g, b);
+      const best = nearestKDM(cache.kd, lab, {dist:Infinity, node:null});
+      const bestIdx = best.node ? best.node.meta : fill;
+      const entry = cache.palette[bestIdx];
+      let chosen = bestIdx;
+      if(!errCur && entry && entry.mix && entry.mix.length > 1){
+        chosen = entry.mix[Math.min(entry.mix.length-1, Math.floor(pseudoRandomM(x,y)*entry.mix.length))];
+      }
+      matrix[idx] = chosen;
+      if(errCur){
+        const c = cache.palette[chosen];
+        const dr = r - c.rgb[0], dg = g - c.rgb[1], db = b - c.rgb[2];
+        const e = x*3;
+        if(x+1 < W){ errCur[e+3]+=dr*7/16; errCur[e+4]+=dg*7/16; errCur[e+5]+=db*7/16; }
+        if(x>0){ errNext[e-3]+=dr*3/16; errNext[e-2]+=dg*3/16; errNext[e-1]+=db*3/16; }
+        errNext[e]+=dr*5/16; errNext[e+1]+=dg*5/16; errNext[e+2]+=db*5/16;
+        if(x+1 < W){ errNext[e+3]+=dr/16; errNext[e+4]+=dg/16; errNext[e+5]+=db/16; }
+      }
+    }
+  }
+  return matrix;
+}
+
+function failWorker(msg){
+  worker = null;          // 后续请求改走主线程兜底
+  workerBusy = false;
+  pendingCompute = false;
+  clearTimeout(computeTimer);
+  hideLoading();
+  genStatus.textContent = '计算失败：' + msg + '，已切换本地计算模式';
+  genStatus.className = 'status danger';
+}
+
 function initWorker(){
   return new Promise((resolve, reject)=>{
+    let settled = false;
     try {
       const blob = new Blob([WORKER_CODE], {type:'application/javascript'});
       const url = URL.createObjectURL(blob);
       const w = new Worker(url);
       URL.revokeObjectURL(url);
+      const timer = setTimeout(()=>{
+        if(!settled){ settled = true; reject(new Error('Worker 启动超时')); }
+      }, 8000);
       w.onmessage = (e)=>{
-        if(e.data.type==='ready') resolve(w);
-        else if(e.data.type==='result'){ workerBusy=false; onWorkerResult(e.data); }
+        const d = e.data || {};
+        if(d.type === 'ready'){
+          if(!settled){ settled = true; clearTimeout(timer); resolve(w); }
+        } else if(d.type === 'result'){
+          workerBusy = false;
+          onWorkerResult(d);
+        } else if(d.type === 'error'){
+          failWorker(d.message || '未知错误');
+        }
       };
-      w.onerror = (err)=>{ reject(err); };
+      w.onerror = (err)=>{
+        if(!settled){ settled = true; clearTimeout(timer); reject(err); }
+        else failWorker('Worker 运行出错');
+      };
       rebuildPalette();
       w.postMessage({type:'init', palette: flatPalette});
-      resolve(w);
     } catch(e){ reject(e); }
   });
 }
 
 function rebuildPalette(){
   const raw = buildFlatPalette(getExcludes(), libSel.value);
+  // 填充方块可能被资源库/排除规则过滤掉，这里补回去，避免填充色出错
+  const fillName = getFillName(fillSel.value);
+  if(!raw.some(p=>p.blockName === fillName) && BLOCKS_DB[fillName]){
+    const d = BLOCKS_DB[fillName];
+    raw.push({
+      blockName: fillName, nameZh: d.zh, hex: d.hex, rgb: d.rgb,
+      lab: rgbToLab(d.rgb[0], d.rgb[1], d.rgb[2]), mapColorName: 'fill'
+    });
+  }
   flatPalette = raw.map((p, i)=>({...p, idx:i}));
   if(worker) worker.postMessage({type:'init', palette: flatPalette});
 }
@@ -778,18 +1008,32 @@ dropZone.addEventListener('click',()=>fileInput.click());
 dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('dragover')});
 dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('dragover'));
 dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('dragover');const f=e.dataTransfer.files[0];if(f)handleFile(f)});
-fileInput.addEventListener('change',e=>{const f=e.target.files[0];if(f)handleFile(f)});
+fileInput.addEventListener('change',e=>{
+  const f=e.target.files[0];
+  if(f) handleFile(f);
+  e.target.value='';   // 允许重复选择同一个文件
+});
 
 async function handleFile(file){
-  if(!file.type.startsWith('image/')) return;
-  currentImageBlob = file;
-  currentImageBitmap = await createImageBitmap(file);
-  dropText.textContent = `已加载（${currentImageBitmap.width}×${currentImageBitmap.height}）`;
-  dropZone.classList.add('loaded');
-  imgStatus.textContent = '就绪'; imgStatus.className='status ok';
-  genBtn.disabled = false;
-  saveImageToDB(file);
-  scheduleCompute();
+  if(!file || !file.type.startsWith('image/')){
+    imgStatus.textContent='请选择图片文件'; imgStatus.className='status warn';
+    return;
+  }
+  try{
+    const bmp = await createImageBitmap(file);
+    if(currentImageBitmap && currentImageBitmap.close) currentImageBitmap.close();
+    currentImageBlob = file;
+    currentImageBitmap = bmp;
+    dropText.textContent = `已加载（${bmp.width}×${bmp.height}）`;
+    dropZone.classList.add('loaded');
+    imgStatus.textContent = '就绪'; imgStatus.className='status ok';
+    genBtn.disabled = false;
+    saveImageToDB(file);
+    scheduleCompute();
+  }catch(err){
+    hideLoading();
+    imgStatus.textContent = '图片解析失败，请换一张图片'; imgStatus.className='status danger';
+  }
 }
 
 function calcMapGrid(x,z){
@@ -864,8 +1108,11 @@ function updateCoordDisplay(){
 playerXInput.addEventListener('input', updateCoordDisplay);
 playerZInput.addEventListener('input', updateCoordDisplay);
 
-[presetSel,widthInput,heightInput,libSel,fillSel].forEach(el=>{
+[presetSel,widthInput,heightInput].forEach(el=>{
   el.addEventListener('input',scheduleCompute); el.addEventListener('change',scheduleCompute);
+});
+[libSel,fillSel,ditherChk].forEach(el=>{
+  el.addEventListener('change',()=>{ rebuildPalette(); scheduleCompute(); });
 });
 presetSel.addEventListener('change',()=>{
   const v=presetSel.value; if(v){const[w,h]=v.split('x').map(Number);widthInput.value=w;heightInput.value=h}
@@ -873,83 +1120,128 @@ presetSel.addEventListener('change',()=>{
 
 function scheduleCompute(){
   clearTimeout(window._debounce);
-  if(!currentImageBitmap || !worker || workerBusy) return;
-  loadingMask.classList.add('show');
+  if(!currentImageBitmap) return;
+  showLoading();
   genStatus.textContent='正在渲染…'; genStatus.className='status';
-  window._debounce = setTimeout(()=>{ compute(); }, isMobile()?300:150);
+  window._debounce = setTimeout(()=>{
+    if(workerBusy){ pendingCompute = true; return; }
+    compute();
+  }, isMobile()?200:100);
 }
 
 async function compute(){
-  if(!currentImageBitmap || !worker || workerBusy) return;
-  
-  let userW = Math.max(1, Math.min(2048, Number(widthInput.value)||128));
-  let userH = Math.max(1, Math.min(2048, Number(heightInput.value)||128));
-  
-  let canvasW = Math.ceil(userW/128)*128;
-  let canvasH = Math.ceil(userH/128)*128;
+  if(!currentImageBitmap){ pendingCompute=false; hideLoading(); return; }
+  if(workerBusy){ pendingCompute = true; return; }
 
-  const off = document.createElement('canvas');
-  off.width=canvasW; off.height=canvasH;
-  const ctx = off.getContext('2d', {willReadFrequently:true});
-  
-  const fillName = getFillName(fillSel.value);
-  fillBlockObj = flatPalette.find(p => p.blockName === fillName) || flatPalette[0];
-  ctx.fillStyle = fillBlockObj.hex;
-  ctx.fillRect(0,0,canvasW,canvasH);
-  
-  const imgRatio = currentImageBitmap.width / currentImageBitmap.height;
-  const targetRatio = userW / userH;
-  let dw, dh, dx, dy;
-  if(imgRatio > targetRatio) {
-    dw = userW; dh = userW / imgRatio;
-    dx = 0; dy = (userH - dh) / 2;
-  } else {
-    dh = userH; dw = userH * imgRatio;
-    dx = (userW - dw) / 2; dy = 0;
+  try{
+    let userW = Math.max(1, Math.min(2048, Number(widthInput.value)||128));
+    let userH = Math.max(1, Math.min(2048, Number(heightInput.value)||128));
+
+    let canvasW = Math.ceil(userW/128)*128;
+    let canvasH = Math.ceil(userH/128)*128;
+
+    const off = document.createElement('canvas');
+    off.width=canvasW; off.height=canvasH;
+    const ctx = off.getContext('2d', {willReadFrequently:true});
+
+    const fillName = getFillName(fillSel.value);
+    fillBlockObj = flatPalette.find(p => p.blockName === fillName) || flatPalette[0];
+    ctx.fillStyle = fillBlockObj.hex;
+    ctx.fillRect(0,0,canvasW,canvasH);
+
+    const imgRatio = currentImageBitmap.width / currentImageBitmap.height;
+    const targetRatio = userW / userH;
+    let dw, dh, dx, dy;
+    if(imgRatio > targetRatio) {
+      dw = userW; dh = userW / imgRatio;
+      dx = 0; dy = (userH - dh) / 2;
+    } else {
+      dh = userH; dw = userH * imgRatio;
+      dx = (userW - dw) / 2; dy = 0;
+    }
+
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(currentImageBitmap, dx, dy, dw, dh);
+
+    const imageData = ctx.getImageData(0,0,canvasW,canvasH);
+    const fillIdx = Math.max(0, flatPalette.indexOf(fillBlockObj));
+
+    window._calcParams = { canvasW, canvasH, userW, userH, dx, dy, dw, dh, fillIdx, palette:flatPalette };
+    if(worker){
+      workerBusy = true;
+      clearTimeout(computeTimer);
+      computeTimer = setTimeout(()=>{
+        // Worker 无响应（被杀/被限制）：放弃 Worker，改走主线程
+        if(workerBusy){
+          worker = null;
+          workerBusy = false;
+          pendingCompute = true;
+          hideLoading();
+          genStatus.textContent='计算超时，已切换为本地计算模式'; genStatus.className='status warn';
+          compute();
+        }
+      }, 30000);
+      worker.postMessage({
+        type:'process', imageData, W:canvasW, H:canvasH, userW, userH, dx, dy, dw, dh, fillIndex:fillIdx, dither:ditherChk.checked
+      }, [imageData.data.buffer]);
+    } else {
+      // Worker 不可用（例如直接以 file:// 打开被浏览器限制），退回主线程计算
+      const matrix = computeOnMainThread(imageData, {W:canvasW, H:canvasH, dx, dy, dw, dh, fillIdx, dither:ditherChk.checked});
+      workerBusy = true;
+      onWorkerResult({matrix}, window._calcParams);
+    }
+  }catch(err){
+    clearTimeout(computeTimer);
+    workerBusy = false;
+    pendingCompute = false;
+    hideLoading();
+    genStatus.textContent = '生成失败：' + ((err && err.message) || err);
+    genStatus.className = 'status danger';
   }
-  
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(currentImageBitmap, dx, dy, dw, dh);
-  
-  const imageData = ctx.getImageData(0,0,canvasW,canvasH);
-  const fillIdx = flatPalette.indexOf(fillBlockObj);
-  
-  window._calcParams = { canvasW, canvasH, userW, userH, dx, dy, dw, dh, fillIdx };
-  workerBusy = true;
-  worker.postMessage({
-    type:'process', imageData, W:canvasW, H:canvasH, userW, userH, dx, dy, dw, dh, fillIndex:fillIdx
-  }, [imageData.data.buffer]);
 }
 
 function getFillName(id) {
   return {'white_wool':'White Wool','white_concrete':'White Concrete','snow_block':'Snow Block','quartz_block':'Quartz Block'}[id] || 'White Wool';
 }
 
-function onWorkerResult(data){
+function onWorkerResult(data, params){
   const { matrix } = data;
-  const p = window._calcParams;
-  
-  lastPixels = {
-    W: p.canvasW, H: p.canvasH,
-    userW: p.userW, userH: p.userH,
-    matrix: matrix,
-    palette: flatPalette,
-    fillIndex: p.fillIdx
-  };
+  const p = params || window._calcParams;
+  if(!p){ hideLoading(); workerBusy=false; return; }
 
-  mapProgress = {};
+  try{
+    lastPixels = {
+      W: p.canvasW, H: p.canvasH,
+      userW: p.userW, userH: p.userH,
+      matrix: matrix,
+      palette: p.palette || flatPalette,
+      fillIndex: p.fillIdx
+    };
 
-  drawPreview(lastPixels);
-  renderMaterials(lastPixels);
-  renderMapTiles(lastPixels);
-  updateStats(lastPixels);
-  updateCoordDisplay();
-  
-  genStatus.textContent = `完成：${p.canvasW}×${p.canvasH} 格（${Math.ceil(p.canvasW/128)}×${Math.ceil(p.canvasH/128)} 张地图）`;
-  genStatus.className='status ok';
-  loadingMask.classList.remove('show');
-  saveStateToDB(lastPixels);
-  workerBusy = false;
+    mapProgress = {};
+
+    drawPreview(lastPixels);
+    renderMaterials(lastPixels);
+    renderMapTiles(lastPixels);
+    updateStats(lastPixels);
+    updateCoordDisplay();
+
+    genStatus.textContent = `完成：${p.canvasW}×${p.canvasH} 格（${Math.ceil(p.canvasW/128)}×${Math.ceil(p.canvasH/128)} 张地图）`;
+    genStatus.className='status ok';
+    saveStateToDB(lastPixels);
+  }catch(err){
+    genStatus.textContent = '渲染出错：' + ((err && err.message) || err);
+    genStatus.className = 'status danger';
+  }finally{
+    clearTimeout(computeTimer);
+    hideLoading();
+    workerBusy = false;
+    if(pendingCompute){
+      pendingCompute = false;
+      showLoading();
+      compute();
+    }
+  }
 }
 
 // 严格读取物理颜色渲染
@@ -1039,7 +1331,7 @@ function renderMapTiles(p){
   
   for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
     const nx=base.nx+i, nz=base.nz+j, ox=-64+128*nx, oz=-64+128*nz;
-    const tMatrix = new Uint8Array(128*128);
+    const tMatrix = new Uint16Array(128*128);
     for(let ty=0;ty<128;ty++)for(let tx=0;tx<128;tx++){
       const gx=i*128+tx, gy=j*128+ty;
       tMatrix[ty*128+tx] = (gx<p.W && gy<p.H) ? p.matrix[gy*p.W+gx] : p.fillIndex;
@@ -1077,7 +1369,7 @@ window.openMapDetail = function(mx, mz, ox, oz) {
   const base = calcMapGrid(Number(playerXInput.value)||0, Number(playerZInput.value)||0);
   const relX = mx - base.nx, relZ = mz - base.nz;
   
-  const tMatrix = new Uint8Array(128*128);
+  const tMatrix = new Uint16Array(128*128);
   for(let ty=0;ty<128;ty++)for(let tx=0;tx<128;tx++){
     const gx=relX*128+tx, gy=relZ*128+ty;
     tMatrix[ty*128+tx] = (gx>=0 && gx<lastPixels.W && gy>=0 && gy<lastPixels.H) ? lastPixels.matrix[gy*lastPixels.W+gx] : lastPixels.fillIndex;
@@ -1087,8 +1379,13 @@ window.openMapDetail = function(mx, mz, ox, oz) {
   updateCoordDisplay();
   
   const mapKey = `${mx},${mz}`;
-  if(!mapProgress[mapKey]) mapProgress[mapKey] = { step: 0, mode: 'step', lineIdx: 0 };
-  guideState = { ...mapProgress[mapKey] };
+  const saved = mapProgress[mapKey] || {};
+  guideState = {
+    mode: saved.mode === 'row' || saved.mode === 'col' ? saved.mode : 'step',
+    stepIdx: Number.isFinite(saved.stepIdx) ? saved.stepIdx : 0,
+    lineIdx: Number.isFinite(saved.lineIdx) ? saved.lineIdx : 0
+  };
+  saveProgress();
   
   $('modalTitle').textContent = `地图 (${mx}, ${mz}) 建造详情`;
   
@@ -1123,7 +1420,28 @@ window.openMapDetail = function(mx, mz, ox, oz) {
   }
   
   mapModal.classList.add('show');
+  fitModalCanvas();
+  requestAnimationFrame(fitModalCanvas);
 };
+
+// 让 128×128 大图始终完整显示在可用区域内（移动端不会被裁切）
+function fitModalCanvas(){
+  const left = document.querySelector('.modal-left');
+  const wrap = document.querySelector('.modal-canvas-wrap');
+  if(!left || !wrap || !mapModal.classList.contains('show')) return;
+  const cs = getComputedStyle(left);
+  const padX = (parseFloat(cs.paddingLeft)||0) + (parseFloat(cs.paddingRight)||0);
+  const padY = (parseFloat(cs.paddingTop)||0) + (parseFloat(cs.paddingBottom)||0);
+  const w = left.clientWidth - padX;
+  const h = left.clientHeight - padY;
+  if(w <= 0 || h <= 0) return;
+  const size = Math.max(100, Math.floor(Math.min(w, h, 600)));
+  wrap.style.width = size + 'px';
+  wrap.style.height = size + 'px';
+}
+
+window.addEventListener('resize', fitModalCanvas);
+window.addEventListener('orientationchange', ()=>setTimeout(fitModalCanvas, 150));
 
 modalCloseBtn.onclick = () => {
   mapModal.classList.remove('show');
@@ -1148,38 +1466,47 @@ function updateStepUI() {
   saveProgress();
 }
 
+const GUIDE_SIZE = 512;          // 引导层分辨率（128 格 × 4）
+const GUIDE_CELL = GUIDE_SIZE/128; // 每格 4×4 画布像素
+
 function updateGuideCanvas() {
   if(!activeMap) return;
   const ctx = $('modalGuideCanvas').getContext('2d');
-  ctx.clearRect(0,0,128,128);
-  
+  ctx.clearRect(0,0,GUIDE_SIZE,GUIDE_SIZE);
+
+  // 整体压暗，被选中的格子再“挖空”露出真实方块颜色
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.fillRect(0,0,GUIDE_SIZE,GUIDE_SIZE);
+
+  const frame = (x0,y0,w,h,color)=>{
+    // 在格子内部画 1 个画布像素的描边，绝不越界到相邻格
+    ctx.fillStyle = color;
+    ctx.fillRect(x0, y0, w, 1);
+    ctx.fillRect(x0, y0+h-1, w, 1);
+    ctx.fillRect(x0, y0, 1, h);
+    ctx.fillRect(x0+w-1, y0, 1, h);
+  };
+
   if(guideState.mode === 'step') {
     const rx = guideState.stepIdx % 128;
     const ry = Math.floor(guideState.stepIdx / 128);
-    
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.fillRect(0,0,128,128);
-    
-    ctx.clearRect(rx, ry, 1, 1);
-    ctx.fillStyle = 'rgba(255, 0, 85, 0.4)';
-    ctx.fillRect(rx, ry, 1, 1);
-    ctx.strokeStyle = '#ff0055';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(rx + 0.5, ry + 0.5, 0.5, 0.5);
+    const x0 = rx*GUIDE_CELL, y0 = ry*GUIDE_CELL;
+    ctx.clearRect(x0, y0, GUIDE_CELL, GUIDE_CELL);
+    frame(x0, y0, GUIDE_CELL, GUIDE_CELL, '#ff0055');
   } else if(guideState.mode === 'row') {
     const ry = guideState.lineIdx;
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.fillRect(0,0,128,128);
-    ctx.clearRect(0, ry, 128, 1);
-    ctx.fillStyle = 'rgba(124,108,255,0.4)';
-    ctx.fillRect(0, ry, 128, 1);
+    const y0 = ry*GUIDE_CELL;
+    ctx.clearRect(0, y0, GUIDE_SIZE, GUIDE_CELL);
+    ctx.fillStyle = '#7c6cff';
+    ctx.fillRect(0, y0, GUIDE_SIZE, 1);
+    ctx.fillRect(0, y0+GUIDE_CELL-1, GUIDE_SIZE, 1);
   } else if(guideState.mode === 'col') {
     const rx = guideState.lineIdx;
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.fillRect(0,0,128,128);
-    ctx.clearRect(rx, 0, 1, 128);
-    ctx.fillStyle = 'rgba(124,108,255,0.4)';
-    ctx.fillRect(rx, 0, 1, 128);
+    const x0 = rx*GUIDE_CELL;
+    ctx.clearRect(x0, 0, GUIDE_CELL, GUIDE_SIZE);
+    ctx.fillStyle = '#7c6cff';
+    ctx.fillRect(x0, 0, 1, GUIDE_SIZE);
+    ctx.fillRect(x0+GUIDE_CELL-1, 0, 1, GUIDE_SIZE);
   }
 }
 
@@ -1222,13 +1549,12 @@ function renderLineList() {
 }
 
 function saveProgress() {
-  if(!activeMap) return;
+  if(!activeMap || !db) return;
   const mapKey = `${activeMap.mx},${activeMap.mz}`;
   mapProgress[mapKey] = { ...guideState };
-  if(db) {
-    const tx = db.transaction('state','readwrite');
-    tx.objectStore('state').put({ ...window.lastSavedState, mapProgress }, 'lastState');
-  }
+  // 只写进度，避免每一步都把整张矩阵重新写库（会造成明显卡顿）
+  const tx = db.transaction('state','readwrite');
+  tx.objectStore('state').put(mapProgress, 'mapProgress');
 }
 
 $('gBtnPrev').onclick = () => { if(guideState.stepIdx > 0) { guideState.stepIdx--; updateStepUI(); } };
@@ -1343,43 +1669,72 @@ $('exportCsv').addEventListener('click',()=>{
 const DB_NAME='mc_pixel_db',DB_VER=10;
 let db=null;
 function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VER);r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains('images'))d.createObjectStore('images');if(!d.objectStoreNames.contains('state'))d.createObjectStore('state')};r.onsuccess=e=>{db=e.target.result;res(db)};r.onerror=e=>rej(e.target.error)})}
-async function saveImageToDB(blob){if(!db)await openDB();const tx=db.transaction('images','readwrite');tx.objectStore('images').put(blob,'lastImage')}
+async function saveImageToDB(blob){
+  try{ if(!db)await openDB(); const tx=db.transaction('images','readwrite'); tx.objectStore('images').put(blob,'lastImage'); }
+  catch(e){ /* 本地打开时可能无 IndexedDB，忽略 */ }
+}
 
 async function saveStateToDB(p){
-  if(!db)await openDB();
+  // 画布过大时不再缓存矩阵（体积过大，恢复时直接重算）
+  const canCacheMatrix = p.W*p.H <= 512*512;
+  const pal = p.palette || flatPalette;
   window.lastSavedState = {
     W:p.W, H:p.H, userW:p.userW, userH:p.userH,
     fillId:fillSel.value, playerX:playerXInput.value, playerZ:playerZInput.value,
     width:widthInput.value, height:heightInput.value, libMode:libSel.value,
-    matrix:Array.from(p.matrix), excludes:[...excludedCategories],
+    matrix:canCacheMatrix ? Array.from(p.matrix) : null,
+    paletteKeys:pal.map(b=>b.blockName).join('|'),
+    fillIndex:p.fillIndex,
+    excludes:[...excludedCategories],
     mapProgress: mapProgress
   };
-  const tx=db.transaction('state','readwrite');tx.objectStore('state').put(window.lastSavedState,'lastState');
+  try{
+    if(!db) await openDB();
+    const tx=db.transaction('state','readwrite');
+    tx.objectStore('state').put(window.lastSavedState,'lastState');
+  }catch(e){ /* 本地打开时可能无 IndexedDB，忽略 */ }
 }
 
 async function loadFromDB(){
   if(!db)await openDB();
   const blob=await new Promise(r=>{const q=db.transaction('images').objectStore('images').get('lastImage');q.onsuccess=()=>r(q.result)});
   const state=await new Promise(r=>{const q=db.transaction('state').objectStore('state').get('lastState');q.onsuccess=()=>r(q.result)});
+  const savedProgress=await new Promise(r=>{const q=db.transaction('state').objectStore('state').get('mapProgress');q.onsuccess=()=>r(q.result)});
   if(!blob||!state) return;
   
   window.lastSavedState = state;
   if(state.excludes){ excludedCategories=new Set(state.excludes); updateExcludesUI(); }
   if(state.width)widthInput.value=state.width; if(state.height)heightInput.value=state.height; if(state.fillId)fillSel.value=state.fillId;
-  if(state.playerX)playerXInput.value=state.playerX; if(state.playerZ)playerZInput.value=state.playerZ;
+  if(state.playerX!==undefined)playerXInput.value=state.playerX; if(state.playerZ!==undefined)playerZInput.value=state.playerZ;
   if(state.libMode)libSel.value=state.libMode;
   
-  if(state.mapProgress) mapProgress = state.mapProgress;
-  
-  currentImageBlob=blob; currentImageBitmap=await createImageBitmap(blob);
-  dropText.textContent=`已恢复（${currentImageBitmap.width}×${currentImageBitmap.height}）`; dropZone.classList.add('loaded');
-  genBtn.disabled=false;
-  
-  if(state.matrix && state.matrix.length===state.W*state.H){
-    lastPixels={W:state.W,H:state.H,userW:state.userW,userH:state.userH,matrix:new Uint8Array(state.matrix),palette:flatPalette,fillIndex:0};
+  mapProgress = savedProgress || state.mapProgress || {};
+
+  // 先按恢复出来的设置重建调色板，保证“缓存矩阵里的下标”能对上颜色
+  rebuildPalette();
+  const paletteKeys = flatPalette.map(b=>b.blockName).join('|');
+
+  try{
+    const bmp = await createImageBitmap(blob);
+    if(currentImageBitmap && currentImageBitmap.close) currentImageBitmap.close();
+    currentImageBlob=blob; currentImageBitmap=bmp;
+    dropText.textContent=`已恢复（${bmp.width}×${bmp.height}）`; dropZone.classList.add('loaded');
+    genBtn.disabled=false;
+  }catch(err){
+    currentImageBlob=blob;
+  }
+
+  const matrixOk = state.matrix && state.matrix.length===state.W*state.H && state.paletteKeys===paletteKeys;
+  if(matrixOk && currentImageBitmap){
+    lastPixels={
+      W:state.W,H:state.H,userW:state.userW,userH:state.userH,
+      matrix:new Uint16Array(state.matrix),palette:flatPalette,
+      fillIndex:(state.fillIndex>=0 && state.fillIndex<flatPalette.length)?state.fillIndex:0
+    };
     drawPreview(lastPixels);renderMaterials(lastPixels);renderMapTiles(lastPixels);updateStats(lastPixels);updateCoordDisplay();
     genStatus.textContent='已恢复上次结果'; genStatus.className='status ok';
-  } else {
+  } else if(currentImageBitmap){
+    // 设置或调色板有变化，按当前设置重算，避免颜色错位
     scheduleCompute();
   }
 }
@@ -1405,9 +1760,23 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
 $('hamburgerBtn').addEventListener('click',()=>{$('sidebar').classList.add('open');$('sidebarOverlay').classList.add('show')});
 $('sidebarOverlay').addEventListener('click',()=>{$('sidebar').classList.remove('open');$('sidebarOverlay').classList.remove('show')});
 
-genBtn.addEventListener('click',()=>{loadingMask.classList.add('show');scheduleCompute()});
-restoreBtn.addEventListener('click',loadFromDB);
+genBtn.addEventListener('click',()=>{
+  if(!currentImageBitmap){
+    genStatus.textContent='请先上传图片'; genStatus.className='status warn';
+    hideLoading();
+    return;
+  }
+  scheduleCompute();
+});
+restoreBtn.addEventListener('click',()=>{
+  hideLoading();
+  loadFromDB().catch(err=>{
+    hideLoading();
+    genStatus.textContent='恢复失败：'+((err&&err.message)||err); genStatus.className='status danger';
+  });
+});
 clearBtn.addEventListener('click',()=>{
+  hideLoading();
   if(!db)return; const tx=db.transaction(['images','state'],'readwrite'); tx.objectStore('images').clear(); tx.objectStore('state').clear();
   lastPixels=null; excludedCategories.clear(); mapProgress={}; updateExcludesUI(); rebuildPalette();
   previewCanvas.getContext('2d').clearRect(0,0,previewCanvas.width,previewCanvas.height);
@@ -1417,13 +1786,18 @@ clearBtn.addEventListener('click',()=>{
 (async function(){
   updateExcludesUI();
   updateCoordDisplay();
-  await openDB();
+  try { await openDB(); } catch(e) { db = null; }
   try {
     worker = await initWorker();
+  } catch(e) {
+    worker = null;   // 退回主线程计算
+    genStatus.textContent = '已切换为本地计算模式（速度略慢）';
+    genStatus.className = 'status warn';
+  }
+  try {
     await loadFromDB();
   } catch(e) {
-    genStatus.textContent = 'Worker 初始化失败，请检查浏览器兼容性';
-    genStatus.className = 'status danger';
+    hideLoading();
   }
 })();
 </script>
