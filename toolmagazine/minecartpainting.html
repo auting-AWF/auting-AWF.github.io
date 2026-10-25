@@ -91,7 +91,8 @@ select{cursor:pointer;font-family:inherit}
 
 .preview-stage{display:flex;flex-direction:column;align-items:center;gap:12px}
 .canvas-frame{background:repeating-conic-gradient(var(--panel) 0% 25%,var(--panel2) 0% 50%) 50%/16px 16px;border:1px solid var(--border);border-radius:9px;padding:10px;max-width:100%;overflow:auto}
-#previewCanvas{display:block;image-rendering:pixelated;max-width:100%;height:auto;cursor:crosshair;touch-action:none}
+#previewCanvas{display:block;image-rendering:pixelated;width:min(560px,calc(100vw - 420px));max-width:100%;height:auto;cursor:crosshair;touch-action:none}
+@media (max-width:900px){#previewCanvas{width:calc(100vw - 48px)}}
 .preview-meta{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;font-size:12px;color:var(--muted)}
 .preview-meta b{color:var(--accent2);font-family:var(--mono)}
 
@@ -734,7 +735,7 @@ self.onmessage = function(e){
       const mix = [];
       for(let k=0; k<same.length; k++){
         const j = same[k];
-        if(j === i || labDistSq(palette[j].lab, palette[i].lab) <= 64) mix.push(j);
+        if(j === i || labDistSq(palette[j].lab, palette[i].lab) <= 16) mix.push(j);
       }
       palette[i].mix = mix.length ? mix : [i];
     }
@@ -896,7 +897,7 @@ function mtPrepare(){
     const same = groups[pal[i].mapColorName], mix = [];
     for(let k=0;k<same.length;k++){
       const j = same[k];
-      if(j===i || labDistSqM(pal[j].lab, pal[i].lab) <= 64) mix.push(j);
+      if(j===i || labDistSqM(pal[j].lab, pal[i].lab) <= 16) mix.push(j);
     }
     pal[i].mix = mix.length ? mix : [i];
   }
@@ -1160,7 +1161,9 @@ async function compute(){
       dx = (userW - dw) / 2; dy = 0;
     }
 
-    ctx.imageSmoothingEnabled = false;
+    // 缩图必须开平滑采样：最近邻缩放会把大图抽稀成噪点，抖动会进一步放大
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(currentImageBitmap, dx, dy, dw, dh);
 
     const imageData = ctx.getImageData(0,0,canvasW,canvasH);
